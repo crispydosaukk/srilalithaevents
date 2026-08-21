@@ -119,6 +119,8 @@ export default function HomePage() {
     }
   };
 
+  const [submittedBookingId, setSubmittedBookingId] = useState<string>('');
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (bookingForm.phone && !validateUKPhone(bookingForm.phone)) {
@@ -126,6 +128,8 @@ export default function HomePage() {
       return;
     }
     setIsSubmitting(true);
+    setCustomHomeAlert(null);
+
     if (blockedDates.includes(bookingForm.date)) {
       setCustomHomeAlert({
         message: "This date is unfortunately fully booked or unavailable. Please choose another date.",
@@ -134,40 +138,49 @@ export default function HomePage() {
       setIsSubmitting(false);
       return;
     }
+
     try {
       const fullPhone = bookingForm.phone ? `+44${bookingForm.phone.replace(/^0/, '').replace(/\s/g, '')}` : '';
       const guestCount = Number(bookingForm.guests) || 0;
       const selectedPkg = BANQUET_PACKAGES.find(p => p.name === bookingForm.selectedPackage);
       const selectedExtra = LIVE_COUNTER_PACKAGE?.extras?.find(e => e.name === bookingForm.selectedPackage);
+      
       let baseAmount = 0;
       if (selectedPkg) {
         baseAmount = selectedPkg.pricePerPerson * guestCount;
       } else if (selectedExtra) {
         baseAmount = selectedExtra.price;
       }
-      const deposit = pricingDetails.depositPercentage;
-      await addDoc(collection(db, 'booking_requests'), {
-        name: bookingForm.name,
-        email: bookingForm.email,
+
+      const depositPercent = pricingDetails.depositPercentage || 30;
+      const depositAmount = Math.round((baseAmount * depositPercent) / 100);
+
+      const docRef = await addDoc(collection(db, 'booking_requests'), {
+        name: bookingForm.name.trim(),
+        email: bookingForm.email.trim().toLowerCase(),
         phone: fullPhone,
         eventType: bookingForm.eventType,
         date: bookingForm.date,
         timeOfDay: bookingForm.timeOfDay,
         guests: guestCount,
-        message: bookingForm.message,
+        message: bookingForm.message || '',
         package: bookingForm.selectedPackage || 'Not Selected',
         baseAmount,
-        deposit,
+        deposit: depositAmount,
+        depositPercentage: depositPercent,
         extraCharges: [],
-        createdAt: new Date().toISOString()
+        status: 'new_enquiry',
+        createdAt: new Date().toISOString(),
       });
+
+      setSubmittedBookingId(docRef.id);
       setSubmitted(true);
       setPhoneError('');
       setBookingForm({ name: '', email: '', phone: '', eventType: '', date: '', timeOfDay: '', guests: '', message: '', selectedPackage: '' });
-    } catch (error) {
-      console.error("Error adding document: ", error);
+    } catch (error: any) {
+      console.error("Error adding booking document: ", error);
       setCustomHomeAlert({
-        message: "There was an error submitting your request. Please try again.",
+        message: error?.message || "There was an error submitting your request. Please check Firestore rules or try again.",
         type: 'error'
       });
     } finally {
@@ -184,26 +197,27 @@ export default function HomePage() {
       <Header onOpenModal={() => {}} />
 
       {/* Hero — two-column layout */}
-      <section className="pt-24 pb-0 px-6" style={{ background: 'linear-gradient(135deg, #1A0F00 0%, #2C1A00 60%, #3D2800 100%)' }}>
-        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center gap-10 lg:gap-16 py-12">
+      <section className="pt-24 pb-0 px-6 relative overflow-hidden bg-surface">
+        <div className="absolute inset-0 opacity-5 pointer-events-none" style={{ background: 'radial-gradient(circle at top right, #9B1B30 0%, transparent 40%), radial-gradient(circle at bottom left, #C8860A 0%, transparent 40%)' }}></div>
+        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center gap-10 lg:gap-16 py-12 relative z-10">
 
           {/* ── Left: Text content ── */}
           <div className="flex-1 text-center lg:text-left">
-            <span className="inline-block text-xs font-semibold uppercase tracking-widest px-4 py-1.5 rounded-full mb-5" style={{ background: 'rgba(200,134,10,0.2)', color: '#F0A830' }}>
+            <span className="inline-block text-xs font-semibold uppercase tracking-widest px-4 py-1.5 rounded-full mb-5" style={{ background: 'rgba(155, 27, 48, 0.1)', color: '#9B1B30' }}>
               Banquet &amp; Catering
             </span>
-            <h1 className="text-4xl md:text-5xl font-bold text-white leading-tight mb-4">
+            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 leading-tight mb-4">
               Make Your Event<br />
-              <span style={{ color: '#F0A830' }}>Unforgettable</span>
+              <span style={{ color: '#9B1B30' }}>Unforgettable</span>
             </h1>
-            <p className="text-lg mb-8 max-w-xl lg:mx-0 mx-auto" style={{ color: '#A08060' }}>
+            <p className="text-lg mb-8 max-w-xl lg:mx-0 mx-auto text-gray-600">
               Authentic Indian &amp; Sri Lankan cuisine. Elegant banquet hall. Unforgettable events.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
-              <a href="#menus" className="text-white font-semibold px-8 py-3.5 rounded-xl transition-all shadow-lg hover:shadow-xl" style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
+              <a href="#menus" className="text-white font-semibold px-8 py-3.5 rounded-xl transition-all shadow-lg hover:shadow-xl bg-maroon-primary hover:bg-maroon-dark">
                 View Menus &amp; Packages
               </a>
-              <a href="#book" className="border font-semibold px-8 py-3.5 rounded-xl transition-colors hover:text-white" style={{ borderColor: '#3D2800', color: '#A08060' }}>
+              <a href="#book" className="border border-gray-300 font-semibold px-8 py-3.5 rounded-xl transition-colors text-gray-700 hover:text-maroon-primary hover:border-maroon-primary">
                 Book Now
               </a>
             </div>
@@ -216,18 +230,31 @@ export default function HomePage() {
               <p className="text-sm text-gray-500 text-center mb-5">Fill in your details and we'll get back to you within 24 hours</p>
 
               {submitted ? (
-                <div className="text-center py-10 rounded-2xl border" style={{ background: 'rgba(200,134,10,0.04)', borderColor: 'rgba(200,134,10,0.2)' }}>
+                <div className="text-center py-8 px-4 rounded-2xl border" style={{ background: 'rgba(200,134,10,0.04)', borderColor: 'rgba(200,134,10,0.2)' }}>
                   <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: 'rgba(200,134,10,0.1)' }}>
                     <Icon name="CheckCircleIcon" size={28} style={{ color: '#C8860A' }} />
                   </div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-1">Request Received!</h3>
-                  <p className="text-gray-500 text-sm">We'll contact you within 24 hours to confirm your booking.</p>
-                  <button onClick={() => setSubmitted(false)} className="mt-5 text-sm font-medium hover:underline" style={{ color: '#C8860A' }}>
-                    Submit another request
-                  </button>
+                  <p className="text-gray-500 text-sm mb-3">We'll contact you within 24 hours to confirm your booking.</p>
+                  {submittedBookingId && (
+                    <div className="bg-white border border-amber-200 rounded-xl p-3 inline-block max-w-full text-left mb-3">
+                      <span className="text-xs text-gray-400 block uppercase font-semibold">Booking Reference</span>
+                      <span className="text-sm font-mono font-bold text-gray-800 break-all">{submittedBookingId}</span>
+                    </div>
+                  )}
+                  <div>
+                    <button onClick={() => { setSubmitted(false); setSubmittedBookingId(''); }} className="text-sm font-medium hover:underline block mx-auto" style={{ color: '#C8860A' }}>
+                      Submit another request
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-3">
+                  {customHomeAlert && (
+                    <div className={`p-3 rounded-xl text-xs font-medium border ${customHomeAlert.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200'}`}>
+                      {customHomeAlert.message}
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">Full Name *</label>
@@ -431,11 +458,11 @@ export default function HomePage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {BANQUET_PACKAGES.map((pkg) => (
                   <div key={pkg.id} className={`bg-white rounded-2xl border-2 shadow-sm hover:shadow-md transition-shadow flex flex-col`}
-                    style={{ borderColor: pkg.id === 'gold' ? '#C8860A' : pkg.id === 'honeymoon' ? '#7C3AED' : '#E5E7EB' }}>
+                    style={{ borderColor: pkg.id === 'gold' ? '#C8860A' : pkg.id === 'srilalitha' ? '#7C3AED' : '#E5E7EB' }}>
                     <div className="p-5 flex-1">
                       {pkg.tag && (
                         <div className="mb-2">
-                          <span className="text-xs font-bold px-3 py-1 rounded-full" style={{ background: pkg.id === 'honeymoon' ? '#7C3AED' : 'rgba(200,134,10,0.1)', color: pkg.id === 'honeymoon' ? 'white' : '#C8860A' }}>
+                          <span className="text-xs font-bold px-3 py-1 rounded-full" style={{ background: pkg.id === 'srilalitha' ? '#7C3AED' : 'rgba(200,134,10,0.1)', color: pkg.id === 'srilalitha' ? 'white' : '#C8860A' }}>
                             {pkg.tag}
                           </span>
                         </div>

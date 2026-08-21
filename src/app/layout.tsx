@@ -8,11 +8,11 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'HoneyMoon — Banquet & Catering Management',
-  description: 'HoneyMoon helps you plan and manage unforgettable banquet events and catering services with ease.',
+  title: 'SriLalitha — Banquet & Catering Management',
+  description: 'SriLalitha helps you plan and manage unforgettable banquet events and catering services with ease.',
   icons: {
     icon: [
-      { url: '/assets/images/oie_gAxqzQFu0Ixw-1777831503416.png', type: 'image/png' }
+      { url: '/assets/images/srilalitha.png', type: 'image/png' }
     ],
   },
 };

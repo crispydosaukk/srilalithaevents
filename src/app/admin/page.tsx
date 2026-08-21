@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Icon from '@/components/ui/AppIcon';
-import { INDIAN_MENU, SRI_LANKAN_MENU, LIVE_COUNTER_PACKAGE, BANQUET_PACKAGES, VENUE_HALL_CHARGES, TABLE_SERVICE, KIDS_PRICING, DRY_HIRE_PRICES } from '@/app/data/menuData';
+import { INDIAN_MENU, SRI_LANKAN_MENU, LIVE_COUNTER_PACKAGE, BANQUET_PACKAGES, VENUE_HALL_CHARGES, TABLE_SERVICE, KIDS_PRICING, DRY_HIRE_PRICES, TERMS_AND_CONDITIONS, STANDARD_SETUP } from '@/app/data/menuData';
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, db, storage } from '@/lib/firebase';
-import { collection, onSnapshot, query, where, orderBy, doc, setDoc, deleteDoc, getDoc, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, orderBy, doc, setDoc, deleteDoc, getDoc, getDocs, addDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import AccessControl from '@/components/admin/AccessControl';
 
@@ -252,7 +252,8 @@ type AdminTab = 'overview' | 'enquiries' | 'bookings' | 'calendar' | 'customers'
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
-  const [bookings, setBookings] = useState<Booking[]>(SAMPLE_BOOKINGS);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loadingBookings, setLoadingBookings] = useState(true);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [isEditingBookingDate, setIsEditingBookingDate] = useState(false);
   const [isEditingEventType, setIsEditingEventType] = useState(false);
@@ -265,6 +266,26 @@ export default function AdminPage() {
   const [trackerSearch, setTrackerSearch] = useState<string>('');
   const [depositPaymentMethod, setDepositPaymentMethod] = useState<string>('');
   const [finalPaymentMethod, setFinalPaymentMethod] = useState<string>('');
+
+  // New Booking Modal State
+  const [showNewBookingModal, setShowNewBookingModal] = useState(false);
+  const [newBookingForm, setNewBookingForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    eventType: 'Wedding',
+    date: new Date().toISOString().split('T')[0],
+    time: 'Lunch (12:00pm – 4:00pm)',
+    guests: '50',
+    adults: '50',
+    kids4to10: '0',
+    kidsUnder4: '0',
+    package: 'Gold Package',
+    status: 'new_enquiry' as BookingStatus,
+    notes: '',
+  });
+  const [isCreatingBooking, setIsCreatingBooking] = useState(false);
+  const [showSignOutModal, setShowSignOutModal] = useState(false);
 
   useEffect(() => {
     if (selectedBooking) {
@@ -289,8 +310,66 @@ export default function AdminPage() {
     }
   }, [activeTab]);
 
+  // Seed default site_data if database is newly initialized
   useEffect(() => {
-    const q = query(collection(db, 'booking_requests'), orderBy('createdAt', 'desc'));
+    const seedSiteDataDefaults = async () => {
+      try {
+        const menuSnap = await getDoc(doc(db, 'site_data', 'menus'));
+        if (!menuSnap.exists()) {
+          await setDoc(doc(db, 'site_data', 'menus'), {
+            INDIAN_MENU,
+            SRI_LANKAN_MENU,
+            LIVE_COUNTER_PACKAGE,
+            BANQUET_PACKAGES,
+            VENUE_HALL_CHARGES,
+            TABLE_SERVICE,
+            KIDS_PRICING,
+            DRY_HIRE_PRICES,
+            TERMS_AND_CONDITIONS,
+            STANDARD_SETUP,
+          }, { merge: true });
+        }
+
+        const pricingSnap = await getDoc(doc(db, 'site_data', 'pricing_details'));
+        if (!pricingSnap.exists()) {
+          await setDoc(doc(db, 'site_data', 'pricing_details'), {
+            depositPercentage: 30,
+            minimumBookingHours: 4,
+            weekdayRate: 350,
+            weekendRate: 550
+          }, { merge: true });
+        }
+
+        const venueSnap = await getDoc(doc(db, 'site_data', 'venue_details'));
+        if (!venueSnap.exists()) {
+          await setDoc(doc(db, 'site_data', 'venue_details'), {
+            venueName: 'SriLalitha Banquet Hall',
+            maxCapacity: '500',
+            contactEmail: 'hello@srilalitha.com',
+            phone: '+44 7700 900000',
+            whatsapp: '+447700900000',
+            address: '123 Event Plaza, London, UK'
+          }, { merge: true });
+        }
+
+        const bankSnap = await getDoc(doc(db, 'site_data', 'bank_details'));
+        if (!bankSnap.exists()) {
+          await setDoc(doc(db, 'site_data', 'bank_details'), {
+            accountName: 'SriLalitha Events Ltd',
+            sortCode: '20-00-00',
+            accountNumber: '12345678'
+          }, { merge: true });
+        }
+      } catch (e) {
+        console.error("Note: Auto-seeding check finished or deferred.", e);
+      }
+    };
+    seedSiteDataDefaults();
+  }, []);
+
+  // Real-time Firestore sync for all bookings
+  useEffect(() => {
+    const q = collection(db, 'booking_requests');
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const liveBookings: Booking[] = snapshot.docs.map((doc) => {
         const data = doc.data();
@@ -301,13 +380,13 @@ export default function AdminPage() {
           phone: data.phone || 'N/A',
           eventType: data.eventType || 'N/A',
           date: data.date || 'N/A',
-          time: data.timeOfDay || 'N/A',
+          time: data.timeOfDay || data.time || 'N/A',
           guests: data.guests || 0,
           adults: data.adults ?? undefined,
           kids4to10: data.kids4to10 ?? 0,
           kidsUnder4: data.kidsUnder4 ?? 0,
-          status: data.status || 'new_enquiry',
-          notes: data.message || '',
+          status: (data.status || 'new_enquiry') as BookingStatus,
+          notes: data.message || data.notes || '',
           baseAmount: data.baseAmount || 0,
           deposit: data.deposit || 0,
           depositPaid: data.depositPaid || false,
@@ -336,8 +415,13 @@ export default function AdminPage() {
           updatedAt: data.updatedAt,
           createdAt: data.createdAt,
         } as Booking;
-      });
+      }).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      
       setBookings(liveBookings);
+      setLoadingBookings(false);
+    }, (error) => {
+      console.error("Error subscribing to bookings:", error);
+      setLoadingBookings(false);
     });
     return () => unsubscribe();
   }, []);
@@ -386,7 +470,7 @@ export default function AdminPage() {
             }
             setCurrentUser({ name: userData.name || 'User', email: userData.email || user.email || '', role: roleName });
           } else {
-            // No user doc found → original super admin (honeymoonadmin)
+            // No user doc found → original super admin (srilalithaadmin)
             setCurrentUser({ name: 'Admin', email: user.email || '', role: 'Super Admin' });
             setUserPermissions('all');
           }
@@ -437,7 +521,7 @@ export default function AdminPage() {
   }, []);
 
   const [bankDetails, setBankDetails] = useState({
-    accountName: 'Honeymoon Events Ltd',
+    accountName: 'SriLalitha Events Ltd',
     sortCode: '20-00-00',
     accountNumber: '12345678'
   });
@@ -447,7 +531,7 @@ export default function AdminPage() {
       if (docSnap.exists()) {
         const data = docSnap.data();
         setBankDetails({
-          accountName: data.accountName || 'Honeymoon Events Ltd',
+          accountName: data.accountName || 'SriLalitha Events Ltd',
           sortCode: data.sortCode || '20-00-00',
           accountNumber: data.accountNumber || '12345678'
         });
@@ -456,9 +540,9 @@ export default function AdminPage() {
   }, []);
 
   const [venueDetails, setVenueDetails] = useState({
-    venueName: 'Honeymoon Banquet Hall',
+    venueName: 'SriLalitha Banquet Hall',
     maxCapacity: '500',
-    contactEmail: 'hello@honeymoon.com',
+    contactEmail: 'hello@srilalitha.com',
     phone: '+44 7700 900000',
     whatsapp: '+447700900000',
     address: '123 Event Plaza, London, UK'
@@ -469,9 +553,9 @@ export default function AdminPage() {
       if (docSnap.exists()) {
         const data = docSnap.data();
         setVenueDetails({
-          venueName: data.venueName || 'Honeymoon Banquet Hall',
+          venueName: data.venueName || 'SriLalitha Banquet Hall',
           maxCapacity: data.maxCapacity || '500',
-          contactEmail: data.contactEmail || 'hello@honeymoon.com',
+          contactEmail: data.contactEmail || 'hello@srilalitha.com',
           phone: data.phone || '+44 7700 900000',
           whatsapp: data.whatsapp || '+447700900000',
           address: data.address || '123 Event Plaza, London, UK'
@@ -647,7 +731,7 @@ export default function AdminPage() {
   };
 
   const buildMenuWhatsAppText = (customerName: string, customerPhone: string, menuType: string, guestCount: number) => {
-    let text = `Hi ${customerName}, here are our *${menuType}* options from Honeymoon:\n\n`;
+    let text = `Hi ${customerName}, here are our *${menuType}* options from SriLalitha:\n\n`;
     if (menuType === 'Indian Menu') {
       text += `🥗 *Vegetarian Starters:*\n${(editableIndianMenu.vegStarters || []).map(i => `• ${i}`).join('\n')}\n\n`;
       text += `🍗 *Non-Veg Starters:*\n${(editableIndianMenu.nonVegStarters || []).map(i => `• ${i}`).join('\n')}\n\n`;
@@ -710,7 +794,7 @@ export default function AdminPage() {
 
     return `Hi ${booking.name.split(' ')[0]},
 
-Thank you so much for booking with Honeymoon Events! 🎊 Your event was a success and your booking is now fully completed.
+Thank you so much for booking with SriLalitha Events! 🎊 Your event was a success and your booking is now fully completed.
 
 *📝 Event Summary:*
 • Event: ${booking.eventType}
@@ -780,7 +864,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
       `• Total Paid: £${totalPaid.toLocaleString()}\n` +
       `• *Remaining Balance Due: ${remainingBalance <= 0 ? 'PAID IN FULL ✓' : `£${remainingBalance.toLocaleString()}`}*`;
 
-    return `Hi ${booking.name.split(' ')[0]}, thank you for choosing Honeymoon Events for your ${booking.eventType}! 🎉\n\nHere is your final invoice summary:\n\n*📋 Booking Ref:* ${booking.id}\n*📦 Package:* ${booking.selectedMenu || booking.package}\n\n${guestBreakdown}\n\n*💰 Base Amount:* £${booking.baseAmount.toLocaleString()}${extrasText}${discountText}${hallText}\n\n${breakdownText}${dueDateText}\n\nPlease transfer the balance to:\n🏦 Account Name: ${bank.accountName}\n📋 Sort Code: ${bank.sortCode}\n🔢 Account No: ${bank.accountNumber}\n📌 Reference: ${booking.id}\n\nOnce paid, please send a screenshot of the transfer confirmation here. Thank you!`;
+    return `Hi ${booking.name.split(' ')[0]}, thank you for choosing SriLalitha Events for your ${booking.eventType}! 🎉\n\nHere is your final invoice summary:\n\n*📋 Booking Ref:* ${booking.id}\n*📦 Package:* ${booking.selectedMenu || booking.package}\n\n${guestBreakdown}\n\n*💰 Base Amount:* £${booking.baseAmount.toLocaleString()}${extrasText}${discountText}${hallText}\n\n${breakdownText}${dueDateText}\n\nPlease transfer the balance to:\n🏦 Account Name: ${bank.accountName}\n📋 Sort Code: ${bank.sortCode}\n🔢 Account No: ${bank.accountNumber}\n📌 Reference: ${booking.id}\n\nOnce paid, please send a screenshot of the transfer confirmation here. Thank you!`;
   };
 
   const buildExtraInvoiceWhatsAppText = (booking: Booking, bank: typeof bankDetails) => {
@@ -790,7 +874,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
 
     return `Hi ${booking.name.split(' ')[0]},
 
-Thank you for celebrating with us at Honeymoon Events! 🎉 We hope you had a fantastic time.
+Thank you for celebrating with us at SriLalitha Events! 🎉 We hope you had a fantastic time.
 
 There were some additional adjustments/services added during your event:
 ${extrasList}
@@ -811,15 +895,95 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoggingIn(true);
+    setLoginError('');
     try {
       await signInWithEmailAndPassword(auth, loginForm.email, loginForm.password);
       setLoggedIn(true);
       setLoginError('');
-    } catch (error) {
-      console.error(error);
-      setLoginError('Invalid credentials or user not found in Firebase Authentication.');
+    } catch (error: any) {
+      console.error("Firebase Login Error:", error);
+      const code = error?.code;
+      if (code === 'auth/operation-not-allowed') {
+        setLoginError('Email/Password provider is not enabled. Go to Firebase Console → Authentication → Sign-in method, and enable "Email/Password".');
+      } else if (code === 'auth/user-not-found' || code === 'auth/invalid-credential' || code === 'auth/wrong-password') {
+        setLoginError('User account not found or invalid password in project (srilalitha-a0cff). Please add this user in Firebase Console → Authentication → Users.');
+      } else if (code === 'auth/network-request-failed') {
+        setLoginError('Network error connecting to Firebase. Please check your internet connection.');
+      } else {
+        setLoginError(error?.message || 'Invalid credentials or user not found in Firebase Authentication.');
+      }
     } finally {
       setIsLoggingIn(false);
+    }
+  };
+
+  const handleCreateManualBooking = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newBookingForm.name.trim()) {
+      alert("Customer full name is required");
+      return;
+    }
+    setIsCreatingBooking(true);
+    try {
+      const adults = Number(newBookingForm.adults) || Number(newBookingForm.guests) || 0;
+      const kids4to10 = Number(newBookingForm.kids4to10) || 0;
+      const kidsUnder4 = Number(newBookingForm.kidsUnder4) || 0;
+      const totalGuests = (adults + kids4to10 + kidsUnder4) || Number(newBookingForm.guests) || 1;
+
+      const selectedPkg = editableBanquetPackages.find(p => p.name === newBookingForm.package);
+      const pricePerPerson = selectedPkg?.pricePerPerson || 0;
+      const baseAmount = adults * pricePerPerson;
+      const depositPercent = pricingDetails.depositPercentage || 30;
+      const deposit = Math.round((baseAmount * depositPercent) / 100);
+
+      const fullPhone = newBookingForm.phone ? (newBookingForm.phone.startsWith('+') ? newBookingForm.phone : `+44${newBookingForm.phone.replace(/^0/, '').replace(/\s/g, '')}`) : '';
+
+      const docRef = await addDoc(collection(db, 'booking_requests'), {
+        name: newBookingForm.name.trim(),
+        email: newBookingForm.email.trim().toLowerCase(),
+        phone: fullPhone,
+        eventType: newBookingForm.eventType,
+        date: newBookingForm.date,
+        timeOfDay: newBookingForm.time,
+        guests: totalGuests,
+        adults,
+        kids4to10,
+        kidsUnder4,
+        package: newBookingForm.package,
+        selectedMenu: newBookingForm.package,
+        message: newBookingForm.notes,
+        baseAmount,
+        deposit,
+        depositPercentage: depositPercent,
+        depositPaid: newBookingForm.status !== 'new_enquiry' && newBookingForm.status !== 'deposit_pending',
+        finalPaymentPaid: newBookingForm.status === 'completed' || newBookingForm.status === 'final_payment_received',
+        extraCharges: [],
+        status: newBookingForm.status,
+        createdAt: new Date().toISOString(),
+      });
+
+      setShowNewBookingModal(false);
+      setNewBookingForm({
+        name: '',
+        email: '',
+        phone: '',
+        eventType: 'Wedding',
+        date: new Date().toISOString().split('T')[0],
+        time: 'Lunch (12:00pm – 4:00pm)',
+        guests: '50',
+        adults: '50',
+        kids4to10: '0',
+        kidsUnder4: '0',
+        package: 'Gold Package',
+        status: 'new_enquiry',
+        notes: '',
+      });
+      setCustomAlert({ message: `Booking created successfully in database! Ref: #${docRef.id.slice(0, 6).toUpperCase()}`, type: 'success' });
+    } catch (error: any) {
+      console.error("Error creating booking:", error);
+      setCustomAlert({ message: `Error creating booking: ${error.message || 'Unknown error'}`, type: 'error' });
+    } finally {
+      setIsCreatingBooking(false);
     }
   };
 
@@ -1452,7 +1616,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     const formattedEnquiryDate = booking.enquiryDate ? new Date(booking.enquiryDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A';
 
     // Construct logo source (ensure it points to the absolute path of the domain)
-    const logoUrl = window.location.origin + '/assets/images/oie_gAxqzQFu0Ixw-1777831503416.png';
+    const logoUrl = window.location.origin + '/assets/images/srilalitha.png';
 
     // Build the proof screenshots section
     let screenshotsHTML = '';
@@ -1668,7 +1832,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             <p>Booking Reference: <strong>#${booking.id}</strong></p>
             <p>Enquiry Date: ${formattedEnquiryDate}</p>
           </div>
-          <img class="logo" src="${logoUrl}" alt="Honeymoon Events Logo" />
+          <img class="logo" src="${logoUrl}" alt="SriLalitha Events Logo" />
         </div>
 
         <div class="grid-2">
@@ -1838,7 +2002,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
         ${screenshotsHTML}
 
         <div class="footer-note">
-          Thank you for choosing Honeymoon Events. If you have any questions regarding this invoice, please contact us.
+          Thank you for choosing SriLalitha Events. If you have any questions regarding this invoice, please contact us.
         </div>
 
         <script>
@@ -1973,7 +2137,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
   // ─── AUTHENTICATION LOADING ────────────────────────────────────────────────
   if (loadingAuth) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1A0F00 0%, #2C1A00 50%, #3D2800 100%)' }}>
+      <div className="min-h-screen flex items-center justify-center bg-surface-lighter">
         <div className="animate-spin rounded-full h-8 w-8 border-4 border-[#C8860A] border-t-transparent" />
       </div>
     );
@@ -1982,7 +2146,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
   // ─── LOGIN ────────────────────────────────────────────────────────────────
   if (!loggedIn) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-6" style={{ background: 'linear-gradient(135deg, #1A0F00 0%, #2C1A00 50%, #3D2800 100%)' }}>
+      <div className="min-h-screen flex items-center justify-center px-6 bg-surface-lighter">
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-20 left-20 w-64 h-64 rounded-full opacity-10" style={{ background: 'radial-gradient(circle, #F0A830, transparent)' }} />
           <div className="absolute bottom-20 right-20 w-80 h-80 rounded-full opacity-10" style={{ background: 'radial-gradient(circle, #C8860A, transparent)' }} />
@@ -1990,8 +2154,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
         <div className="relative bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm">
           <div className="flex flex-col items-center mb-6">
             <img
-              src="/assets/images/oie_gAxqzQFu0Ixw-1777831503416.png"
-              alt="Honeymoon logo"
+              src="/assets/images/srilalitha.png"
+              alt="SriLalitha logo"
               style={{ maxHeight: '60px', width: 'auto', objectFit: 'contain' }}
               className="mb-1"
             />
@@ -2001,7 +2165,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Email Address</label>
-              <input type="email" required value={loginForm.email} onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50" placeholder="honeymoonadmin@gmail.com" />
+              <input type="email" required value={loginForm.email} onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50" placeholder="srilalithaadmin@gmail.com" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Password</label>
@@ -2032,12 +2196,12 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
       {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setSidebarOpen(false)} />}
 
       {/* Sidebar */}
-      <aside className={`fixed md:static inset-y-0 left-0 z-50 w-60 flex-shrink-0 flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`} style={{ background: 'linear-gradient(180deg, #1A0F00 0%, #2C1A00 100%)' }}>
-        <div className="px-5 py-4 border-b flex items-center gap-2.5" style={{ borderColor: '#3D2800' }}>
+      <aside className={`fixed md:static inset-y-0 left-0 z-50 w-60 flex-shrink-0 flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} bg-surface border-r border-surface-border`}>
+        <div className="px-5 py-4 border-b border-surface-border flex items-center gap-2.5">
           <div>
             <img
-              src="/assets/images/oie_gAxqzQFu0Ixw-1777831503416.png"
-              alt="Honeymoon logo"
+              src="/assets/images/srilalitha.png"
+              alt="SriLalitha logo"
               style={{ maxHeight: '40px', width: 'auto', objectFit: 'contain' }}
             />
             <div className="text-xs mt-1" style={{ color: '#A08060' }}>Admin Dashboard</div>
@@ -2046,7 +2210,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           {visibleNavItems.map((item) => (
             <button key={item.id} onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === item.id ? 'text-white shadow-md' : 'hover:text-white'}`}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === item.id ? 'text-white shadow-md' : 'hover:text-maroon-primary'}`}
               style={activeTab === item.id ? { background: 'linear-gradient(135deg, #C8860A, #F0A830)', color: 'white' } : { color: '#A08060' }}>
               <Icon name={item.icon as 'CalendarDaysIcon'} size={17} />
               <span className="flex-1 text-left">{item.label}</span>
@@ -2054,7 +2218,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             </button>
           ))}
         </nav>
-        <div className="px-3 py-4 border-t" style={{ borderColor: '#3D2800' }}>
+        <div className="px-3 py-4 border-t border-surface-border">
           <div className="flex items-center gap-2 px-3 py-2 mb-1">
             <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: 'rgba(200,134,10,0.2)' }}>
               <Icon name="UserCircleIcon" size={16} style={{ color: '#F0A830' }} />
@@ -2065,19 +2229,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             </div>
           </div>
           <button
-            onClick={async () => {
-              try {
-                await signOut(auth);
-                setActiveTab('overview');
-                if (typeof window !== 'undefined') {
-                  localStorage.removeItem('adminActiveTab');
-                }
-                setLoggedIn(false);
-              } catch (error) {
-                console.error("Error signing out:", error);
-              }
-            }}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors hover:text-white"
+            onClick={() => setShowSignOutModal(true)}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors hover:text-maroon-primary cursor-pointer"
             style={{ color: '#A08060' }}
           >
             <Icon name="ArrowRightOnRectangleIcon" size={17} />
@@ -2113,8 +2266,15 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowNewBookingModal(true)}
+              className="flex items-center gap-1.5 bg-[#C8860A] hover:bg-[#A06A08] text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg transition-all shadow-sm active:scale-95 cursor-pointer"
+            >
+              <Icon name="PlusIcon" size={14} />
+              <span>+ New Booking</span>
+            </button>
             {stats.newEnquiries > 0 && (
-              <button onClick={() => setActiveTab('enquiries')} className="hidden sm:flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors">
+              <button onClick={() => setActiveTab('enquiries')} className="hidden sm:flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors cursor-pointer">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
                 {stats.newEnquiries} new
               </button>
@@ -2180,7 +2340,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           <div className="text-sm font-medium text-gray-900 truncate">{b.name}</div>
                           <div className="text-xs text-gray-400">{b.eventType} · {b.date} · {b.guests} guests</div>
                         </div>
-                        <a href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, thank you for your enquiry with Honeymoon! We'd love to help with your ${b.eventType}. Could you confirm your preferred date and guest count?`)} target="_blank" rel="noopener noreferrer"
+                        <a href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, thank you for your enquiry with SriLalitha! We'd love to help with your ${b.eventType}. Could you confirm your preferred date and guest count?`)} target="_blank" rel="noopener noreferrer"
                           className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors flex-shrink-0"
                           style={{ background: '#25D366', color: 'white' }}>
                           <Icon name="ChatBubbleLeftRightIcon" size={13} />
@@ -2291,7 +2451,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   )}
 
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <a href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, thank you for your enquiry with Honeymoon! We'd love to help with your ${b.eventType} on ${b.date}. Let me share our menu packages with you shortly.`)}
+                    <a href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, thank you for your enquiry with SriLalitha! We'd love to help with your ${b.eventType} on ${b.date}. Let me share our menu packages with you shortly.`)}
                       target="_blank" rel="noopener noreferrer"
                       className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-colors"
                       style={{ background: '#25D366', color: 'white' }}>
@@ -2391,7 +2551,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             </span>
                           </td>
                           <td className="px-4 py-3.5">
-                            <a href={buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]}, this is Honeymoon regarding your ${booking.eventType} booking on ${booking.date}.`)}
+                            <a href={buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]}, this is SriLalitha regarding your ${booking.eventType} booking on ${booking.date}.`)}
                               target="_blank" rel="noopener noreferrer"
                               className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
                               style={{ background: '#25D366', color: 'white' }}>
@@ -2492,7 +2652,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold flex-shrink-0 ${STATUS_COLORS[b.status]}`}>
                             {STATUS_LABELS[b.status]}
                           </span>
-                          <a href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, just a reminder about your ${b.eventType} at Honeymoon on ${b.date} at ${b.time}. We look forward to seeing you!`)}
+                          <a href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, just a reminder about your ${b.eventType} at SriLalitha on ${b.date} at ${b.time}. We look forward to seeing you!`)}
                             target="_blank" rel="noopener noreferrer"
                             className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg flex-shrink-0"
                             style={{ background: '#25D366', color: 'white' }}>
@@ -2550,7 +2710,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           <td className="px-4 py-3.5 text-xs text-gray-500">{customer.lastEvent}</td>
                           <td className="px-4 py-3.5">
                             <div className="flex items-center gap-2">
-                              <a href={buildWhatsAppLink(customer.phone, `Hi ${customer.name.split(' ')[0]}, this is Honeymoon. How can we help you today?`)}
+                              <a href={buildWhatsAppLink(customer.phone, `Hi ${customer.name.split(' ')[0]}, this is SriLalitha. How can we help you today?`)}
                                 target="_blank" rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
                                 style={{ background: '#25D366', color: 'white' }}>
@@ -3008,7 +3168,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <div className="flex flex-wrap gap-2">
                       {enquiries.concat(activeBookings).slice(0, 5).map((b) => (
                         <a key={b.id}
-                          href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, here is our *Live Counter Package* from Honeymoon:\n\n🎪 *Sri Lankan & South Indian:*\n${editableLiveCounter.srilankanSouthIndian.map(i => `• ${i.name} — £${i.price.toFixed(2)}/person`).join('\n')}\n\n🎪 *North Indian:*\n${editableLiveCounter.northIndian.map(i => `• ${i.name} — £${i.price.toFixed(2)}/person`).join('\n')}\n\n✨ *Extras:*\n${editableLiveCounter.extras.map(i => `• ${i.name} — £${i.price.toFixed(2)}`).join('\n')}\n\nPlease let us know which items you'd like to add to your event! 🙏`)}
+                          href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, here is our *Live Counter Package* from SriLalitha:\n\n🎪 *Sri Lankan & South Indian:*\n${editableLiveCounter.srilankanSouthIndian.map(i => `• ${i.name} — £${i.price.toFixed(2)}/person`).join('\n')}\n\n🎪 *North Indian:*\n${editableLiveCounter.northIndian.map(i => `• ${i.name} — £${i.price.toFixed(2)}/person`).join('\n')}\n\n✨ *Extras:*\n${editableLiveCounter.extras.map(i => `• ${i.name} — £${i.price.toFixed(2)}`).join('\n')}\n\nPlease let us know which items you'd like to add to your event! 🙏`)}
                           target="_blank" rel="noopener noreferrer"
                           className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
                           style={{ background: '#25D366', color: 'white' }}>
@@ -3807,7 +3967,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <div className="text-sm text-gray-500">{selectedBooking.email}</div>
                     <div className="text-sm text-gray-500">{selectedBooking.phone}</div>
                   </div>
-                  <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, this is Honeymoon regarding your ${selectedBooking.eventType} booking.`)}
+                  <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, this is SriLalitha regarding your ${selectedBooking.eventType} booking.`)}
                     target="_blank" rel="noopener noreferrer"
                     className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg"
                     style={{ background: '#25D366', color: 'white' }}>
@@ -5337,7 +5497,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               )}
               {selectedBooking.status === 'event_scheduled' && (
                 <div className="space-y-2">
-                  <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, just a reminder — your ${selectedBooking.eventType} at Honeymoon is coming up on *${selectedBooking.date}* at ${selectedBooking.time}. We look forward to seeing you! 🎉`)}
+                  <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, just a reminder — your ${selectedBooking.eventType} at SriLalitha is coming up on *${selectedBooking.date}* at ${selectedBooking.time}. We look forward to seeing you! 🎉`)}
                     target="_blank" rel="noopener noreferrer"
                     className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl"
                     style={{ background: '#25D366', color: 'white' }}>
@@ -5526,7 +5686,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   {selectedCustomer.phone}
                 </div>
               </div>
-              <a href={buildWhatsAppLink(selectedCustomer.phone, `Hi ${selectedCustomer.name.split(' ')[0]}, this is Honeymoon. How can we help you today?`)}
+              <a href={buildWhatsAppLink(selectedCustomer.phone, `Hi ${selectedCustomer.name.split(' ')[0]}, this is SriLalitha. How can we help you today?`)}
                 target="_blank" rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-xl w-full"
                 style={{ background: '#25D366', color: 'white' }}>
@@ -5595,6 +5755,210 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
         </div>
       )}
 
+      {/* ─── NEW BOOKING / ENQUIRY MODAL ─── */}
+      {showNewBookingModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-8 w-full max-w-lg border border-gray-100 my-8 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center justify-between pb-4 mb-4 border-b border-gray-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(200,134,10,0.1)' }}>
+                  <Icon name="CalendarDaysIcon" size={20} style={{ color: '#C8860A' }} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Create New Booking</h3>
+                  <p className="text-xs text-gray-500">Add an enquiry or confirmed booking directly into the database</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowNewBookingModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <Icon name="XMarkIcon" size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateManualBooking} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Customer Full Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newBookingForm.name}
+                    onChange={(e) => setNewBookingForm({ ...newBookingForm, name: e.target.value })}
+                    placeholder="e.g. Sarah Jenkins"
+                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Email Address</label>
+                  <input
+                    type="email"
+                    value={newBookingForm.email}
+                    onChange={(e) => setNewBookingForm({ ...newBookingForm, email: e.target.value })}
+                    placeholder="sarah@example.com"
+                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Phone / WhatsApp Number</label>
+                  <input
+                    type="tel"
+                    value={newBookingForm.phone}
+                    onChange={(e) => setNewBookingForm({ ...newBookingForm, phone: e.target.value })}
+                    placeholder="07700 900000"
+                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Event Type *</label>
+                  <select
+                    value={newBookingForm.eventType}
+                    onChange={(e) => setNewBookingForm({ ...newBookingForm, eventType: e.target.value })}
+                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-white"
+                  >
+                    <option value="Wedding">Wedding</option>
+                    <option value="Birthday">Birthday</option>
+                    <option value="Corporate">Corporate</option>
+                    <option value="Anniversary">Anniversary</option>
+                    <option value="Graduation">Graduation</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Event Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={newBookingForm.date}
+                    onChange={(e) => setNewBookingForm({ ...newBookingForm, date: e.target.value })}
+                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Time of Day</label>
+                  <select
+                    value={newBookingForm.time}
+                    onChange={(e) => setNewBookingForm({ ...newBookingForm, time: e.target.value })}
+                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-white"
+                  >
+                    <option value="Lunch (12:00pm – 4:00pm)">Lunch (12:00pm – 4:00pm)</option>
+                    <option value="Dinner (6:00pm – 11:30pm)">Dinner (6:00pm – 11:30pm)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Guest Counts */}
+              <div className="grid grid-cols-3 gap-2 bg-gray-50 p-3 rounded-xl border border-gray-200">
+                <div>
+                  <label className="block text-[11px] font-semibold text-gray-600 mb-1">Adults</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={newBookingForm.adults}
+                    onChange={(e) => setNewBookingForm({ ...newBookingForm, adults: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-gray-600 mb-1">Kids (4-10)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newBookingForm.kids4to10}
+                    onChange={(e) => setNewBookingForm({ ...newBookingForm, kids4to10: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-gray-600 mb-1">Kids (&lt;4)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newBookingForm.kidsUnder4}
+                    onChange={(e) => setNewBookingForm({ ...newBookingForm, kidsUnder4: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Select Package</label>
+                  <select
+                    value={newBookingForm.package}
+                    onChange={(e) => setNewBookingForm({ ...newBookingForm, package: e.target.value })}
+                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-white"
+                  >
+                    {editableBanquetPackages.map(p => (
+                      <option key={p.id} value={p.name}>{p.name} (£{p.pricePerPerson}/pp)</option>
+                    ))}
+                    <option value="Venue Hall Only">Venue Hall Only</option>
+                    <option value="Dry Hire">Dry Hire</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Initial Status</label>
+                  <select
+                    value={newBookingForm.status}
+                    onChange={(e) => setNewBookingForm({ ...newBookingForm, status: e.target.value as BookingStatus })}
+                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-white"
+                  >
+                    <option value="new_enquiry">New Enquiry</option>
+                    <option value="menu_sent">Menu Sent</option>
+                    <option value="deposit_pending">Deposit Pending</option>
+                    <option value="deposit_confirmed">Deposit Confirmed</option>
+                    <option value="event_scheduled">Event Scheduled</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Notes / Special Requests</label>
+                <textarea
+                  rows={2}
+                  value={newBookingForm.notes}
+                  onChange={(e) => setNewBookingForm({ ...newBookingForm, notes: e.target.value })}
+                  placeholder="e.g. Dietary preferences, stage decoration..."
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A] resize-none"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowNewBookingModal(false)}
+                  className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingBooking}
+                  className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all shadow-md hover:shadow-lg disabled:opacity-70 flex items-center justify-center gap-2"
+                  style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                >
+                  {isCreatingBooking ? (
+                    <>
+                      <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                      Saving to Database...
+                    </>
+                  ) : (
+                    'Save Booking'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* ─── CUSTOM ALERT MODAL ─── */}
       {customAlert && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
@@ -5611,6 +5975,48 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             >
               OK
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── SIGN OUT CONFIRMATION MODAL ─── */}
+      {showSignOutModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm border border-gray-100 flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
+            <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4 bg-amber-50 text-amber-600 shadow-inner">
+              <Icon name="ArrowRightOnRectangleIcon" size={26} />
+            </div>
+            <h3 className="text-base font-bold text-gray-900 mb-1">Sign Out Confirmation</h3>
+            <p className="text-sm text-gray-500 mb-6">Are you sure you want to sign out of your Admin session?</p>
+            <div className="flex gap-3 w-full">
+              <button
+                type="button"
+                onClick={() => setShowSignOutModal(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setShowSignOutModal(false);
+                  try {
+                    await signOut(auth);
+                    setActiveTab('overview');
+                    if (typeof window !== 'undefined') {
+                      localStorage.removeItem('adminActiveTab');
+                    }
+                    setLoggedIn(false);
+                  } catch (error) {
+                    console.error("Error signing out:", error);
+                  }
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all shadow-md active:scale-95 hover:brightness-110"
+                style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+              >
+                Sign Out
+              </button>
+            </div>
           </div>
         </div>
       )}

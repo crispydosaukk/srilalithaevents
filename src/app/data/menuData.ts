@@ -177,8 +177,8 @@ export const BANQUET_PACKAGES = [
     color: '#1F2937',
   },
   {
-    id: 'honeymoon',
-    name: 'Honeymoon Package',
+    id: 'srilalitha',
+    name: 'SriLalitha Package',
     pricePerPerson: 50,
     tag: 'Grand Red Carpet Entrance',
     minGuests: null,
@@ -256,7 +256,7 @@ export const TERMS_AND_CONDITIONS = {
     ],
   },
   soundLimiter: {
-    title: 'HONEYMOON SOUND LIMITER\'S',
+    title: 'SRILALITHA SOUND LIMITER\'S',
     items: [
       'DJ to Maintain Policy or will be held responsible. Before 10:00 pm - Upto 90dB | After 10:00 pm - Upto 85dB.',
       'DJ and Client will be liable and responsible if not adhered to the sound and timings as agreed and will be fined if any licensing are in breach during an Event.',

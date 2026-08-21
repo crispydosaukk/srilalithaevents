@@ -53,7 +53,8 @@ export default function AccessControl({ currentUserRole }: { currentUserRole?: s
           'manage_history',
           'manage_settings',
           'manage_access',
-          'manage_tracker'
+          'manage_tracker',
+          'manage_discounts'
         ];
         for (const p of DEFAULT_PERMISSIONS) {
           if (!existing.includes(p)) {

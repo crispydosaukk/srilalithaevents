@@ -8,25 +8,25 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        honey: {
+        maroon: {
+          primary: '#9B1B30',
+          dark: '#7A1526',
+          light: '#BD213B',
+          muted: 'rgba(155,27,48,0.15)',
+        },
+        gold: {
           primary: '#C8860A',
           dark: '#A06A05',
           light: '#F0A830',
           muted: 'rgba(200,134,10,0.15)',
           pale: '#FFF8E7',
-          gold: '#D4A017',
         },
-        teal: {
-          primary: '#C8860A',
-          dark: '#A06A05',
-          light: '#F0A830',
-          muted: 'rgba(200,134,10,0.15)',
-        },
-        midnight: {
-          DEFAULT: '#1A0F00',
-          lighter: '#2C1A00',
-          border: '#3D2800',
-          text: '#A08060',
+        surface: {
+          DEFAULT: '#FFFFFF',
+          lighter: '#FAFAFA',
+          border: '#E5E7EB',
+          text: '#1F2937',
+          muted: '#4B5563',
         },
         linen: {
           DEFAULT: '#FFF8E7',
