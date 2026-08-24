@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Icon from '@/components/ui/AppIcon';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import {
   INDIAN_MENU as DEFAULT_INDIAN_MENU,
@@ -19,13 +19,32 @@ import {
   TERMS_AND_CONDITIONS as DEFAULT_TERMS_AND_CONDITIONS,
   DRY_HIRE_PRICES as DEFAULT_DRY_HIRE_PRICES,
 } from '@/app/data/menuData';
-import { onSnapshot, doc } from 'firebase/firestore';
-
-const EVENT_TYPES = ['Wedding', 'Birthday', 'Corporate', 'Anniversary', 'Graduation', 'Other'];
+import {
+  DEFAULT_FORM_CONFIG,
+  BookingFormConfig,
+  FormField,
+  DEFAULT_TIME_SLOTS,
+  DEFAULT_EVENT_TYPES,
+  DEFAULT_OUTDOOR_TIME_SLOTS,
+  DEFAULT_SLOT_CAPACITY,
+  SlotCapacityConfig,
+} from '@/app/data/formConfig';
+import {
+  DeliveryLocationConfig,
+  DEFAULT_DELIVERY_CONFIG,
+  calculateDistanceMiles,
+  calculateDeliveryCharge,
+  DeliveryCalculationResult,
+} from '@/app/data/deliveryConfig';
+import GoogleLocationInput from '@/components/GoogleLocationInput';
+import InteractiveMenuOrderModal from '@/components/InteractiveMenuOrderModal';
 
 type MenuTab = 'indian' | 'srilankan' | 'live' | 'packages';
 
 export default function HomePage() {
+  const [isMenuOrderModalOpen, setIsMenuOrderModalOpen] = useState(false);
+  const [selectedPackageForModal, setSelectedPackageForModal] = useState<string>('Gold Package');
+
   const [menus, setMenus] = useState({
     INDIAN_MENU: DEFAULT_INDIAN_MENU,
     SRI_LANKAN_MENU: DEFAULT_SRI_LANKAN_MENU,
@@ -40,6 +59,63 @@ export default function HomePage() {
   });
 
   const [blockedDates, setBlockedDates] = useState<string[]>([]);
+  const [formConfig, setFormConfig] = useState<BookingFormConfig>(DEFAULT_FORM_CONFIG);
+  const [existingBookings, setExistingBookings] = useState<any[]>([]);
+  const [deliveryConfig, setDeliveryConfig] = useState<DeliveryLocationConfig>(DEFAULT_DELIVERY_CONFIG);
+  const [customerLocationCoords, setCustomerLocationCoords] = useState<{ lat: number; lng: number; postcode?: string } | null>(null);
+  const [deliveryResult, setDeliveryResult] = useState<DeliveryCalculationResult | null>(null);
+
+  React.useEffect(() => {
+    return onSnapshot(doc(db, 'site_data', 'booking_form_config'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data() as Partial<BookingFormConfig>;
+        let fields = (data.fields && data.fields.length > 0) ? [...data.fields] : [...DEFAULT_FORM_CONFIG.fields];
+
+        // Ensure location field is present if not in database
+        if (!fields.some(f => f.id === 'location' || f.type === 'location')) {
+          const locField = DEFAULT_FORM_CONFIG.fields.find(f => f.id === 'location');
+          if (locField) {
+            const eventTypeIdx = fields.findIndex(f => f.id === 'eventType');
+            if (eventTypeIdx !== -1) {
+              fields.splice(eventTypeIdx + 1, 0, locField);
+            } else {
+              fields.push(locField);
+            }
+          }
+        }
+
+        // Remove legacy service_type field
+        fields = fields.filter(f => f.id !== 'service_type' && f.id !== 'serviceType');
+
+        setFormConfig({
+          formTitle: data.formTitle || DEFAULT_FORM_CONFIG.formTitle,
+          formSubtitle: data.formSubtitle || DEFAULT_FORM_CONFIG.formSubtitle,
+          submitButtonText: data.submitButtonText || DEFAULT_FORM_CONFIG.submitButtonText,
+          fields,
+          slotCapacity: data.slotCapacity || DEFAULT_FORM_CONFIG.slotCapacity || DEFAULT_SLOT_CAPACITY,
+        });
+      }
+    });
+  }, []);
+
+  React.useEffect(() => {
+    return onSnapshot(doc(db, 'site_data', 'delivery_settings'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data() as Partial<DeliveryLocationConfig>;
+        setDeliveryConfig(prev => ({
+          ...prev,
+          ...data,
+        }));
+      }
+    });
+  }, []);
+
+  React.useEffect(() => {
+    return onSnapshot(collection(db, 'booking_requests'), (snapshot) => {
+      const bks = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      setExistingBookings(bks);
+    });
+  }, []);
 
   React.useEffect(() => {
     return onSnapshot(doc(db, 'site_data', 'menus'), (docSnap) => {
@@ -85,9 +161,75 @@ export default function HomePage() {
 
   const { INDIAN_MENU, SRI_LANKAN_MENU, LIVE_COUNTER_PACKAGE, BANQUET_PACKAGES, VENUE_HALL_CHARGES, TABLE_SERVICE, KIDS_PRICING, STANDARD_SETUP, TERMS_AND_CONDITIONS, DRY_HIRE_PRICES } = menus;
 
-  const [bookingForm, setBookingForm] = useState({
+  const [bookingForm, setBookingForm] = useState<Record<string, any>>({
     name: '', email: '', phone: '', eventType: '', date: '', timeOfDay: '', guests: '', message: '', selectedPackage: '',
   });
+
+  const isOutdoorCateringSelected = (form: Record<string, any>) => {
+    return Object.values(form).some((val) => {
+      if (typeof val === 'string') {
+        const lower = val.toLowerCase().trim();
+        return (
+          lower.includes('outdoor') ||
+          lower.includes('out door') ||
+          lower.includes('categroing') ||
+          lower.includes('catering')
+        );
+      }
+      return false;
+    });
+  };
+
+  const isOutdoorActive = isOutdoorCateringSelected(bookingForm);
+  const activeSlotConfig: SlotCapacityConfig = formConfig.slotCapacity || DEFAULT_SLOT_CAPACITY;
+  const maxSlotCapacity = isOutdoorActive 
+    ? (activeSlotConfig.maxOutdoorCateringPerSlot || 4) 
+    : (activeSlotConfig.maxHallBookingsPerSlot || 1);
+
+  const dynamicTimeSlots = isOutdoorActive
+    ? (activeSlotConfig.outdoorCateringTimeSlots && activeSlotConfig.outdoorCateringTimeSlots.length > 0 
+        ? activeSlotConfig.outdoorCateringTimeSlots 
+        : DEFAULT_OUTDOOR_TIME_SLOTS)
+    : (formConfig.fields.find(f => f.id === 'timeOfDay')?.options && (formConfig.fields.find(f => f.id === 'timeOfDay')?.options?.length || 0) > 0
+        ? formConfig.fields.find(f => f.id === 'timeOfDay')!.options!
+        : (activeSlotConfig.standardTimeSlots || DEFAULT_TIME_SLOTS));
+
+  const getSlotOccupancy = (slotName: string) => {
+    if (!bookingForm.date) return { count: 0, full: false, remaining: maxSlotCapacity };
+    const count = existingBookings.filter((b) => {
+      if (b.date !== bookingForm.date) return false;
+      if (b.status === 'cancelled' || b.status === 'rejected') return false;
+      const bSlot = b.timeOfDay || b.time || '';
+      if (bSlot !== slotName) return false;
+      const bIsOutdoor = isOutdoorCateringSelected(b.customFields ? { ...b, ...b.customFields } : b);
+      return isOutdoorActive ? bIsOutdoor : !bIsOutdoor;
+    }).length;
+    const full = count >= maxSlotCapacity;
+    const remaining = Math.max(0, maxSlotCapacity - count);
+    return { count, full, remaining };
+  };
+
+  const handleLocationSelected = (address: string, coords?: { lat: number; lng: number; postcode?: string }) => {
+    setBookingForm(prev => ({ ...prev, location: address }));
+    if (coords && coords.lat && coords.lng && deliveryConfig.venueLat && deliveryConfig.venueLng) {
+      setCustomerLocationCoords(coords);
+      const dist = calculateDistanceMiles(
+        deliveryConfig.venueLat,
+        deliveryConfig.venueLng,
+        coords.lat,
+        coords.lng
+      );
+      const res = calculateDeliveryCharge(dist, deliveryConfig);
+      setDeliveryResult(res);
+    } else {
+      if (coords && coords.lat && coords.lng) {
+        setCustomerLocationCoords(coords);
+      } else if (!address) {
+        setCustomerLocationCoords(null);
+      }
+      setDeliveryResult(null);
+    }
+  };
 
   const handleEnquireNow = (packageName: string) => {
     setBookingForm(prev => ({ ...prev, selectedPackage: packageName }));
@@ -104,14 +246,12 @@ export default function HomePage() {
   // UK phone validation: 07xxxxxxxxx (11 digits) or +447xxxxxxxxx
   const validateUKPhone = (digits: string) => {
     const cleaned = digits.replace(/\s/g, '');
-    // Accept: 07XXXXXXXXX (10 local digits starting with 07) or 7XXXXXXXXX (9 local digits starting with 7)
     return /^(07\d{9}|7\d{9})$/.test(cleaned) || cleaned === '';
   };
 
   const handlePhoneChange = (digits: string) => {
-    // Only allow digits and spaces
     const sanitized = digits.replace(/[^\d\s]/g, '');
-    setBookingForm({ ...bookingForm, phone: sanitized });
+    setBookingForm(prev => ({ ...prev, phone: sanitized }));
     if (sanitized && !validateUKPhone(sanitized)) {
       setPhoneError('Enter a valid UK number (e.g. 07700 900000)');
     } else {
@@ -120,6 +260,8 @@ export default function HomePage() {
   };
 
   const [submittedBookingId, setSubmittedBookingId] = useState<string>('');
+  const [submittedIsWaitlist, setSubmittedIsWaitlist] = useState(false);
+  const [submittedDetails, setSubmittedDetails] = useState<{ date: string; timeOfDay: string } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,7 +272,7 @@ export default function HomePage() {
     setIsSubmitting(true);
     setCustomHomeAlert(null);
 
-    if (blockedDates.includes(bookingForm.date)) {
+    if (bookingForm.date && blockedDates.includes(bookingForm.date)) {
       setCustomHomeAlert({
         message: "This date is unfortunately fully booked or unavailable. Please choose another date.",
         type: 'error'
@@ -139,8 +281,16 @@ export default function HomePage() {
       return;
     }
 
+    let isWaitlist = false;
+    if (bookingForm.date && bookingForm.timeOfDay) {
+      const { full } = getSlotOccupancy(bookingForm.timeOfDay);
+      if (full) {
+        isWaitlist = true;
+      }
+    }
+
     try {
-      const fullPhone = bookingForm.phone ? `+44${bookingForm.phone.replace(/^0/, '').replace(/\s/g, '')}` : '';
+      const fullPhone = bookingForm.phone ? `+44${String(bookingForm.phone).replace(/^0/, '').replace(/\s/g, '')}` : '';
       const guestCount = Number(bookingForm.guests) || 0;
       const selectedPkg = BANQUET_PACKAGES.find(p => p.name === bookingForm.selectedPackage);
       const selectedExtra = LIVE_COUNTER_PACKAGE?.extras?.find(e => e.name === bookingForm.selectedPackage);
@@ -152,31 +302,68 @@ export default function HomePage() {
         baseAmount = selectedExtra.price;
       }
 
+      const deliveryFee = deliveryResult ? deliveryResult.charge : 0;
+      const totalAmount = baseAmount + deliveryFee;
+
       const depositPercent = pricingDetails.depositPercentage || 30;
       const depositAmount = Math.round((baseAmount * depositPercent) / 100);
 
+      // Collect custom fields
+      const standardKeys = ['name', 'email', 'phone', 'eventType', 'location', 'date', 'timeOfDay', 'guests', 'message', 'selectedPackage'];
+      const customFields: Record<string, any> = {};
+      Object.entries(bookingForm).forEach(([k, v]) => {
+        if (!standardKeys.includes(k) && v !== undefined && v !== '') {
+          customFields[k] = v;
+        }
+      });
+
       const docRef = await addDoc(collection(db, 'booking_requests'), {
-        name: bookingForm.name.trim(),
-        email: bookingForm.email.trim().toLowerCase(),
+        name: (bookingForm.name || '').trim(),
+        email: (bookingForm.email || '').trim().toLowerCase(),
         phone: fullPhone,
-        eventType: bookingForm.eventType,
-        date: bookingForm.date,
-        timeOfDay: bookingForm.timeOfDay,
+        eventType: bookingForm.eventType || 'Other',
+        location: bookingForm.location || '',
+        customerCoords: customerLocationCoords || null,
+        distanceMiles: deliveryResult ? deliveryResult.distanceMiles : 0,
+        deliveryCharge: deliveryFee,
+        deliveryBreakdown: deliveryResult ? deliveryResult.breakdownText : '',
+        totalEstimatedAmount: totalAmount,
+        date: bookingForm.date || '',
+        timeOfDay: bookingForm.timeOfDay || '',
         guests: guestCount,
         message: bookingForm.message || '',
         package: bookingForm.selectedPackage || 'Not Selected',
         baseAmount,
         deposit: depositAmount,
         depositPercentage: depositPercent,
-        extraCharges: [],
+        extraCharges: deliveryFee > 0 ? [{ description: `Travel & Delivery Fee (${deliveryResult?.distanceMiles} miles)`, amount: deliveryFee }] : [],
+        customFields,
+        ...customFields,
+        isWaitlist,
+        capacityStatus: isWaitlist ? 'exceeded_capacity' : 'normal',
+        waitlistNote: isWaitlist ? 'Submitted for high-demand / full-capacity slot - Customer requesting schedule adjustment' : '',
         status: 'new_enquiry',
         createdAt: new Date().toISOString(),
       });
 
       setSubmittedBookingId(docRef.id);
+      setSubmittedIsWaitlist(isWaitlist);
+      setSubmittedDetails({
+        date: bookingForm.date || '',
+        timeOfDay: bookingForm.timeOfDay || '',
+      });
       setSubmitted(true);
       setPhoneError('');
-      setBookingForm({ name: '', email: '', phone: '', eventType: '', date: '', timeOfDay: '', guests: '', message: '', selectedPackage: '' });
+      // Reset form
+      const resetObj: Record<string, any> = {
+        name: '', email: '', phone: '', eventType: '', location: '', date: '', timeOfDay: '', guests: '', message: '', selectedPackage: '',
+      };
+      formConfig.fields.forEach(f => {
+        resetObj[f.id] = '';
+      });
+      setBookingForm(resetObj);
+      setCustomerLocationCoords(null);
+      setDeliveryResult(null);
     } catch (error: any) {
       console.error("Error adding booking document: ", error);
       setCustomHomeAlert({
@@ -188,6 +375,287 @@ export default function HomePage() {
     }
   };
 
+  const renderField = (field: FormField, isCompact: boolean = false) => {
+    if (!field.enabled) return null;
+
+    // Responsive column span in a 12-column grid
+    let colSpanClass = 'col-span-12';
+    if (field.width === 'half') {
+      colSpanClass = 'col-span-12 sm:col-span-6';
+    } else if (field.width === 'third') {
+      colSpanClass = 'col-span-12 sm:col-span-4';
+    }
+
+    const inputBaseClass = `w-full border border-gray-300 rounded-xl ${
+      isCompact ? 'px-3 py-2.5 text-sm' : 'px-4 py-3 text-sm'
+    } focus:outline-none focus:ring-2 focus:border-yellow-500 bg-white transition-all`;
+
+    return (
+      <div key={field.id} className={colSpanClass}>
+        <label className={`block ${isCompact ? 'text-xs' : 'text-sm'} font-medium text-gray-700 mb-1 flex items-center gap-1.5`}>
+          {field.id === 'phone' && (
+            <svg viewBox="0 0 24 24" fill="#25D366" className="w-3.5 h-3.5 flex-shrink-0">
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.126 1.533 5.859L.057 23.428a.75.75 0 0 0 .921.921l5.684-1.47A11.943 11.943 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.75a9.694 9.694 0 0 1-4.946-1.356l-.355-.211-3.676.95.974-3.578-.231-.368A9.693 9.693 0 0 1 2.25 12C2.25 6.615 6.615 2.25 12 2.25S21.75 6.615 21.75 12 17.385 21.75 12 21.75z"/>
+            </svg>
+          )}
+          {field.label} {field.required && <span className="text-red-500">*</span>}
+        </label>
+
+        {field.type === 'location' && (
+          <div>
+            <GoogleLocationInput
+              value={bookingForm[field.id] || ''}
+              placeholder={field.placeholder || 'Enter venue address or UK postcode (e.g. EC1A 1BB)'}
+              required={field.required}
+              onChange={(address, coords) => handleLocationSelected(address, coords)}
+              onCoordinatesChange={(coords) => {
+                if (coords && coords.lat && coords.lng && deliveryConfig.venueLat && deliveryConfig.venueLng) {
+                  const dist = calculateDistanceMiles(
+                    deliveryConfig.venueLat,
+                    deliveryConfig.venueLng,
+                    coords.lat,
+                    coords.lng
+                  );
+                  const res = calculateDeliveryCharge(dist, deliveryConfig);
+                  setDeliveryResult(res);
+                } else {
+                  setDeliveryResult(null);
+                }
+              }}
+            />
+
+            {/* Dynamic Distance & Delivery Pricing Badge */}
+            {deliveryResult && bookingForm[field.id] && (
+              <div className={`mt-2 p-3 rounded-xl border text-xs leading-relaxed transition-all animate-in fade-in duration-200 ${
+                deliveryResult.isFree
+                  ? 'bg-emerald-50/80 border-emerald-200 text-emerald-900'
+                  : deliveryResult.isOutOfRange
+                  ? 'bg-amber-50 border-amber-300 text-amber-900'
+                  : 'bg-amber-50/80 border-amber-200 text-amber-950'
+              }`}>
+                <div className="flex items-center justify-between font-bold text-xs mb-1">
+                  <span className="flex items-center gap-1.5">
+                    <Icon name="MapPinIcon" size={14} className={deliveryResult.isFree ? 'text-emerald-600' : 'text-[#C8860A]'} />
+                    <span>Distance: {deliveryResult.distanceMiles} miles from Restaurant</span>
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-md font-bold text-xs ${
+                    deliveryResult.isFree
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-amber-200 text-amber-900'
+                  }`}>
+                    {deliveryResult.isFree ? 'FREE Delivery' : `+£${deliveryResult.charge.toFixed(2)} Delivery Fee`}
+                  </span>
+                </div>
+                <p className="text-[11px] opacity-90">
+                  {deliveryResult.breakdownText}
+                  {deliveryResult.isOutOfRange && (
+                    <span className="block text-rose-700 font-semibold mt-0.5">
+                      ⚠️ Note: Event is over {deliveryConfig.maxDeliveryRadiusMiles} miles. Custom long-distance arrangements will be confirmed with you.
+                    </span>
+                  )}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {field.type === 'text' && (
+          <input
+            type="text"
+            required={field.required}
+            value={bookingForm[field.id] || ''}
+            onChange={(e) => setBookingForm({ ...bookingForm, [field.id]: e.target.value })}
+            className={inputBaseClass}
+            placeholder={field.placeholder || ''}
+          />
+        )}
+
+        {field.type === 'email' && (
+          <input
+            type="email"
+            required={field.required}
+            value={bookingForm[field.id] || ''}
+            onChange={(e) => setBookingForm({ ...bookingForm, [field.id]: e.target.value })}
+            className={inputBaseClass}
+            placeholder={field.placeholder || 'your@email.com'}
+          />
+        )}
+
+        {field.type === 'tel' && (
+          <div>
+            <div className={`flex items-center rounded-xl overflow-hidden border ${phoneError ? 'border-red-400' : 'border-gray-300'} focus-within:ring-2 focus-within:ring-yellow-400 focus-within:border-yellow-500 bg-white`}>
+              <span className={`${isCompact ? 'px-3 py-2.5 text-xs sm:text-sm' : 'px-3.5 py-3 text-sm'} bg-gray-50 font-semibold text-gray-600 border-r border-gray-300 select-none whitespace-nowrap`}>
+                +44
+              </span>
+              <input
+                type="tel"
+                value={bookingForm[field.id] || ''}
+                onChange={(e) => handlePhoneChange(e.target.value)}
+                className={`flex-1 ${isCompact ? 'px-3 py-2.5 text-sm' : 'px-4 py-3 text-sm'} focus:outline-none bg-white`}
+                placeholder={field.placeholder || '07700 900000'}
+                maxLength={12}
+              />
+            </div>
+            {phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}
+          </div>
+        )}
+
+        {field.type === 'number' && (
+          <input
+            type="number"
+            required={field.required}
+            min={field.min ?? 1}
+            max={field.max ?? 500}
+            value={bookingForm[field.id] || ''}
+            onChange={(e) => setBookingForm({ ...bookingForm, [field.id]: e.target.value })}
+            className={inputBaseClass}
+            placeholder={field.placeholder || 'e.g. 100'}
+          />
+        )}
+
+        {field.type === 'date' && (
+          <div>
+            <input
+              type="date"
+              required={field.required}
+              min={new Date().toISOString().split('T')[0]}
+              value={bookingForm[field.id] || ''}
+              onChange={(e) => setBookingForm({ ...bookingForm, [field.id]: e.target.value })}
+              className={`${inputBaseClass} ${
+                bookingForm[field.id] && blockedDates.includes(bookingForm[field.id])
+                  ? 'border-red-500 ring-2 ring-red-100 bg-red-50/10'
+                  : ''
+              }`}
+            />
+            {bookingForm[field.id] && blockedDates.includes(bookingForm[field.id]) && (
+              <span className="text-red-500 text-xs font-semibold mt-1 flex items-center gap-1">
+                <Icon name="ExclamationTriangleIcon" size={12} className="text-red-500 flex-shrink-0" />
+                Unavailable / Fully Booked
+              </span>
+            )}
+          </div>
+        )}
+
+        {field.type === 'select' && (
+          <select
+            required={field.required}
+            value={bookingForm[field.id] || ''}
+            onChange={(e) => setBookingForm({ ...bookingForm, [field.id]: e.target.value })}
+            className={inputBaseClass}
+          >
+            <option value="">{field.placeholder || `Select ${field.label}`}</option>
+            {(field.options && field.options.length > 0 ? field.options : DEFAULT_EVENT_TYPES).map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        )}
+
+        {field.type === 'time_select' && (
+          <div>
+            <select
+              required={field.required}
+              value={bookingForm[field.id] || ''}
+              onChange={(e) => setBookingForm({ ...bookingForm, [field.id]: e.target.value })}
+              className={`${inputBaseClass} ${isOutdoorActive ? 'border-amber-400 bg-amber-50/10' : ''}`}
+            >
+              <option value="">{field.placeholder || 'Select time'}</option>
+              {dynamicTimeSlots.map((slot) => {
+                const { count, full, remaining } = getSlotOccupancy(slot);
+                return (
+                  <option key={slot} value={slot} className={full ? 'text-amber-800 bg-amber-50/60 font-semibold' : ''}>
+                    {slot}
+                    {bookingForm.date
+                      ? full
+                        ? ` — (High Demand / Full Capacity - Special Request)`
+                        : isOutdoorActive
+                        ? ` — (${remaining} of ${maxSlotCapacity} slots left)`
+                        : count > 0
+                        ? ` — (Booked - Special Request)`
+                        : ` — (Available)`
+                      : isOutdoorActive
+                      ? ` (Up to ${maxSlotCapacity} bookings / slot)`
+                      : ''}
+                  </option>
+                );
+              })}
+            </select>
+
+            {/* High Demand Warning Banner when selected slot is full */}
+            {bookingForm.date && bookingForm.timeOfDay && getSlotOccupancy(bookingForm.timeOfDay).full && (
+              <div className="flex items-start gap-2.5 text-xs text-amber-950 mt-2 bg-gradient-to-r from-amber-50 via-amber-100/60 to-amber-50 p-3 rounded-xl border border-amber-300 shadow-2xs animate-in fade-in duration-200">
+                <span className="text-base flex-shrink-0">✨</span>
+                <div>
+                  <span className="font-bold block text-amber-950">High Demand Slot — We'll Strive to Accommodate You!</span>
+                  <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                    This time slot has reached standard booking capacity for this date. You can still submit your request! Our senior event coordinators will review our schedule and contact you within 24 hours to do our very best to adjust timings and accommodate your event.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {isOutdoorActive && !(bookingForm.date && bookingForm.timeOfDay && getSlotOccupancy(bookingForm.timeOfDay).full) && (
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-800 mt-1.5 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200">
+                <Icon name="ClockIcon" size={13} className="text-amber-600 flex-shrink-0" />
+                <span>Outdoor Catering: {dynamicTimeSlots.length} dynamic time slots ({maxSlotCapacity} bookings per slot capacity)</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {field.type === 'package_select' && (
+          <select
+            value={bookingForm.selectedPackage || ''}
+            onChange={(e) => setBookingForm({ ...bookingForm, selectedPackage: e.target.value })}
+            className={inputBaseClass}
+            style={
+              bookingForm.selectedPackage
+                ? { borderColor: '#C8860A', boxShadow: '0 0 0 1px rgba(200,134,10,0.3)' }
+                : {}
+            }
+          >
+            <option value="">{field.placeholder || 'No specific package – help me choose'}</option>
+            <optgroup label="── Buffet Packages ──">
+              {(menus.BANQUET_PACKAGES || BANQUET_PACKAGES).map((pkg) => (
+                <option key={pkg.id} value={pkg.name}>
+                  {pkg.name} — £{pkg.pricePerPerson}/person
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="── Venue & Hire ──">
+              <option value="Venue Hall">Venue Hall</option>
+              <option value="Dry Hire">Dry Hire</option>
+              <option value="Kids Pricing">Kids Pricing</option>
+            </optgroup>
+            <optgroup label="── Extras ──">
+              {((menus.LIVE_COUNTER_PACKAGE?.extras) || (LIVE_COUNTER_PACKAGE?.extras) || []).map((extra, idx) => (
+                <option key={idx} value={extra.name}>
+                  {extra.name} — £{extra.price}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+        )}
+
+        {field.type === 'textarea' && (
+          <textarea
+            rows={isCompact ? 2 : 3}
+            required={field.required}
+            value={bookingForm[field.id] || ''}
+            onChange={(e) => setBookingForm({ ...bookingForm, [field.id]: e.target.value })}
+            className={`${inputBaseClass} resize-none`}
+            placeholder={field.placeholder || 'Special requests, preferred menu, dietary needs...'}
+          />
+        )}
+
+        {field.helperText && (
+          <p className="text-[11px] text-gray-400 mt-1">{field.helperText}</p>
+        )}
+      </div>
+    );
+  };
+
   const toggleSection = (key: string) => {
     setExpandedSection(prev => prev === key ? null : key);
   };
@@ -197,186 +665,177 @@ export default function HomePage() {
       <Header onOpenModal={() => {}} />
 
       {/* Hero — two-column layout */}
-      <section className="pt-24 pb-0 px-6 relative overflow-hidden bg-surface">
+      <section className="pt-24 pb-4 px-6 relative overflow-hidden bg-surface">
         <div className="absolute inset-0 opacity-5 pointer-events-none" style={{ background: 'radial-gradient(circle at top right, #9B1B30 0%, transparent 40%), radial-gradient(circle at bottom left, #C8860A 0%, transparent 40%)' }}></div>
-        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center gap-10 lg:gap-16 py-12 relative z-10">
+        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-start justify-between gap-8 lg:gap-12 py-6 lg:py-10 relative z-10">
 
           {/* ── Left: Text content ── */}
-          <div className="flex-1 text-center lg:text-left">
-            <span className="inline-block text-xs font-semibold uppercase tracking-widest px-4 py-1.5 rounded-full mb-5" style={{ background: 'rgba(155, 27, 48, 0.1)', color: '#9B1B30' }}>
+          <div className="flex-1 text-center lg:text-left pt-2 lg:pt-4">
+            <span className="inline-block text-xs font-semibold uppercase tracking-widest px-4 py-1.5 rounded-full mb-4" style={{ background: 'rgba(155, 27, 48, 0.1)', color: '#9B1B30' }}>
               Banquet &amp; Catering
             </span>
-            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 leading-tight mb-4">
+            <h1 className="text-4xl md:text-5xl lg:text-[3.25rem] font-bold text-gray-900 leading-tight mb-4 tracking-tight">
               Make Your Event<br />
               <span style={{ color: '#9B1B30' }}>Unforgettable</span>
             </h1>
-            <p className="text-lg mb-8 max-w-xl lg:mx-0 mx-auto text-gray-600">
-              Authentic Indian &amp; Sri Lankan cuisine. Elegant banquet hall. Unforgettable events.
+            <p className="text-base md:text-lg mb-6 max-w-xl lg:mx-0 mx-auto text-gray-600 leading-relaxed">
+              Authentic Indian &amp; Sri Lankan cuisine. Elegant banquet hall. Seamless outdoor catering for all occasions.
             </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
-              <a href="#menus" className="text-white font-semibold px-8 py-3.5 rounded-xl transition-all shadow-lg hover:shadow-xl bg-maroon-primary hover:bg-maroon-dark">
+            <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start mb-8">
+              <a href="#menus" className="text-white font-semibold px-7 py-3 rounded-xl transition-all shadow-md hover:shadow-lg bg-maroon-primary hover:bg-maroon-dark text-sm sm:text-base">
                 View Menus &amp; Packages
               </a>
-              <a href="#book" className="border border-gray-300 font-semibold px-8 py-3.5 rounded-xl transition-colors text-gray-700 hover:text-maroon-primary hover:border-maroon-primary">
+              <a href="#book" className="border border-gray-300 font-semibold px-7 py-3 rounded-xl transition-colors text-gray-700 hover:text-maroon-primary hover:border-maroon-primary text-sm sm:text-base">
                 Book Now
               </a>
+            </div>
+
+            {/* Key Trust Badges to balance vertical space */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-xl mx-auto lg:mx-0 pt-4 border-t border-gray-200/70 text-left">
+              <div className="flex items-center gap-2.5 bg-white/70 backdrop-blur-xs p-2.5 rounded-xl border border-gray-100 shadow-2xs">
+                <span className="text-lg">⭐</span>
+                <div>
+                  <div className="text-xs font-bold text-gray-900">4.9★ Rated</div>
+                  <div className="text-[11px] text-gray-500">500+ Happy Events</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5 bg-white/70 backdrop-blur-xs p-2.5 rounded-xl border border-gray-100 shadow-2xs">
+                <span className="text-lg">🍲</span>
+                <div>
+                  <div className="text-xs font-bold text-gray-900">Authentic Taste</div>
+                  <div className="text-[11px] text-gray-500">Indian &amp; Sri Lankan</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5 bg-white/70 backdrop-blur-xs p-2.5 rounded-xl border border-gray-100 shadow-2xs">
+                <span className="text-lg">🏛️</span>
+                <div>
+                  <div className="text-xs font-bold text-gray-900">500 Capacity</div>
+                  <div className="text-[11px] text-gray-500">Hall &amp; Outdoor</div>
+                </div>
+              </div>
             </div>
           </div>
 
           {/* ── Right: Booking form card ── */}
-          <div id="book" className="w-full lg:w-[480px] flex-shrink-0">
-            <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-7">
-              <h2 className="text-xl font-bold text-gray-900 text-center mb-1">Request a Booking</h2>
-              <p className="text-sm text-gray-500 text-center mb-5">Fill in your details and we'll get back to you within 24 hours</p>
+          <div id="book" className="w-full lg:w-[490px] flex-shrink-0">
+            <div className="bg-white rounded-2xl shadow-xl p-5 sm:p-6 border border-gray-100">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 text-center mb-1">
+                {formConfig.formTitle || 'Request a Booking'}
+              </h2>
+              <p className="text-xs sm:text-sm text-gray-500 text-center mb-4">
+                {formConfig.formSubtitle || "Fill in your details and we'll get back to you within 24 hours"}
+              </p>
 
               {submitted ? (
-                <div className="text-center py-8 px-4 rounded-2xl border" style={{ background: 'rgba(200,134,10,0.04)', borderColor: 'rgba(200,134,10,0.2)' }}>
-                  <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: 'rgba(200,134,10,0.1)' }}>
-                    <Icon name="CheckCircleIcon" size={28} style={{ color: '#C8860A' }} />
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1">Request Received!</h3>
-                  <p className="text-gray-500 text-sm mb-3">We'll contact you within 24 hours to confirm your booking.</p>
-                  {submittedBookingId && (
-                    <div className="bg-white border border-amber-200 rounded-xl p-3 inline-block max-w-full text-left mb-3">
-                      <span className="text-xs text-gray-400 block uppercase font-semibold">Booking Reference</span>
-                      <span className="text-sm font-mono font-bold text-gray-800 break-all">{submittedBookingId}</span>
+                submittedIsWaitlist ? (
+                  <div className="text-center py-7 px-4 sm:px-6 rounded-2xl border border-amber-300 shadow-md bg-gradient-to-b from-amber-50/90 to-amber-100/40 animate-in zoom-in-95 duration-200">
+                    <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3 bg-amber-100 border border-amber-300 shadow-inner">
+                      <Icon name="SparklesIcon" size={26} className="text-[#C8860A]" />
                     </div>
-                  )}
-                  <div>
-                    <button onClick={() => { setSubmitted(false); setSubmittedBookingId(''); }} className="text-sm font-medium hover:underline block mx-auto" style={{ color: '#C8860A' }}>
-                      Submit another request
+                    <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-amber-200 text-amber-900 mb-2">
+                      Priority Review Request Received
+                    </span>
+                    <h3 className="text-lg font-bold text-gray-900 mb-1">Thank You for Your Request!</h3>
+                    <p className="text-xs text-gray-700 mb-3 leading-relaxed">
+                      We have received your enquiry for <strong className="text-amber-950 font-semibold">{submittedDetails?.date}</strong> during <strong className="text-amber-950 font-semibold">{submittedDetails?.timeOfDay}</strong>.
+                    </p>
+                    <div className="bg-white/95 border border-amber-200 rounded-xl p-3.5 text-xs text-amber-900 mb-4 text-left leading-relaxed shadow-2xs">
+                      <div className="font-bold flex items-center gap-1.5 mb-1 text-amber-950">
+                        <Icon name="InformationCircleIcon" size={14} className="text-[#C8860A] flex-shrink-0" />
+                        Custom Scheduling &amp; Accommodation
+                      </div>
+                      This time slot is currently at standard capacity, but our senior event coordinators will personally review our schedule and contact you directly within 24 hours to do our very best to adjust timings and accommodate your event.
+                    </div>
+                    {submittedBookingId && (
+                      <div className="bg-white border border-amber-200 rounded-xl p-2.5 inline-block max-w-full text-left mb-3 shadow-2xs">
+                        <span className="text-[10px] text-gray-400 block uppercase font-bold tracking-wider">Booking Reference</span>
+                        <span className="text-xs font-mono font-bold text-gray-800 break-all">{submittedBookingId}</span>
+                      </div>
+                    )}
+                    <div>
+                      <button
+                        onClick={() => { setSubmitted(false); setSubmittedBookingId(''); setSubmittedIsWaitlist(false); }}
+                        className="text-xs font-semibold hover:underline block mx-auto py-1"
+                        style={{ color: '#C8860A' }}
+                      >
+                        Submit another enquiry
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 px-4 rounded-2xl border animate-in zoom-in-95 duration-200" style={{ background: 'rgba(200,134,10,0.04)', borderColor: 'rgba(200,134,10,0.2)' }}>
+                    <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: 'rgba(200,134,10,0.1)' }}>
+                      <Icon name="CheckCircleIcon" size={28} style={{ color: '#C8860A' }} />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">Request Received!</h3>
+                    <p className="text-gray-500 text-sm mb-3">We'll contact you within 24 hours to confirm your booking.</p>
+                    {submittedBookingId && (
+                      <div className="bg-white border border-amber-200 rounded-xl p-3 inline-block max-w-full text-left mb-3">
+                        <span className="text-xs text-gray-400 block uppercase font-semibold">Booking Reference</span>
+                        <span className="text-sm font-mono font-bold text-gray-800 break-all">{submittedBookingId}</span>
+                      </div>
+                    )}
+                    <div>
+                      <button onClick={() => { setSubmitted(false); setSubmittedBookingId(''); setSubmittedIsWaitlist(false); }} className="text-sm font-medium hover:underline block mx-auto" style={{ color: '#C8860A' }}>
+                        Submit another request
+                      </button>
+                    </div>
+                  </div>
+                )
+              ) : (
+                <div>
+                  {/* Option to Customize Menu & Pay Online */}
+                  <div className="mb-4 p-3 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-400/20 to-amber-500/10 border border-amber-300 flex items-center justify-between gap-3 shadow-2xs">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base flex-shrink-0">🍽️</span>
+                      <div>
+                        <span className="text-xs font-bold text-gray-900 block">Choose Menu Dishes &amp; Pay Online</span>
+                        <span className="text-[10px] text-gray-500">Pick dishes &amp; pay deposit online via Stripe</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsMenuOrderModalOpen(true)}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold text-white shadow-xs hover:shadow-md transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                      style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                    >
+                      <span>Build Menu</span>
+                      <span>→</span>
                     </button>
                   </div>
-                </div>
-              ) : (
-                <form onSubmit={handleSubmit} className="space-y-3">
-                  {customHomeAlert && (
-                    <div className={`p-3 rounded-xl text-xs font-medium border ${customHomeAlert.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200'}`}>
-                      {customHomeAlert.message}
-                    </div>
-                  )}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Full Name *</label>
-                      <input type="text" required value={bookingForm.name} onChange={(e) => setBookingForm({ ...bookingForm, name: e.target.value })} className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500" placeholder="Your name" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Email *</label>
-                      <input type="email" required value={bookingForm.email} onChange={(e) => setBookingForm({ ...bookingForm, email: e.target.value })} className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500" placeholder="your@email.com" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1 flex items-center gap-1.5">
-                        <svg viewBox="0 0 24 24" fill="#25D366" className="w-3.5 h-3.5 flex-shrink-0"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.126 1.533 5.859L.057 23.428a.75.75 0 0 0 .921.921l5.684-1.47A11.943 11.943 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.75a9.694 9.694 0 0 1-4.946-1.356l-.355-.211-3.676.95.974-3.578-.231-.368A9.693 9.693 0 0 1 2.25 12C2.25 6.615 6.615 2.25 12 2.25S21.75 6.615 21.75 12 17.385 21.75 12 21.75z"/></svg>
-                        WhatsApp Number
-                      </label>
-                      <div className={`flex items-center rounded-xl overflow-hidden border ${phoneError ? 'border-red-400' : 'border-gray-300'} focus-within:ring-2 focus-within:ring-yellow-400 focus-within:border-yellow-500`}>
-                        <span className="px-3 py-2.5 bg-gray-50 text-sm font-semibold text-gray-600 border-r border-gray-300 select-none whitespace-nowrap">+44</span>
-                        <input
-                          type="tel"
-                          value={bookingForm.phone}
-                          onChange={(e) => handlePhoneChange(e.target.value)}
-                          className="flex-1 px-3 py-2.5 text-sm focus:outline-none bg-white"
-                          placeholder="07700 900000"
-                          maxLength={12}
-                        />
+
+                  <form onSubmit={handleSubmit} className="space-y-3">
+                    {customHomeAlert && (
+                      <div className={`p-3 rounded-xl text-xs font-medium border ${customHomeAlert.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200'}`}>
+                        {customHomeAlert.message}
                       </div>
-                      {phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Event Type *</label>
-                      <select required value={bookingForm.eventType} onChange={(e) => setBookingForm({ ...bookingForm, eventType: e.target.value })} className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500 bg-white">
-                        <option value="">Select type</option>
-                        {EVENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  {/* Preferred Package */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1 flex items-center gap-1.5">
-                      <span style={{ color: '#C8860A' }}>🎁</span> Preferred Package
-                      {bookingForm.selectedPackage && (
-                        <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: 'rgba(200,134,10,0.12)', color: '#C8860A' }}>Auto-selected</span>
-                      )}
-                    </label>
-                    <select
-                      value={bookingForm.selectedPackage}
-                      onChange={(e) => setBookingForm({ ...bookingForm, selectedPackage: e.target.value })}
-                      className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500 bg-white"
-                      style={bookingForm.selectedPackage ? { borderColor: '#C8860A', boxShadow: '0 0 0 1px rgba(200,134,10,0.3)' } : {}}
-                    >
-                      <option value="">No specific package – help me choose</option>
-                      <optgroup label="── Buffet Packages ──">
-                        {BANQUET_PACKAGES.map((pkg) => (
-                          <option key={pkg.id} value={pkg.name}>
-                            {pkg.name} — £{pkg.pricePerPerson}/person
-                          </option>
-                        ))}
-                      </optgroup>
-                      <optgroup label="── Venue & Hire ──">
-                        <option value="Venue Hall">Venue Hall</option>
-                        <option value="Dry Hire">Dry Hire</option>
-                        <option value="Kids Pricing">Kids Pricing</option>
-                      </optgroup>
-                      <optgroup label="── Extras ──">
-                        {(LIVE_COUNTER_PACKAGE?.extras || []).map((extra, idx) => (
-                          <option key={idx} value={extra.name}>
-                            {extra.name} — £{extra.price}
-                          </option>
-                        ))}
-                      </optgroup>
-                    </select>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Event Date *</label>
-                      <input
-                        type="date"
-                        required
-                        min={new Date().toISOString().split('T')[0]}
-                        value={bookingForm.date}
-                        onChange={(e) => setBookingForm({ ...bookingForm, date: e.target.value })}
-                        className={`w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500 ${blockedDates.includes(bookingForm.date) ? 'border-red-500 ring-2 ring-red-100 bg-red-50/10' : 'border-gray-300'}`}
-                      />
-                      {blockedDates.includes(bookingForm.date) && (
-                        <span className="text-red-500 text-xs font-semibold mt-1 flex items-center gap-1">
-                          <Icon name="ExclamationTriangleIcon" size={12} className="text-red-500 flex-shrink-0" />
-                          Unavailable
-                        </span>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Time of Day *</label>
-                      <select required value={bookingForm.timeOfDay} onChange={(e) => setBookingForm({ ...bookingForm, timeOfDay: e.target.value })} className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500 bg-white">
-                        <option value="">Select time</option>
-                        <option value="Lunch (12:00pm – 4:00pm)">Lunch (12:00pm – 4:00pm)</option>
-                        <option value="Dinner (6:00pm – 11:30pm)">Dinner (6:00pm – 11:30pm)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Guests *</label>
-                      <input type="number" required min={1} max={500} value={bookingForm.guests} onChange={(e) => setBookingForm({ ...bookingForm, guests: e.target.value })} className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500" placeholder="e.g. 100" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Additional Notes</label>
-                    <textarea rows={2} value={bookingForm.message} onChange={(e) => setBookingForm({ ...bookingForm, message: e.target.value })} className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500 resize-none" placeholder="Special requests, preferred menu, décor ideas..." />
-                  </div>
-                  <button type="submit" disabled={isSubmitting} className="w-full text-white font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg disabled:opacity-70 cursor-pointer disabled:cursor-not-allowed" style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
-                    {isSubmitting ? (
-                      <span className="flex items-center gap-2">
-                        <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span>
-                        Submitting...
-                      </span>
-                    ) : (
-                      <>
-                        <Icon name="CalendarDaysIcon" size={16} />
-                        Submit Booking Request
-                      </>
                     )}
-                  </button>
-                </form>
+                    <div className="grid grid-cols-12 gap-3">
+                      {formConfig.fields
+                        .filter((f) => f.enabled)
+                        .sort((a, b) => a.order - b.order)
+                        .map((field) => renderField(field, true))}
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="w-full text-white font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg disabled:opacity-70 cursor-pointer disabled:cursor-not-allowed"
+                      style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                    >
+                      {isSubmitting ? (
+                        <span className="flex items-center gap-2">
+                          <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span>
+                          Submitting...
+                        </span>
+                      ) : (
+                        <>
+                          <Icon name="CalendarDaysIcon" size={16} />
+                          {formConfig.submitButtonText || 'Submit Booking Request'}
+                        </>
+                      )}
+                    </button>
+                  </form>
+                </div>
               )}
             </div>
           </div>
@@ -498,13 +957,23 @@ export default function HomePage() {
                         )}
                       </div>
                     </div>
-                    <div className="px-5 pb-5">
+                    <div className="px-5 pb-5 space-y-2">
                       <button
-                        onClick={() => handleEnquireNow(pkg.name)}
-                        className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-2.5 rounded-xl transition-all shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-[0.98]"
+                        onClick={() => {
+                          setSelectedPackageForModal(pkg.name);
+                          setIsMenuOrderModalOpen(true);
+                        }}
+                        className="w-full flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-[0.98] cursor-pointer"
                         style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)', color: 'white' }}
                       >
-                        Enquire Now
+                        <Icon name="SparklesIcon" size={14} />
+                        Select Menu &amp; Order Online
+                      </button>
+                      <button
+                        onClick={() => handleEnquireNow(pkg.name)}
+                        className="w-full flex items-center justify-center gap-1 text-xs font-semibold py-2 rounded-xl transition-colors border border-gray-200 text-gray-700 hover:bg-gray-50 cursor-pointer"
+                      >
+                        Send Enquiry
                       </button>
                     </div>
                   </div>
@@ -978,99 +1447,83 @@ export default function HomePage() {
       {/* ─── BOOKING FORM ─── */}
       <section id="book" className="py-16 px-6" style={{ background: '#FAFAF8' }}>
         <div className="max-w-2xl mx-auto">
-          <h2 className="text-2xl font-bold text-gray-900 text-center mb-2">Request a Booking</h2>
-          <p className="text-gray-500 text-center mb-10">Fill in your details and we'll get back to you within 24 hours</p>
+          <h2 className="text-2xl font-bold text-gray-900 text-center mb-2">
+            {formConfig.formTitle || 'Request a Booking'}
+          </h2>
+          <p className="text-gray-500 text-center mb-10">
+            {formConfig.formSubtitle || "Fill in your details and we'll get back to you within 24 hours"}
+          </p>
 
           {submitted ? (
-            <div className="text-center py-12 rounded-2xl border" style={{ background: 'rgba(200,134,10,0.04)', borderColor: 'rgba(200,134,10,0.2)' }}>
-              <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: 'rgba(200,134,10,0.1)' }}>
-                <Icon name="CheckCircleIcon" size={32} style={{ color: '#C8860A' }} />
+            submittedIsWaitlist ? (
+              <div className="text-center py-10 px-6 rounded-2xl border border-amber-300 shadow-md bg-gradient-to-b from-amber-50/90 to-amber-100/40 animate-in zoom-in-95 duration-200">
+                <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 bg-amber-100 border border-amber-300 shadow-inner">
+                  <Icon name="SparklesIcon" size={30} className="text-[#C8860A]" />
+                </div>
+                <span className="inline-block text-xs font-bold uppercase tracking-wider px-3.5 py-1 rounded-full bg-amber-200 text-amber-900 mb-2.5">
+                  Priority Review Request Received
+                </span>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Thank You for Your Request!</h3>
+                <p className="text-sm text-gray-700 mb-4 max-w-md mx-auto leading-relaxed">
+                  We have received your enquiry for <strong className="text-amber-950 font-semibold">{submittedDetails?.date}</strong> during <strong className="text-amber-950 font-semibold">{submittedDetails?.timeOfDay}</strong>.
+                </p>
+                <div className="bg-white/95 border border-amber-200 rounded-xl p-4 text-xs text-amber-900 mb-5 text-left max-w-lg mx-auto leading-relaxed shadow-2xs">
+                  <div className="font-bold flex items-center gap-1.5 mb-1.5 text-amber-950 text-sm">
+                    <Icon name="InformationCircleIcon" size={16} className="text-[#C8860A] flex-shrink-0" />
+                    Custom Scheduling &amp; Accommodation
+                  </div>
+                  This time slot has currently reached standard booking capacity, but our senior event coordinators will personally review our schedule and contact you directly within 24 hours to explore custom arrangements and do our very best to adjust timings and accommodate your event.
+                </div>
+                {submittedBookingId && (
+                  <div className="bg-white border border-amber-200 rounded-xl p-3 inline-block max-w-full text-left mb-4 shadow-2xs">
+                    <span className="text-xs text-gray-400 block uppercase font-bold tracking-wider">Booking Reference</span>
+                    <span className="text-sm font-mono font-bold text-gray-800 break-all">{submittedBookingId}</span>
+                  </div>
+                )}
+                <div>
+                  <button
+                    onClick={() => { setSubmitted(false); setSubmittedBookingId(''); setSubmittedIsWaitlist(false); }}
+                    className="text-sm font-semibold hover:underline block mx-auto py-1"
+                    style={{ color: '#C8860A' }}
+                  >
+                    Submit another request
+                  </button>
+                </div>
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Request Received!</h3>
-              <p className="text-gray-500">We'll contact you within 24 hours to confirm your booking.</p>
-              <button onClick={() => setSubmitted(false)} className="mt-6 font-medium hover:underline" style={{ color: '#C8860A' }}>
-                Submit another request
-              </button>
-            </div>
+            ) : (
+              <div className="text-center py-12 rounded-2xl border animate-in zoom-in-95 duration-200" style={{ background: 'rgba(200,134,10,0.04)', borderColor: 'rgba(200,134,10,0.2)' }}>
+                <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: 'rgba(200,134,10,0.1)' }}>
+                  <Icon name="CheckCircleIcon" size={32} style={{ color: '#C8860A' }} />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Request Received!</h3>
+                <p className="text-gray-500">We'll contact you within 24 hours to confirm your booking.</p>
+                {submittedBookingId && (
+                  <div className="bg-white border border-amber-200 rounded-xl p-3 inline-block max-w-full text-left mt-3 mb-2 shadow-2xs">
+                    <span className="text-xs text-gray-400 block uppercase font-semibold">Booking Reference</span>
+                    <span className="text-sm font-mono font-bold text-gray-800 break-all">{submittedBookingId}</span>
+                  </div>
+                )}
+                <div className="mt-4">
+                  <button onClick={() => { setSubmitted(false); setSubmittedBookingId(''); setSubmittedIsWaitlist(false); }} className="font-medium hover:underline" style={{ color: '#C8860A' }}>
+                    Submit another request
+                  </button>
+                </div>
+              </div>
+            )
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
-                  <input type="text" required value={bookingForm.name} onChange={(e) => setBookingForm({ ...bookingForm, name: e.target.value })} className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500" placeholder="Your name" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
-                  <input type="email" required value={bookingForm.email} onChange={(e) => setBookingForm({ ...bookingForm, email: e.target.value })} className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500" placeholder="your@email.com" />
-                </div>
+              <div className="grid grid-cols-12 gap-4">
+                {formConfig.fields
+                  .filter((f) => f.enabled)
+                  .sort((a, b) => a.order - b.order)
+                  .map((field) => renderField(field, false))}
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
-                    <svg viewBox="0 0 24 24" fill="#25D366" className="w-4 h-4 flex-shrink-0"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.126 1.533 5.859L.057 23.428a.75.75 0 0 0 .921.921l5.684-1.47A11.943 11.943 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.75a9.694 9.694 0 0 1-4.946-1.356l-.355-.211-3.676.95.974-3.578-.231-.368A9.693 9.693 0 0 1 2.25 12C2.25 6.615 6.615 2.25 12 2.25S21.75 6.615 21.75 12 17.385 21.75 12 21.75z"/></svg>
-                    WhatsApp Number
-                  </label>
-                  <div className={`flex items-center rounded-xl overflow-hidden border ${phoneError ? 'border-red-400' : 'border-gray-300'} focus-within:ring-2 focus-within:ring-yellow-400 focus-within:border-yellow-500`}>
-                    <span className="px-3 py-3 bg-gray-50 text-sm font-semibold text-gray-600 border-r border-gray-300 select-none whitespace-nowrap">+44</span>
-                    <input
-                      type="tel"
-                      value={bookingForm.phone}
-                      onChange={(e) => handlePhoneChange(e.target.value)}
-                      className="flex-1 px-4 py-3 text-sm focus:outline-none bg-white"
-                      placeholder="07700 900000"
-                      maxLength={12}
-                    />
-                  </div>
-                  {phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Event Type *</label>
-                  <select required value={bookingForm.eventType} onChange={(e) => setBookingForm({ ...bookingForm, eventType: e.target.value })} className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500 bg-white">
-                    <option value="">Select type</option>
-                    {EVENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Event Date *</label>
-                  <input 
-                    type="date" 
-                    required 
-                    min={new Date().toISOString().split('T')[0]}
-                    value={bookingForm.date} 
-                    onChange={(e) => setBookingForm({ ...bookingForm, date: e.target.value })} 
-                    className={`w-full border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500 ${
-                      blockedDates.includes(bookingForm.date) 
-                        ? 'border-red-500 ring-2 ring-red-100 bg-red-50/10' 
-                        : 'border-gray-300'
-                    }`} 
-                  />
-                  {blockedDates.includes(bookingForm.date) && (
-                    <span className="text-red-500 text-xs font-semibold mt-1.5 flex items-center gap-1">
-                      <Icon name="ExclamationTriangleIcon" size={12} className="text-red-500 flex-shrink-0" />
-                      Unavailable / Fully Booked
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Time of Day *</label>
-                  <select required value={bookingForm.timeOfDay} onChange={(e) => setBookingForm({ ...bookingForm, timeOfDay: e.target.value })} className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500 bg-white">
-                    <option value="">Select time</option>
-                    <option value="Lunch (12:00pm – 4:00pm)">Lunch (12:00pm – 4:00pm)</option>
-                    <option value="Dinner (6:00pm – 11:30pm)">Dinner (6:00pm – 11:30pm)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Number of Guests *</label>
-                  <input type="number" required min={1} max={500} value={bookingForm.guests} onChange={(e) => setBookingForm({ ...bookingForm, guests: e.target.value })} className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500" placeholder="e.g. 100" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Additional Notes</label>
-                <textarea rows={3} value={bookingForm.message} onChange={(e) => setBookingForm({ ...bookingForm, message: e.target.value })} className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500 resize-none" placeholder="Special requests, preferred menu, décor ideas..." />
-              </div>
-              <button type="submit" disabled={isSubmitting} className="w-full text-white font-semibold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg disabled:opacity-70 cursor-pointer disabled:cursor-not-allowed" style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full text-white font-semibold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg disabled:opacity-70 cursor-pointer disabled:cursor-not-allowed"
+                style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+              >
                 {isSubmitting ? (
                   <span className="flex items-center gap-2">
                     <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span>
@@ -1079,7 +1532,7 @@ export default function HomePage() {
                 ) : (
                   <>
                     <Icon name="CalendarDaysIcon" size={18} />
-                    Submit Booking Request
+                    {formConfig.submitButtonText || 'Submit Booking Request'}
                   </>
                 )}
               </button>
@@ -1095,6 +1548,14 @@ export default function HomePage() {
           Staff / Admin Login
         </Link>
       </div>
+
+      {/* Interactive Menu Customizer & Online Order Modal */}
+      <InteractiveMenuOrderModal
+        isOpen={isMenuOrderModalOpen}
+        onClose={() => setIsMenuOrderModalOpen(false)}
+        initialPackage={selectedPackageForModal}
+        deliveryConfig={deliveryConfig}
+      />
 
       <Footer />
       {/* ─── CUSTOM ALERT MODAL ─── */}

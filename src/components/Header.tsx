@@ -15,15 +15,17 @@ const Header: React.FC<HeaderProps> = () => {
     <nav className="fixed top-0 left-0 right-0 z-50 bg-surface border-b border-surface-border">
       <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
         {/* Logo */}
-        <a href="/home" className="flex items-center gap-2.5">
-          <Image
-            src="/assets/images/srilalitha.png"
-            alt="SriLalitha logo"
-            width={120}
-            height={48}
-            className="object-contain"
-            style={{ maxHeight: '48px', width: 'auto' }}
-          />
+        <a href="/home" className="flex items-center gap-2.5 transition-transform hover:scale-[1.02]">
+          <div className="flex items-center justify-center py-0.5">
+            <Image
+              src="/assets/images/srilalitha.png"
+              alt="SriLalitha logo"
+              width={180}
+              height={60}
+              className="object-contain h-12 md:h-14 w-auto drop-shadow-xs"
+              priority
+            />
+          </div>
         </a>
 
         {/* Desktop Nav */}

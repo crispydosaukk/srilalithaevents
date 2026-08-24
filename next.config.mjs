@@ -7,7 +7,6 @@ const nextConfig = {
   },
   productionBrowserSourceMaps: true,
   distDir: process.env.DIST_DIR || '.next',
-  output: 'export',
   typescript: {
     ignoreBuildErrors: true,
   },

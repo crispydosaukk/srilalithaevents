@@ -3,6 +3,27 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Icon from '@/components/ui/AppIcon';
 import { INDIAN_MENU, SRI_LANKAN_MENU, LIVE_COUNTER_PACKAGE, BANQUET_PACKAGES, VENUE_HALL_CHARGES, TABLE_SERVICE, KIDS_PRICING, DRY_HIRE_PRICES, TERMS_AND_CONDITIONS, STANDARD_SETUP } from '@/app/data/menuData';
+import {
+  DEFAULT_FORM_CONFIG,
+  BookingFormConfig,
+  FormField,
+  FormFieldType,
+  FieldWidth,
+  DEFAULT_EVENT_TYPES,
+  DEFAULT_TIME_SLOTS,
+  DEFAULT_OUTDOOR_TIME_SLOTS,
+  DEFAULT_SLOT_CAPACITY,
+  SlotCapacityConfig,
+} from '@/app/data/formConfig';
+import {
+  DeliveryLocationConfig,
+  DEFAULT_DELIVERY_CONFIG,
+  calculateDistanceMiles,
+  calculateDeliveryCharge,
+  DeliveryCalculationResult,
+} from '@/app/data/deliveryConfig';
+import GoogleLocationInput from '@/components/GoogleLocationInput';
+import { PaymentGatewayConfig, DEFAULT_PAYMENT_CONFIG } from '@/lib/stripe';
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, db, storage } from '@/lib/firebase';
 import { collection, onSnapshot, query, where, orderBy, doc, setDoc, deleteDoc, getDoc, getDocs, addDoc } from 'firebase/firestore';
@@ -12,21 +33,36 @@ import AccessControl from '@/components/admin/AccessControl';
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
 type BookingStatus =
-  | 'new_enquiry' | 'menu_sent' | 'menu_selected' | 'deposit_pending' | 'deposit_confirmed' | 'event_scheduled' | 'event_completed' | 'final_invoice_sent' | 'final_payment_received' | 'completed';
+  | 'new_enquiry'
+  | 'menu_sent'
+  | 'menu_selected'
+  | 'deposit_pending'
+  | 'deposit_confirmed'
+  | 'event_scheduled'
+  | 'event_completed'
+  | 'final_invoice_sent'
+  | 'final_payment_received'
+  | 'completed'
+  | 'cancelled'
+  | 'rejected';
 
 interface ExtraCharge {
-  label: string;
+  id?: string;
+  label?: string;
+  name?: string;
   amount: number;
   isPreset?: boolean;
+  paid?: boolean;
 }
 
 interface Discount {
   type: 'fixed' | 'percentage';
   value: number;
-  reason: string;
+  reason?: string;
 }
 
 interface DiscountRequest {
+  id?: string;
   type: 'fixed' | 'percentage';
   value: number;
   reason: string;
@@ -40,8 +76,15 @@ interface Booking {
   email: string;
   phone: string;
   eventType: string;
+  location?: string;
+  customerCoords?: { lat: number; lng: number; postcode?: string };
+  distanceMiles?: number;
+  deliveryCharge?: number;
+  deliveryBreakdown?: string;
+  totalEstimatedAmount?: number;
   date: string;
   time: string;
+  timeOfDay?: string;
   guests: number;
   adults?: number;
   kids4to10?: number;
@@ -54,7 +97,29 @@ interface Booking {
   finalPaymentPaid: boolean;
   dueDate?: string;
   package: string;
+  packageName?: string;
+  cuisineType?: 'indian' | 'srilankan';
   selectedMenu?: string;
+  selectedMenuDishes?: {
+    canapesVeg?: string[];
+    canapesNonVeg?: string[];
+    startersVeg?: string[];
+    startersNonVeg?: string[];
+    mainsVeg?: string[];
+    mainsNonVeg?: string[];
+    desserts?: string[];
+    sundries?: string[];
+    selectedExtras?: { name: string; price: number; perPerson?: boolean }[];
+    [key: string]: any;
+  };
+  isOnlineOrder?: boolean;
+  stripeSessionId?: string;
+  stripePaymentIntentId?: string;
+  stripeCustomerEmail?: string;
+  amountPaidSoFar?: number;
+  paymentChoice?: 'deposit' | 'full';
+  kitchenStatus?: 'received' | 'prep' | 'ready' | 'dispatched';
+  kitchenNotes?: string;
   extraCharges: ExtraCharge[];
   paymentProofDeposit?: string;
   paymentProofFinal?: string;
@@ -63,6 +128,10 @@ interface Booking {
   paymentMethodFinal?: string;
   discount?: Discount;
   discountRequest?: DiscountRequest;
+  customFields?: Record<string, any>;
+  isWaitlist?: boolean;
+  capacityStatus?: string;
+  waitlistNote?: string;
   enquiryDate: string;
   updatedAt?: string;
   createdAt?: string;
@@ -105,6 +174,8 @@ const STATUS_LABELS: Record<BookingStatus, string> = {
   final_invoice_sent: 'Final Invoice Sent',
   final_payment_received: 'Final Payment Received',
   completed: 'Completed',
+  cancelled: 'Cancelled',
+  rejected: 'Rejected',
 };
 
 const STATUS_COLORS: Record<BookingStatus, string> = {
@@ -118,6 +189,8 @@ const STATUS_COLORS: Record<BookingStatus, string> = {
   final_invoice_sent: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
   final_payment_received: 'bg-lime-50 text-lime-700 border border-lime-200',
   completed: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+  cancelled: 'bg-gray-100 text-gray-700 border border-gray-300',
+  rejected: 'bg-red-50 text-red-700 border border-red-200',
 };
 
 const STATUS_DOT: Record<BookingStatus, string> = {
@@ -131,6 +204,8 @@ const STATUS_DOT: Record<BookingStatus, string> = {
   final_invoice_sent: 'bg-yellow-500',
   final_payment_received: 'bg-lime-500',
   completed: 'bg-emerald-500',
+  cancelled: 'bg-gray-400',
+  rejected: 'bg-red-500',
 };
 
 const MENU_PACKAGES = [
@@ -246,7 +321,7 @@ function buildWhatsAppLink(phone: string, message: string) {
   return `https://wa.me/${cleaned}?text=${encodeURIComponent(message)}`;
 }
 
-type AdminTab = 'overview' | 'enquiries' | 'bookings' | 'calendar' | 'customers' | 'payments' | 'menus' | 'history' | 'settings' | 'access' | 'discount_approvals' | 'tracker';
+type AdminTab = 'overview' | 'online_orders' | 'enquiries' | 'bookings' | 'calendar' | 'customers' | 'payments' | 'menus' | 'history' | 'settings' | 'access' | 'discount_approvals' | 'tracker';
 
 // ─── COMPONENT ────────────────────────────────────────────────────────────────
 
@@ -267,6 +342,18 @@ export default function AdminPage() {
   const [depositPaymentMethod, setDepositPaymentMethod] = useState<string>('');
   const [finalPaymentMethod, setFinalPaymentMethod] = useState<string>('');
 
+  // Online Orders State
+  const [selectedOnlineOrder, setSelectedOnlineOrder] = useState<Booking | null>(null);
+  const [showKitchenSlipModal, setShowKitchenSlipModal] = useState<Booking | null>(null);
+  const [showInvoiceModal, setShowInvoiceModal] = useState<Booking | null>(null);
+  const [onlineOrderFilter, setOnlineOrderFilter] = useState<'all' | 'paid' | 'deposit' | 'kitchen' | 'completed'>('all');
+  const [onlineOrderSearch, setOnlineOrderSearch] = useState('');
+
+  // Payment Gateway Settings State
+  const [paymentGatewaySettings, setPaymentGatewaySettings] = useState<PaymentGatewayConfig>(DEFAULT_PAYMENT_CONFIG);
+  const [isSavingPaymentSettings, setIsSavingPaymentSettings] = useState(false);
+  const [showSecretKey, setShowSecretKey] = useState(false);
+
   // New Booking Modal State
   const [showNewBookingModal, setShowNewBookingModal] = useState(false);
   const [newBookingForm, setNewBookingForm] = useState({
@@ -286,6 +373,32 @@ export default function AdminPage() {
   });
   const [isCreatingBooking, setIsCreatingBooking] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
+
+  // Dynamic Form Config State
+  const [formConfig, setFormConfig] = useState<BookingFormConfig>(DEFAULT_FORM_CONFIG);
+  const [editableFormConfig, setEditableFormConfig] = useState<BookingFormConfig>(DEFAULT_FORM_CONFIG);
+  const [isSavingFormConfig, setIsSavingFormConfig] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<'form_builder' | 'venue' | 'location_delivery' | 'pricing' | 'stripe_gateway' | 'bank' | 'block_dates'>('form_builder');
+  const [deliverySettings, setDeliverySettings] = useState<DeliveryLocationConfig>(DEFAULT_DELIVERY_CONFIG);
+  const [isSavingDeliverySettings, setIsSavingDeliverySettings] = useState(false);
+  const [testPostcode, setTestPostcode] = useState('');
+  const [testResult, setTestResult] = useState<DeliveryCalculationResult | null>(null);
+  const [editingFieldModal, setEditingFieldModal] = useState<FormField | null>(null);
+  const [showAddFieldModal, setShowAddFieldModal] = useState(false);
+  const [newOptionInput, setNewOptionInput] = useState('');
+  const [newOutdoorSlotInput, setNewOutdoorSlotInput] = useState('');
+  const [fieldToManageOptions, setFieldToManageOptions] = useState<FormField | null>(null);
+  const [newFieldForm, setNewFieldForm] = useState<Partial<FormField>>({
+    id: '',
+    label: '',
+    type: 'text',
+    placeholder: '',
+    required: false,
+    enabled: true,
+    width: 'half',
+    options: [],
+    helperText: '',
+  });
 
   useEffect(() => {
     if (selectedBooking) {
@@ -330,6 +443,12 @@ export default function AdminPage() {
           }, { merge: true });
         }
 
+        const formConfigSnap = await getDoc(doc(db, 'site_data', 'booking_form_config'));
+        if (!formConfigSnap.exists()) {
+          const cleanDefault = JSON.parse(JSON.stringify(DEFAULT_FORM_CONFIG));
+          await setDoc(doc(db, 'site_data', 'booking_form_config'), cleanDefault, { merge: true });
+        }
+
         const pricingSnap = await getDoc(doc(db, 'site_data', 'pricing_details'));
         if (!pricingSnap.exists()) {
           await setDoc(doc(db, 'site_data', 'pricing_details'), {
@@ -367,6 +486,43 @@ export default function AdminPage() {
     seedSiteDataDefaults();
   }, []);
 
+  // Listen to dynamic booking form configuration
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'site_data', 'booking_form_config'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data() as Partial<BookingFormConfig>;
+        let fields = (data.fields && data.fields.length > 0) ? [...data.fields] : [...DEFAULT_FORM_CONFIG.fields];
+
+        // Ensure location field is present if missing from database
+        if (!fields.some(f => f.id === 'location' || f.type === 'location')) {
+          const locField = DEFAULT_FORM_CONFIG.fields.find(f => f.id === 'location');
+          if (locField) {
+            const eventTypeIdx = fields.findIndex(f => f.id === 'eventType');
+            if (eventTypeIdx !== -1) {
+              fields.splice(eventTypeIdx + 1, 0, locField);
+            } else {
+              fields.push(locField);
+            }
+          }
+        }
+
+        // Remove legacy service_type field
+        fields = fields.filter(f => f.id !== 'service_type' && f.id !== 'serviceType');
+
+        const merged: BookingFormConfig = {
+          formTitle: data.formTitle || DEFAULT_FORM_CONFIG.formTitle,
+          formSubtitle: data.formSubtitle || DEFAULT_FORM_CONFIG.formSubtitle,
+          submitButtonText: data.submitButtonText || DEFAULT_FORM_CONFIG.submitButtonText,
+          fields,
+          slotCapacity: data.slotCapacity || DEFAULT_FORM_CONFIG.slotCapacity || DEFAULT_SLOT_CAPACITY,
+        };
+        setFormConfig(merged);
+        setEditableFormConfig(merged);
+      }
+    });
+    return () => unsub();
+  }, []);
+
   // Real-time Firestore sync for all bookings
   useEffect(() => {
     const q = collection(db, 'booking_requests');
@@ -381,6 +537,7 @@ export default function AdminPage() {
           eventType: data.eventType || 'N/A',
           date: data.date || 'N/A',
           time: data.timeOfDay || data.time || 'N/A',
+          timeOfDay: data.timeOfDay || data.time || 'N/A',
           guests: data.guests || 0,
           adults: data.adults ?? undefined,
           kids4to10: data.kids4to10 ?? 0,
@@ -391,8 +548,19 @@ export default function AdminPage() {
           deposit: data.deposit || 0,
           depositPaid: data.depositPaid || false,
           finalPaymentPaid: data.finalPaymentPaid || false,
-          package: data.package || 'Not Selected',
+          package: data.package || data.packageName || 'Not Selected',
+          packageName: data.packageName || data.package || 'Not Selected',
+          cuisineType: data.cuisineType || 'indian',
           selectedMenu: data.selectedMenu,
+          selectedMenuDishes: data.selectedMenuDishes || undefined,
+          isOnlineOrder: Boolean(data.isOnlineOrder || data.stripeSessionId || data.selectedMenuDishes),
+          stripeSessionId: data.stripeSessionId || '',
+          stripePaymentIntentId: data.stripePaymentIntentId || '',
+          stripeCustomerEmail: data.stripeCustomerEmail || '',
+          amountPaidSoFar: data.amountPaidSoFar || data.deposit || 0,
+          paymentChoice: data.paymentChoice,
+          kitchenStatus: data.kitchenStatus || 'received',
+          kitchenNotes: data.kitchenNotes || '',
           extraCharges: data.extraCharges || [],
           paymentProofDeposit: data.paymentProofDeposit,
           paymentProofFinal: data.paymentProofFinal,
@@ -401,6 +569,16 @@ export default function AdminPage() {
           paymentMethodFinal: data.paymentMethodFinal,
           discount: data.discount,
           discountRequest: data.discountRequest,
+          customFields: data.customFields || {},
+          location: data.location || '',
+          customerCoords: data.customerCoords || null,
+          distanceMiles: data.distanceMiles || 0,
+          deliveryCharge: data.deliveryCharge || 0,
+          deliveryBreakdown: data.deliveryBreakdown || '',
+          totalEstimatedAmount: data.totalEstimatedAmount || (data.baseAmount || 0),
+          isWaitlist: Boolean(data.isWaitlist),
+          capacityStatus: data.capacityStatus || (data.isWaitlist ? 'exceeded_capacity' : 'normal'),
+          waitlistNote: data.waitlistNote || '',
           enquiryDate: data.createdAt ? new Date(data.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
           dueDate: (() => {
             if (data.dueDate) return data.dueDate;
@@ -425,6 +603,153 @@ export default function AdminPage() {
     });
     return () => unsubscribe();
   }, []);
+
+  // Form Builder Handlers
+  const saveFormConfigToDatabase = async () => {
+    setIsSavingFormConfig(true);
+    try {
+      const cleanFields = (editableFormConfig.fields || []).map((f, idx) => {
+        const cleanField: any = {
+          id: String(f.id || `field_${idx + 1}`),
+          label: String(f.label || ''),
+          type: f.type || 'text',
+          required: Boolean(f.required),
+          enabled: Boolean(f.enabled),
+          width: f.width || 'half',
+          order: Number(f.order || idx + 1),
+        };
+        if (f.placeholder) cleanField.placeholder = String(f.placeholder);
+        if (f.helperText) cleanField.helperText = String(f.helperText);
+        if (f.isSystem !== undefined) cleanField.isSystem = Boolean(f.isSystem);
+        if (Array.isArray(f.options) && f.options.length > 0) {
+          cleanField.options = f.options.map(String).filter(Boolean);
+        }
+        if (typeof f.min === 'number' && !isNaN(f.min)) cleanField.min = f.min;
+        if (typeof f.max === 'number' && !isNaN(f.max)) cleanField.max = f.max;
+        return cleanField;
+      });
+
+      const slotCapacity: SlotCapacityConfig = {
+        maxOutdoorCateringPerSlot: Math.max(1, Number(editableFormConfig.slotCapacity?.maxOutdoorCateringPerSlot || 4)),
+        maxHallBookingsPerSlot: Math.max(1, Number(editableFormConfig.slotCapacity?.maxHallBookingsPerSlot || 1)),
+        outdoorCateringTimeSlots: (editableFormConfig.slotCapacity?.outdoorCateringTimeSlots && editableFormConfig.slotCapacity.outdoorCateringTimeSlots.length > 0)
+          ? editableFormConfig.slotCapacity.outdoorCateringTimeSlots
+          : DEFAULT_OUTDOOR_TIME_SLOTS,
+        standardTimeSlots: (editableFormConfig.slotCapacity?.standardTimeSlots && editableFormConfig.slotCapacity.standardTimeSlots.length > 0)
+          ? editableFormConfig.slotCapacity.standardTimeSlots
+          : (editableFormConfig.fields.find(f => f.id === 'timeOfDay')?.options || DEFAULT_TIME_SLOTS),
+      };
+
+      const payload = JSON.parse(JSON.stringify({
+        formTitle: editableFormConfig.formTitle || 'Request a Booking',
+        formSubtitle: editableFormConfig.formSubtitle || "Fill in your details and we'll get back to you within 24 hours",
+        submitButtonText: editableFormConfig.submitButtonText || 'Submit Booking Request',
+        fields: cleanFields,
+        slotCapacity,
+        updatedAt: new Date().toISOString(),
+      }));
+
+      await setDoc(doc(db, 'site_data', 'booking_form_config'), payload, { merge: true });
+      setFormConfig(editableFormConfig);
+      setCustomAlert({
+        message: 'Booking form configuration successfully saved! All changes are live on the website.',
+        type: 'success'
+      });
+    } catch (err: any) {
+      console.error('Error saving booking form config:', err);
+      setCustomAlert({
+        message: err?.message || 'Error saving form configuration.',
+        type: 'error'
+      });
+    } finally {
+      setIsSavingFormConfig(false);
+    }
+  };
+
+  const handleMoveField = (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= editableFormConfig.fields.length) return;
+    const newFields = [...editableFormConfig.fields];
+    const temp = newFields[index];
+    newFields[index] = newFields[targetIndex];
+    newFields[targetIndex] = temp;
+    newFields.forEach((f, i) => {
+      f.order = i + 1;
+    });
+    setEditableFormConfig(prev => ({ ...prev, fields: newFields }));
+  };
+
+  const handleToggleField = (fieldId: string) => {
+    setEditableFormConfig(prev => ({
+      ...prev,
+      fields: prev.fields.map(f => f.id === fieldId ? { ...f, enabled: !f.enabled } : f)
+    }));
+  };
+
+  const handleDeleteField = (fieldId: string) => {
+    setEditableFormConfig(prev => ({
+      ...prev,
+      fields: prev.fields.filter(f => f.id !== fieldId).map((f, idx) => ({ ...f, order: idx + 1 }))
+    }));
+  };
+
+  const handleSaveFieldModal = (field: FormField) => {
+    setEditableFormConfig(prev => ({
+      ...prev,
+      fields: prev.fields.map(f => f.id === field.id ? field : f)
+    }));
+    setEditingFieldModal(null);
+  };
+
+  const handleCreateNewField = () => {
+    if (!newFieldForm.label || !newFieldForm.label.trim()) {
+      setCustomAlert({ message: 'Please enter a field label', type: 'error' });
+      return;
+    }
+
+    const rawId = newFieldForm.id?.trim() || newFieldForm.label.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const finalId = rawId.startsWith('custom_') ? rawId : `custom_${rawId}`;
+
+    if (editableFormConfig.fields.some(f => f.id === finalId)) {
+      setCustomAlert({ message: 'A field with this identifier already exists.', type: 'error' });
+      return;
+    }
+
+    const createdField: FormField = {
+      id: finalId,
+      label: newFieldForm.label.trim(),
+      type: newFieldForm.type || 'text',
+      placeholder: newFieldForm.placeholder?.trim() || '',
+      required: !!newFieldForm.required,
+      enabled: true,
+      isSystem: false,
+      width: newFieldForm.width || 'half',
+      options: newFieldForm.options ? [...newFieldForm.options] : [],
+      helperText: newFieldForm.helperText?.trim() || '',
+      min: newFieldForm.min,
+      max: newFieldForm.max,
+      order: editableFormConfig.fields.length + 1,
+    };
+
+    setEditableFormConfig(prev => ({
+      ...prev,
+      fields: [...prev.fields, createdField]
+    }));
+
+    setShowAddFieldModal(false);
+    setNewFieldForm({
+      id: '',
+      label: '',
+      type: 'text',
+      placeholder: '',
+      required: false,
+      enabled: true,
+      width: 'half',
+      options: [],
+      helperText: '',
+    });
+    setCustomAlert({ message: `Field "${createdField.label}" added to form builder!`, type: 'success' });
+  };
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterEvent, setFilterEvent] = useState<string>('all');
   const [loggedIn, setLoggedIn] = useState(false);
@@ -584,6 +909,43 @@ export default function AdminPage() {
       }
     });
   }, []);
+
+  useEffect(() => {
+    return onSnapshot(doc(db, 'site_data', 'delivery_settings'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data() as Partial<DeliveryLocationConfig>;
+        setDeliverySettings(prev => ({
+          ...prev,
+          ...data,
+        }));
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    return onSnapshot(doc(db, 'site_data', 'payment_gateway_settings'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data() as Partial<PaymentGatewayConfig>;
+        setPaymentGatewaySettings(prev => ({
+          ...prev,
+          ...data,
+        }));
+      }
+    });
+  }, []);
+
+  const savePaymentGatewaySettings = async () => {
+    setIsSavingPaymentSettings(true);
+    try {
+      await setDoc(doc(db, 'site_data', 'payment_gateway_settings'), paymentGatewaySettings, { merge: true });
+      setCustomAlert({ message: 'Stripe Payment Gateway settings saved successfully!', type: 'success' });
+    } catch (err: any) {
+      console.error('Error saving payment settings:', err);
+      setCustomAlert({ message: `Error saving payment settings: ${err.message || 'Unknown error'}`, type: 'error' });
+    } finally {
+      setIsSavingPaymentSettings(false);
+    }
+  };
 
   // ─── REAL MENU EDITABLE STATE ─────────────────────────────────────────────
   type AdminMenuTab = 'banquet' | 'indian' | 'srilankan' | 'live';
@@ -1539,6 +1901,46 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     }
   };
 
+  const updateAndSaveRestaurantLocation = async (address: string, coords?: { lat: number; lng: number; postcode?: string }) => {
+    const updated: DeliveryLocationConfig = {
+      ...deliverySettings,
+      venueAddress: address,
+      venueLat: coords?.lat !== undefined ? coords.lat : deliverySettings.venueLat,
+      venueLng: coords?.lng !== undefined ? coords.lng : deliverySettings.venueLng,
+      venuePostcode: coords?.postcode !== undefined ? coords.postcode : deliverySettings.venuePostcode,
+    };
+    setDeliverySettings(updated);
+    try {
+      await setDoc(doc(db, 'site_data', 'delivery_settings'), JSON.parse(JSON.stringify(updated)), { merge: true });
+      await setDoc(doc(db, 'site_data', 'venue_details'), {
+        address: updated.venueAddress,
+        venueLat: updated.venueLat,
+        venueLng: updated.venueLng,
+      }, { merge: true });
+    } catch (e) {
+      console.error('Error auto-saving restaurant location:', e);
+    }
+  };
+
+  const saveDeliverySettings = async () => {
+    setIsSavingDeliverySettings(true);
+    try {
+      const cleanData = JSON.parse(JSON.stringify(deliverySettings));
+      await setDoc(doc(db, 'site_data', 'delivery_settings'), cleanData, { merge: true });
+      await setDoc(doc(db, 'site_data', 'venue_details'), {
+        address: deliverySettings.venueAddress,
+        venueLat: deliverySettings.venueLat,
+        venueLng: deliverySettings.venueLng,
+      }, { merge: true });
+      setCustomAlert({ message: 'Restaurant location & dynamic delivery pricing rules saved successfully!', type: 'success' });
+    } catch (error: any) {
+      console.error('Error saving delivery settings:', error);
+      setCustomAlert({ message: `Error saving delivery settings: ${error.message || 'Unknown error'}`, type: 'error' });
+    } finally {
+      setIsSavingDeliverySettings(false);
+    }
+  };
+
   const getDiscountAmount = (b: Booking) => {
     if (!b.discount) return 0;
     const subtotal = b.baseAmount + (b.extraCharges || []).reduce((s, c) => s + c.amount, 0);
@@ -2020,9 +2422,11 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     printWindow.document.close();
   };
 
-  const enquiries = bookings.filter(b => b.status === 'new_enquiry');
-  const activeBookings = bookings.filter(b => b.status !== 'new_enquiry' && b.status !== 'completed');
-  const completedBookings = bookings.filter(b => b.status === 'completed').sort((a, b) => {
+  const isOnlineOrder = (b: Booking) => Boolean(b.isOnlineOrder || b.stripeSessionId || b.selectedMenuDishes);
+
+  const enquiries = bookings.filter(b => b.status === 'new_enquiry' && !isOnlineOrder(b));
+  const activeBookings = bookings.filter(b => b.status !== 'new_enquiry' && b.status !== 'completed' && !isOnlineOrder(b));
+  const completedBookings = bookings.filter(b => b.status === 'completed' && !isOnlineOrder(b)).sort((a, b) => {
     const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : new Date(a.date).getTime());
     const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : new Date(b.date).getTime());
     return bTime - aTime;
@@ -2030,7 +2434,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
   const historyBookings = bookings.filter(b => {
     const statusIndex = STATUS_FLOW.indexOf(b.status);
-    return statusIndex >= STATUS_FLOW.indexOf('deposit_confirmed');
+    return statusIndex >= STATUS_FLOW.indexOf('deposit_confirmed') || isOnlineOrder(b);
   }).sort((a, b) => {
     const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : new Date(a.date).getTime());
     const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : new Date(b.date).getTime());
@@ -2091,9 +2495,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     outstanding: bookings.filter(b => b.depositPaid && !b.finalPaymentPaid && b.status !== 'new_enquiry').reduce((s, b) => s + (getTotalAmount(b) - b.deposit), 0),
   };
 
-  const eventTypes = [...new Set(bookings.map(b => b.eventType))];
+  const eventTypes = [...new Set(bookings.filter(b => !isOnlineOrder(b)).map(b => b.eventType))];
 
   const filtered = bookings.filter(b => {
+    if (isOnlineOrder(b)) return false;
     const statusMatch = filterStatus === 'all' || b.status === filterStatus;
     const eventMatch = filterEvent === 'all' || b.eventType === filterEvent;
     return statusMatch && eventMatch;
@@ -2112,9 +2517,13 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
   };
 
   const pendingDiscounts = bookings.filter(b => b.discountRequest?.status === 'pending');
+  const onlineOrdersList = useMemo(() => {
+    return bookings.filter(b => isOnlineOrder(b));
+  }, [bookings]);
   
   const navItems: { id: AdminTab; label: string; icon: string; badge?: number; requiredPerm?: string }[] = [
     { id: 'overview', label: 'Overview', icon: 'Squares2X2Icon' },
+    { id: 'online_orders', label: 'Online Orders', icon: 'ShoppingBagIcon', badge: onlineOrdersList.filter(o => o.status === 'deposit_confirmed' || o.depositPaid).length || undefined, requiredPerm: 'manage_bookings' },
     { id: 'enquiries', label: 'Enquiries', icon: 'InboxIcon', badge: stats.newEnquiries, requiredPerm: 'manage_enquiries' },
     { id: 'bookings', label: 'Bookings', icon: 'CalendarDaysIcon', badge: activeBookings.length || undefined, requiredPerm: 'manage_bookings' },
     { id: 'calendar', label: 'Calendar', icon: 'CalendarIcon', requiredPerm: 'manage_calendar' },
@@ -2196,7 +2605,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
       {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setSidebarOpen(false)} />}
 
       {/* Sidebar */}
-      <aside className={`fixed md:static inset-y-0 left-0 z-50 w-60 flex-shrink-0 flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} bg-surface border-r border-surface-border`}>
+      <aside className={`fixed md:sticky top-0 h-screen inset-y-0 left-0 z-50 w-60 flex-shrink-0 flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} bg-surface border-r border-surface-border`}>
         <div className="px-5 py-4 border-b border-surface-border flex items-center gap-2.5">
           <div>
             <img
@@ -2384,6 +2793,325 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             </div>
           )}
 
+          {/* ─── ONLINE MENU ORDERS MODULE ─── */}
+          {activeTab === 'online_orders' && (
+            <div className="space-y-6">
+              {/* Top Stats */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
+                  <div className="flex items-center justify-between text-xs text-gray-500 font-semibold mb-1">
+                    <span>Total Online Orders</span>
+                    <Icon name="ShoppingBagIcon" size={18} className="text-[#C8860A]" />
+                  </div>
+                  <div className="text-2xl font-bold text-gray-900">{onlineOrdersList.length}</div>
+                  <div className="text-[11px] text-gray-400 mt-1">Direct website menu customizer orders</div>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-emerald-200 p-4 shadow-sm bg-gradient-to-br from-white to-emerald-50/30">
+                  <div className="flex items-center justify-between text-xs text-emerald-800 font-semibold mb-1">
+                    <span>Paid via Stripe</span>
+                    <Icon name="CheckBadgeIcon" size={18} className="text-emerald-600" />
+                  </div>
+                  <div className="text-2xl font-bold text-emerald-700">
+                    £{onlineOrdersList.filter(o => o.depositPaid).reduce((s, o) => s + (o.deposit || o.baseAmount || 0), 0).toLocaleString()}
+                  </div>
+                  <div className="text-[11px] text-emerald-600 mt-1">Instant online card &amp; Apple Pay deposits</div>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-amber-200 p-4 shadow-sm bg-gradient-to-br from-white to-amber-50/30">
+                  <div className="flex items-center justify-between text-xs text-amber-900 font-semibold mb-1">
+                    <span>Kitchen Prep Pending</span>
+                    <Icon name="ClockIcon" size={18} className="text-[#C8860A]" />
+                  </div>
+                  <div className="text-2xl font-bold text-amber-900">
+                    {onlineOrdersList.filter(o => !o.kitchenStatus || o.kitchenStatus === 'received' || o.kitchenStatus === 'prep').length}
+                  </div>
+                  <div className="text-[11px] text-amber-700 mt-1">Awaiting chef review &amp; preparation</div>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-purple-200 p-4 shadow-sm bg-gradient-to-br from-white to-purple-50/30">
+                  <div className="flex items-center justify-between text-xs text-purple-900 font-semibold mb-1">
+                    <span>Total Order Value</span>
+                    <Icon name="BanknotesIcon" size={18} className="text-purple-600" />
+                  </div>
+                  <div className="text-2xl font-bold text-purple-900">
+                    £{onlineOrdersList.reduce((s, o) => s + (o.totalEstimatedAmount || o.baseAmount || 0), 0).toLocaleString()}
+                  </div>
+                  <div className="text-[11px] text-purple-700 mt-1">Total catering value of online orders</div>
+                </div>
+              </div>
+
+              {/* Filter & Search Bar */}
+              <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto">
+                  {(['all', 'paid', 'deposit', 'kitchen', 'completed'] as const).map((f) => (
+                    <button
+                      key={f}
+                      type="button"
+                      onClick={() => setOnlineOrderFilter(f)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold capitalize transition-all cursor-pointer ${
+                        onlineOrderFilter === f
+                          ? 'bg-[#C8860A] text-white shadow-sm'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {f === 'all' && `All Orders (${onlineOrdersList.length})`}
+                      {f === 'paid' && `Paid Online (${onlineOrdersList.filter(o => o.depositPaid).length})`}
+                      {f === 'deposit' && `Deposit Pending (${onlineOrdersList.filter(o => !o.depositPaid).length})`}
+                      {f === 'kitchen' && `In Kitchen (${onlineOrdersList.filter(o => o.kitchenStatus === 'prep').length})`}
+                      {f === 'completed' && `Ready / Done (${onlineOrdersList.filter(o => o.kitchenStatus === 'ready' || o.status === 'completed').length})`}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="w-full md:w-72">
+                  <input
+                    type="text"
+                    placeholder="Search by customer, phone, or order ID..."
+                    value={onlineOrderSearch}
+                    onChange={(e) => setOnlineOrderSearch(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-gray-50"
+                  />
+                </div>
+              </div>
+
+              {/* Online Orders List */}
+              {onlineOrdersList.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-gray-200 py-16 text-center space-y-3">
+                  <div className="w-14 h-14 rounded-2xl bg-amber-50 text-[#C8860A] flex items-center justify-center mx-auto">
+                    <Icon name="ShoppingBagIcon" size={28} />
+                  </div>
+                  <h3 className="font-bold text-gray-900 text-base">No Online Menu Orders Yet</h3>
+                  <p className="text-xs text-gray-500 max-w-md mx-auto">
+                    When customers customize their menu dishes and pay their deposit online via Stripe on your website, orders will instantly appear here with complete dish lists, kitchen slips, and digital invoices.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {onlineOrdersList
+                    .filter(order => {
+                      if (onlineOrderFilter === 'paid') return order.depositPaid;
+                      if (onlineOrderFilter === 'deposit') return !order.depositPaid;
+                      if (onlineOrderFilter === 'kitchen') return order.kitchenStatus === 'prep';
+                      if (onlineOrderFilter === 'completed') return order.kitchenStatus === 'ready' || order.status === 'completed';
+                      return true;
+                    })
+                    .filter(order => {
+                      if (!onlineOrderSearch.trim()) return true;
+                      const q = onlineOrderSearch.toLowerCase();
+                      return (
+                        order.name.toLowerCase().includes(q) ||
+                        (order.phone || '').toLowerCase().includes(q) ||
+                        (order.email || '').toLowerCase().includes(q) ||
+                        (order.id || '').toLowerCase().includes(q) ||
+                        (order.package || '').toLowerCase().includes(q)
+                      );
+                    })
+                    .map((order) => {
+                      const totalAmt = order.totalEstimatedAmount || order.baseAmount || 0;
+                      const paidAmt = order.deposit || order.amountPaidSoFar || (order.depositPaid ? totalAmt : 0);
+                      const remAmt = Math.max(0, totalAmt - paidAmt);
+                      const dishes = order.selectedMenuDishes || {};
+
+                      return (
+                        <div
+                          key={order.id}
+                          className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-sm hover:shadow-md transition-all space-y-5"
+                        >
+                          {/* Order Card Top Bar */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-2xl bg-amber-100 text-[#C8860A] flex items-center justify-center font-bold text-sm flex-shrink-0">
+                                {order.name ? order.name.charAt(0).toUpperCase() : 'O'}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <h3 className="font-bold text-gray-900 text-sm sm:text-base">{order.name}</h3>
+                                  <span className="font-mono text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
+                                    #{order.id.slice(-6).toUpperCase()}
+                                  </span>
+                                  {order.depositPaid && (
+                                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                      Stripe Paid
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-gray-500 mt-0.5 flex flex-wrap items-center gap-3">
+                                  <span>{order.email}</span>
+                                  <span>•</span>
+                                  <span>{order.phone}</span>
+                                  {order.createdAt && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="text-gray-400">
+                                        Ordered {new Date(order.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                      </span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Quick Action Buttons */}
+                            <div className="flex items-center gap-2 self-start sm:self-center flex-wrap">
+                              <a
+                                href={buildWhatsAppLink(
+                                  order.phone,
+                                  `Hi ${order.name}, thank you for your order with SriLalitha Catering (Order #${order.id})! We have received your menu selection for ${order.date} (${order.guests} guests). Everything is in our kitchen schedule!`
+                                )}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-3 py-1.5 rounded-xl bg-[#25D366]/10 text-[#128C7E] hover:bg-[#25D366]/20 font-bold text-xs flex items-center gap-1.5 transition-colors"
+                              >
+                                <Icon name="ChatBubbleLeftRightIcon" size={14} />
+                                WhatsApp
+                              </a>
+
+                              <button
+                                type="button"
+                                onClick={() => setShowKitchenSlipModal(order)}
+                                className="px-3 py-1.5 rounded-xl bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                              >
+                                <Icon name="ClipboardDocumentCheckIcon" size={14} className="text-[#C8860A]" />
+                                Kitchen Slip
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setShowInvoiceModal(order)}
+                                className="px-3 py-1.5 rounded-xl bg-gray-100 text-gray-800 hover:bg-gray-200 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                              >
+                                <Icon name="PrinterIcon" size={14} />
+                                Invoice
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Event & Delivery Info Row */}
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-gray-50 p-4 rounded-xl text-xs">
+                            <div>
+                              <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Event Date &amp; Time</span>
+                              <div className="font-bold text-gray-900">📅 {order.date}</div>
+                              <div className="text-gray-600">⏰ {order.time || order.timeOfDay || 'Time TBD'}</div>
+                              <div className="text-gray-600">👥 {order.guests} Guests</div>
+                            </div>
+
+                            <div>
+                              <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Package &amp; Cuisine</span>
+                              <div className="font-bold text-[#C8860A]">{order.package || order.packageName || 'Banquet Package'}</div>
+                              <div className="text-gray-600 capitalize">Cuisine: {order.cuisineType || 'Indian'}</div>
+                              {order.notes && (
+                                <div className="text-amber-900 italic mt-1 truncate">Note: &quot;{order.notes}&quot;</div>
+                              )}
+                            </div>
+
+                            <div>
+                              <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Delivery &amp; Venue</span>
+                              <div className="font-bold text-gray-900 truncate">📍 {order.location || 'Base Venue'}</div>
+                              {order.distanceMiles && order.distanceMiles > 0 ? (
+                                <div className="text-gray-600">
+                                  🚗 {order.distanceMiles} miles ({order.deliveryCharge && order.deliveryCharge > 0 ? `+£${order.deliveryCharge} delivery` : 'Free delivery'})
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          {/* Selected Menu Dishes Breakdown */}
+                          {dishes && Object.keys(dishes).length > 0 && (
+                            <div className="space-y-2 border border-gray-100 rounded-xl p-4 bg-amber-50/20">
+                              <span className="text-xs font-bold text-amber-950 uppercase tracking-wide flex items-center gap-1.5">
+                                <Icon name="SparklesIcon" size={14} className="text-[#C8860A]" />
+                                Customer Selected Menu Dishes ({order.package || 'Package'})
+                              </span>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1 text-xs">
+                                {Object.entries(dishes).map(([catKey, dishList]: [string, any]) => {
+                                  if (!Array.isArray(dishList) || dishList.length === 0) return null;
+                                  const catTitle = catKey
+                                    .replace(/([A-Z])/g, ' $1')
+                                    .replace(/^./, str => str.toUpperCase());
+
+                                  return (
+                                    <div key={catKey} className="p-2.5 rounded-lg bg-white border border-gray-200">
+                                      <span className="font-bold text-gray-800 text-[11px] block mb-1">
+                                        • {catTitle} ({dishList.length})
+                                      </span>
+                                      <div className="text-gray-600 space-y-0.5 pl-1">
+                                        {dishList.map((d: any, dIdx: number) => {
+                                          const dishText = typeof d === 'string'
+                                            ? d
+                                            : d?.name
+                                              ? `${d.name}${d.price ? ` (+£${d.price}${d.perPerson ? '/person' : ''})` : ''}`
+                                              : JSON.stringify(d);
+                                          return (
+                                            <div key={dIdx} className="truncate">
+                                              {dishText}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Financial & Status Bar */}
+                          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2 border-t border-gray-100">
+                            <div className="flex items-center gap-4 text-xs">
+                              <div>
+                                <span className="text-gray-400 block text-[10px] uppercase font-bold">Total Bill</span>
+                                <span className="font-bold text-gray-900 text-sm">£{totalAmt.toFixed(2)}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400 block text-[10px] uppercase font-bold">Deposit / Paid</span>
+                                <span className="font-bold text-emerald-700 text-sm">£{paidAmt.toFixed(2)}</span>
+                              </div>
+                              {remAmt > 0 && (
+                                <div>
+                                  <span className="text-gray-400 block text-[10px] uppercase font-bold">Remaining Balance</span>
+                                  <span className="font-bold text-amber-800 text-sm">£{remAmt.toFixed(2)}</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Kitchen Status Selector */}
+                            <div className="flex items-center gap-2 w-full sm:w-auto">
+                              <label className="text-xs font-semibold text-gray-600 whitespace-nowrap">Kitchen Status:</label>
+                              <select
+                                value={order.kitchenStatus || 'received'}
+                                onChange={async (e) => {
+                                  const newStatus = e.target.value;
+                                  try {
+                                    await setDoc(doc(db, 'booking_requests', order.id), {
+                                      kitchenStatus: newStatus,
+                                      updatedAt: new Date().toISOString(),
+                                    }, { merge: true });
+                                    setCustomAlert({ message: `Updated order kitchen status to ${newStatus}`, type: 'success' });
+                                  } catch (err: any) {
+                                    setCustomAlert({ message: 'Failed to update status', type: 'error' });
+                                  }
+                                }}
+                                className="border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-bold bg-gray-50 focus:bg-white focus:outline-none"
+                              >
+                                <option value="received">Order Received</option>
+                                <option value="prep">👨‍🍳 Kitchen Preparing</option>
+                                <option value="ready">📦 Ready for Dispatch</option>
+                                <option value="dispatched">🚚 Dispatched / Delivered</option>
+                                <option value="completed">✓ Event Completed</option>
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ─── ENQUIRIES ─── */}
           {activeTab === 'enquiries' && (
             <div className="space-y-4">
@@ -2408,10 +3136,17 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         <div className="text-xs text-gray-400">{b.email} · {b.phone}</div>
                       </div>
                     </div>
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_COLORS[b.status]}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[b.status]}`} />
-                      {STATUS_LABELS[b.status]}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {b.isWaitlist && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs">
+                          <span>✨</span> Waitlist / High Demand
+                        </span>
+                      )}
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_COLORS[b.status]}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[b.status]}`} />
+                        {STATUS_LABELS[b.status]}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -2445,6 +3180,31 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       </div>
                     )}
                   </div>
+
+                  {b.location && (
+                    <div className="mt-3 flex items-center justify-between gap-3 bg-amber-50/70 border border-amber-200/80 rounded-xl px-4 py-2.5 text-xs text-amber-950 flex-wrap shadow-2xs">
+                      <div className="flex items-center gap-2">
+                        <Icon name="MapPinIcon" size={16} className="text-[#C8860A] flex-shrink-0" />
+                        <div>
+                          <span className="font-bold text-gray-900 block">{b.location}</span>
+                          {b.distanceMiles ? (
+                            <span className="text-[11px] text-amber-800 font-medium">
+                              🚗 {b.distanceMiles} miles from base venue {b.deliveryCharge ? `(🚚 Delivery: £${b.deliveryCharge.toFixed(2)})` : '(Free Delivery)'}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                      <a
+                        href={`https://www.google.com/maps/dir/?api=1&origin=${deliverySettings.venueLat},${deliverySettings.venueLng}&destination=${encodeURIComponent(b.location)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-[#C8860A] hover:underline bg-white px-2.5 py-1 rounded-lg border border-amber-200 shadow-2xs cursor-pointer"
+                      >
+                        <Icon name="ArrowTopRightOnSquareIcon" size={12} />
+                        View Route
+                      </a>
+                    </div>
+                  )}
 
                   {b.notes && (
                     <div className="mt-3 bg-amber-50 border border-amber-100 rounded-lg px-4 py-2.5 text-sm text-amber-800">{b.notes}</div>
@@ -3385,15 +4145,735 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
           {/* ─── SETTINGS ─── */}
           {activeTab === 'settings' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-5xl">
-              {/* Left Column */}
-              <div className="space-y-6">
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
-                  <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <div className="space-y-6 max-w-6xl">
+              {/* Settings Sub navigation */}
+              <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 pb-3">
+                <button
+                  onClick={() => setSettingsSection('form_builder')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                    settingsSection === 'form_builder'
+                      ? 'bg-[#C8860A] text-white shadow-sm'
+                      : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <Icon name="ClipboardDocumentListIcon" size={16} />
+                  Dynamic Form Builder
+                  <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${settingsSection === 'form_builder' ? 'bg-white/25 text-white' : 'bg-amber-100 text-amber-800'}`}>
+                    {editableFormConfig.fields.length}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setSettingsSection('venue')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                    settingsSection === 'venue'
+                      ? 'bg-[#C8860A] text-white shadow-sm'
+                      : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <Icon name="BuildingOfficeIcon" size={16} />
+                  Venue Profile
+                </button>
+                <button
+                  onClick={() => setSettingsSection('location_delivery')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                    settingsSection === 'location_delivery'
+                      ? 'bg-[#C8860A] text-white shadow-sm'
+                      : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <Icon name="MapPinIcon" size={16} />
+                  Restaurant Location &amp; Delivery Rules
+                </button>
+                <button
+                  onClick={() => setSettingsSection('pricing')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                    settingsSection === 'pricing'
+                      ? 'bg-[#C8860A] text-white shadow-sm'
+                      : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <Icon name="CalendarDaysIcon" size={16} />
+                  Pricing & Deposits
+                </button>
+                <button
+                  onClick={() => setSettingsSection('stripe_gateway')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                    settingsSection === 'stripe_gateway'
+                      ? 'bg-[#635BFF] text-white shadow-sm'
+                      : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <Icon name="CreditCardIcon" size={16} />
+                  💳 Stripe Gateway
+                </button>
+                <button
+                  onClick={() => setSettingsSection('bank')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                    settingsSection === 'bank'
+                      ? 'bg-[#C8860A] text-white shadow-sm'
+                      : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <Icon name="CreditCardIcon" size={16} />
+                  Bank Details
+                </button>
+                <button
+                  onClick={() => setSettingsSection('block_dates')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                    settingsSection === 'block_dates'
+                      ? 'bg-[#C8860A] text-white shadow-sm'
+                      : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <Icon name="NoSymbolIcon" size={16} />
+                  Block Dates
+                </button>
+              </div>
+
+              {/* ── SECTION 1: DYNAMIC FORM BUILDER ── */}
+              {settingsSection === 'form_builder' && (
+                <div className="space-y-6">
+                  {/* Top Action Bar */}
+                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                        <span className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center flex-shrink-0">
+                          <Icon name="AdjustmentsHorizontalIcon" size={18} />
+                        </span>
+                        Dynamic Website Booking Form Builder
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Add, reorder, customize fields, validation, and dropdown options. All updates sync in real-time to the website form.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 flex-shrink-0 flex-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => setShowAddFieldModal(true)}
+                        className="px-3.5 py-2 rounded-xl text-xs font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 transition-colors flex items-center gap-1.5 shadow-sm whitespace-nowrap flex-shrink-0"
+                      >
+                        <Icon name="PlusIcon" size={14} />
+                        Add Custom Field
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm('Reset form fields to standard SriLalitha default configuration?')) {
+                            setEditableFormConfig(DEFAULT_FORM_CONFIG);
+                            setCustomAlert({ message: 'Reset to default configuration in editor. Click "Save Form Configuration" to apply.', type: 'success' });
+                          }
+                        }}
+                        className="px-3 py-2 rounded-xl text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors flex items-center gap-1 whitespace-nowrap flex-shrink-0"
+                        title="Restore original default 9 fields"
+                      >
+                        <Icon name="ArrowPathIcon" size={14} />
+                        Reset Defaults
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={saveFormConfigToDatabase}
+                        disabled={isSavingFormConfig}
+                        className="px-4 py-2 rounded-xl text-xs font-bold text-white transition-all shadow-md active:scale-95 disabled:opacity-50 flex items-center gap-1.5 whitespace-nowrap flex-shrink-0"
+                        style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                      >
+                        {isSavingFormConfig ? (
+                          <>
+                            <span className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />
+                            Saving to Live Site...
+                          </>
+                        ) : (
+                          <>
+                            <Icon name="CheckIcon" size={15} />
+                            Save Form Configuration
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    {/* Left: Form Controls & Field List (7 cols) */}
+                    <div className="lg:col-span-7 space-y-6">
+                      {/* Form Headings & Labels Card */}
+                      <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
+                        <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2 border-b border-gray-100 pb-2.5">
+                          <Icon name="DocumentTextIcon" size={16} style={{ color: '#C8860A' }} />
+                          Form Headings & Call-to-Action
+                        </h4>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-600 mb-1">Form Main Title</label>
+                            <input
+                              type="text"
+                              value={editableFormConfig.formTitle || ''}
+                              onChange={(e) => setEditableFormConfig(prev => ({ ...prev, formTitle: e.target.value }))}
+                              placeholder="e.g. Request a Booking"
+                              className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-gray-50"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-600 mb-1">Submit Button Text</label>
+                            <input
+                              type="text"
+                              value={editableFormConfig.submitButtonText || ''}
+                              onChange={(e) => setEditableFormConfig(prev => ({ ...prev, submitButtonText: e.target.value }))}
+                              placeholder="e.g. Submit Booking Request"
+                              className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-gray-50"
+                            />
+                          </div>
+
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs font-semibold text-gray-600 mb-1">Form Subtitle</label>
+                            <input
+                              type="text"
+                              value={editableFormConfig.formSubtitle || ''}
+                              onChange={(e) => setEditableFormConfig(prev => ({ ...prev, formSubtitle: e.target.value }))}
+                              placeholder="e.g. Fill in your details and we'll get back to you within 24 hours"
+                              className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-gray-50"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Outdoor Catering & Dynamic Slot Capacity Card */}
+                      <div className="bg-white rounded-2xl border border-amber-200/80 p-5 shadow-sm space-y-4">
+                        <div className="flex items-center justify-between border-b border-amber-100 pb-2.5">
+                          <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
+                              <Icon name="ClockIcon" size={14} />
+                            </span>
+                            Outdoor Catering & Time Slot Capacity Rules
+                          </h4>
+                          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                            Dynamic Limits
+                          </span>
+                        </div>
+
+                        {/* Outdoor Catering Settings */}
+                        <div className="bg-amber-50/60 rounded-xl p-4 border border-amber-200/60 space-y-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                              <span className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                                🍽️ Outdoor Catering Time Slots & Limits
+                              </span>
+                              <p className="text-[11px] text-amber-700 mt-0.5">
+                                When Outdoor Catering is selected, these time slots appear with a limit of multiple bookings per slot.
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 self-start sm:self-center">
+                              <label className="text-xs font-bold text-amber-900 whitespace-nowrap">
+                                Max Bookings / Slot:
+                              </label>
+                              <input
+                                type="number"
+                                min="1"
+                                max="20"
+                                value={editableFormConfig.slotCapacity?.maxOutdoorCateringPerSlot ?? 4}
+                                onChange={(e) => {
+                                  const val = Math.max(1, parseInt(e.target.value) || 1);
+                                  setEditableFormConfig(prev => ({
+                                    ...prev,
+                                    slotCapacity: {
+                                      ...(prev.slotCapacity || DEFAULT_SLOT_CAPACITY),
+                                      maxOutdoorCateringPerSlot: val,
+                                    }
+                                  }));
+                                }}
+                                className="w-16 border border-amber-300 rounded-lg px-2 py-1 text-xs font-bold text-center bg-white text-amber-900 focus:outline-none focus:ring-2 focus:ring-[#C8860A]"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Outdoor Time Slot Chips */}
+                          <div className="space-y-2 pt-1">
+                            <label className="block text-[11px] font-bold text-amber-900 uppercase tracking-wide">
+                              Active Outdoor Time Slots ({(editableFormConfig.slotCapacity?.outdoorCateringTimeSlots || DEFAULT_OUTDOOR_TIME_SLOTS).length})
+                            </label>
+                            <div className="flex flex-wrap gap-1.5">
+                              {(editableFormConfig.slotCapacity?.outdoorCateringTimeSlots || DEFAULT_OUTDOOR_TIME_SLOTS).map((slot, sIdx) => (
+                                <span
+                                  key={sIdx}
+                                  className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-amber-950 shadow-2xs"
+                                >
+                                  <span>{slot}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const current = editableFormConfig.slotCapacity?.outdoorCateringTimeSlots || DEFAULT_OUTDOOR_TIME_SLOTS;
+                                      const updated = current.filter((_, i) => i !== sIdx);
+                                      setEditableFormConfig(prev => ({
+                                        ...prev,
+                                        slotCapacity: {
+                                          ...(prev.slotCapacity || DEFAULT_SLOT_CAPACITY),
+                                          outdoorCateringTimeSlots: updated,
+                                        }
+                                      }));
+                                    }}
+                                    className="text-gray-400 hover:text-rose-600 transition-colors"
+                                    title="Remove time slot"
+                                  >
+                                    <Icon name="XMarkIcon" size={12} />
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+
+                            {/* Add Outdoor Slot Input */}
+                            <div className="flex items-center gap-1.5 pt-1">
+                              <input
+                                type="text"
+                                placeholder="Add time slot (e.g. Afternoon Tea (2:00pm – 5:00pm))..."
+                                value={newOutdoorSlotInput}
+                                onChange={(e) => setNewOutdoorSlotInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    const val = newOutdoorSlotInput.trim();
+                                    const current = editableFormConfig.slotCapacity?.outdoorCateringTimeSlots || DEFAULT_OUTDOOR_TIME_SLOTS;
+                                    if (val && !current.includes(val)) {
+                                      setEditableFormConfig(prev => ({
+                                        ...prev,
+                                        slotCapacity: {
+                                          ...(prev.slotCapacity || DEFAULT_SLOT_CAPACITY),
+                                          outdoorCateringTimeSlots: [...current, val],
+                                        }
+                                      }));
+                                      setNewOutdoorSlotInput('');
+                                    }
+                                  }
+                                }}
+                                className="flex-1 border border-amber-300 bg-white rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[#C8860A]"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const val = newOutdoorSlotInput.trim();
+                                  const current = editableFormConfig.slotCapacity?.outdoorCateringTimeSlots || DEFAULT_OUTDOOR_TIME_SLOTS;
+                                  if (val && !current.includes(val)) {
+                                    setEditableFormConfig(prev => ({
+                                      ...prev,
+                                      slotCapacity: {
+                                        ...(prev.slotCapacity || DEFAULT_SLOT_CAPACITY),
+                                        outdoorCateringTimeSlots: [...current, val],
+                                      }
+                                    }));
+                                    setNewOutdoorSlotInput('');
+                                  }
+                                }}
+                                className="px-3 py-1 rounded-lg text-xs font-bold text-white transition-colors"
+                                style={{ background: '#C8860A' }}
+                              >
+                                + Add Slot
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Venue Hall Standard Settings */}
+                        <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 space-y-2">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                              <span className="text-xs font-bold text-gray-900">
+                                🏛️ Venue Hall (In-House) Max Bookings / Slot
+                              </span>
+                              <p className="text-[11px] text-gray-500 mt-0.5">
+                                For In-House hall bookings, maximum events allowed per time slot.
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 self-start sm:self-center">
+                              <label className="text-xs font-bold text-gray-700 whitespace-nowrap">
+                                Max Bookings:
+                              </label>
+                              <input
+                                type="number"
+                                min="1"
+                                max="5"
+                                value={editableFormConfig.slotCapacity?.maxHallBookingsPerSlot ?? 1}
+                                onChange={(e) => {
+                                  const val = Math.max(1, parseInt(e.target.value) || 1);
+                                  setEditableFormConfig(prev => ({
+                                    ...prev,
+                                    slotCapacity: {
+                                      ...(prev.slotCapacity || DEFAULT_SLOT_CAPACITY),
+                                      maxHallBookingsPerSlot: val,
+                                    }
+                                  }));
+                                }}
+                                className="w-16 border border-gray-300 rounded-lg px-2 py-1 text-xs font-bold text-center bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C8860A]"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Fields Manager List */}
+                      <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-3">
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                          <div>
+                            <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                              <Icon name="ListBulletIcon" size={16} style={{ color: '#C8860A' }} />
+                              Form Fields Manager ({editableFormConfig.fields.length} Fields)
+                            </h4>
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              Use arrows to reorder, toggle eye to show/hide, click edit or manage dropdown options.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowAddFieldModal(true)}
+                            className="text-xs font-bold text-[#C8860A] hover:underline flex items-center gap-1"
+                          >
+                            <Icon name="PlusCircleIcon" size={15} />
+                            Add Field
+                          </button>
+                        </div>
+
+                        {/* List of Fields */}
+                        <div className="space-y-3 pt-1">
+                          {editableFormConfig.fields
+                            .slice()
+                            .sort((a, b) => a.order - b.order)
+                            .map((field, idx) => (
+                              <div
+                                key={field.id}
+                                className={`rounded-xl border transition-all p-3.5 ${
+                                  field.enabled
+                                    ? 'bg-white border-gray-200 hover:border-amber-300 shadow-sm'
+                                    : 'bg-gray-50/80 border-gray-200/60 opacity-60'
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  {/* Left: Reorder Arrows & Info */}
+                                  <div className="flex items-start gap-2.5">
+                                    <div className="flex flex-col items-center justify-center gap-0.5 pt-0.5">
+                                      <button
+                                        type="button"
+                                        disabled={idx === 0}
+                                        onClick={() => handleMoveField(idx, 'up')}
+                                        className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-20 hover:bg-gray-100 rounded transition-colors"
+                                        title="Move Up"
+                                      >
+                                        <Icon name="ChevronUpIcon" size={14} />
+                                      </button>
+                                      <span className="text-[10px] font-bold text-gray-400">{field.order}</span>
+                                      <button
+                                        type="button"
+                                        disabled={idx === editableFormConfig.fields.length - 1}
+                                        onClick={() => handleMoveField(idx, 'down')}
+                                        className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-20 hover:bg-gray-100 rounded transition-colors"
+                                        title="Move Down"
+                                      >
+                                        <Icon name="ChevronDownIcon" size={14} />
+                                      </button>
+                                    </div>
+
+                                    <div>
+                                      <div className="flex items-center flex-wrap gap-1.5 mb-1">
+                                        <span className="text-sm font-bold text-gray-900">{field.label}</span>
+                                        {field.required && (
+                                          <span className="text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-1.5 py-0.2 rounded">
+                                            Required
+                                          </span>
+                                        )}
+                                        {field.isSystem && (
+                                          <span className="text-[10px] font-medium text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded">
+                                            Core
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      <div className="flex items-center flex-wrap gap-2 text-[11px] text-gray-500">
+                                        <span className="font-mono text-gray-400 text-[10px]">id: {field.id}</span>
+                                        <span>•</span>
+                                        <span className="capitalize font-semibold text-gray-600">Type: {field.type.replace('_', ' ')}</span>
+                                        <span>•</span>
+                                        <span>Width: {field.width === 'full' ? '100%' : field.width === 'third' ? '33%' : '50%'}</span>
+                                      </div>
+
+                                      {field.placeholder && (
+                                        <p className="text-[11px] text-gray-400 italic mt-1 truncate max-w-sm">
+                                          Placeholder: &quot;{field.placeholder}&quot;
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Right: Actions */}
+                                  <div className="flex items-center gap-1 flex-shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleField(field.id)}
+                                      className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ${
+                                        field.enabled
+                                          ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                          : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                                      }`}
+                                      title={field.enabled ? 'Click to disable' : 'Click to enable'}
+                                    >
+                                      <Icon name={field.enabled ? 'EyeIcon' : 'EyeSlashIcon'} size={14} />
+                                      <span className="text-[11px]">{field.enabled ? 'Active' : 'Hidden'}</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingFieldModal(field)}
+                                      className="p-1.5 rounded-lg text-amber-700 hover:bg-amber-50 transition-colors"
+                                      title="Edit field settings"
+                                    >
+                                      <Icon name="PencilSquareIcon" size={16} />
+                                    </button>
+
+                                    {!field.isSystem && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (confirm(`Remove field "${field.label}"?`)) {
+                                            handleDeleteField(field.id);
+                                          }
+                                        }}
+                                        className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 transition-colors"
+                                        title="Delete custom field"
+                                      >
+                                        <Icon name="TrashIcon" size={16} />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Quick Dropdown Options Editor if field has options */}
+                                {(field.type === 'select' || field.type === 'time_select') && (
+                                  <div className="mt-3 pt-2.5 border-t border-gray-100 bg-amber-50/40 -mx-3.5 -mb-3.5 p-3 rounded-b-xl">
+                                    <div className="flex items-center justify-between mb-2">
+                                      <span className="text-[11px] font-bold text-amber-900 uppercase tracking-wide flex items-center gap-1">
+                                        <Icon name="TagIcon" size={12} style={{ color: '#C8860A' }} />
+                                        Dropdown Options ({field.options?.length || 0})
+                                      </span>
+                                      <span className="text-[10px] text-gray-400">Click &apos;✕&apos; to remove or add below</span>
+                                    </div>
+
+                                    {/* Option Chips */}
+                                    <div className="flex flex-wrap gap-1.5 mb-2.5">
+                                      {(field.options || []).map((opt, optIdx) => (
+                                        <span
+                                          key={optIdx}
+                                          className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-white border border-amber-200 text-gray-800 shadow-2xs"
+                                        >
+                                          <span>{opt}</span>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const updated = (field.options || []).filter((_, i) => i !== optIdx);
+                                              setEditableFormConfig(prev => ({
+                                                ...prev,
+                                                fields: prev.fields.map(f => f.id === field.id ? { ...f, options: updated } : f)
+                                              }));
+                                            }}
+                                            className="text-gray-400 hover:text-rose-600 transition-colors p-0.5"
+                                            title={`Remove ${opt}`}
+                                          >
+                                            <Icon name="XMarkIcon" size={12} />
+                                          </button>
+                                        </span>
+                                      ))}
+                                      {(!field.options || field.options.length === 0) && (
+                                        <span className="text-xs text-gray-400 italic">No options defined yet</span>
+                                      )}
+                                    </div>
+
+                                    {/* Quick Add Option Input */}
+                                    <div className="flex items-center gap-1.5">
+                                      <input
+                                        type="text"
+                                        placeholder={`Add new option (e.g. ${field.id === 'eventType' ? 'Outdoor Catering' : 'Custom Slot'})...`}
+                                        id={`new-opt-input-${field.id}`}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            const inputEl = document.getElementById(`new-opt-input-${field.id}`) as HTMLInputElement;
+                                            const val = inputEl?.value?.trim();
+                                            if (val && !(field.options || []).includes(val)) {
+                                              const updated = [...(field.options || []), val];
+                                              setEditableFormConfig(prev => ({
+                                                ...prev,
+                                                fields: prev.fields.map(f => f.id === field.id ? { ...f, options: updated } : f)
+                                              }));
+                                              inputEl.value = '';
+                                            }
+                                          }
+                                        }}
+                                        className="flex-1 border border-amber-200 bg-white rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[#C8860A]"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const inputEl = document.getElementById(`new-opt-input-${field.id}`) as HTMLInputElement;
+                                          const val = inputEl?.value?.trim();
+                                          if (val && !(field.options || []).includes(val)) {
+                                            const updated = [...(field.options || []), val];
+                                            setEditableFormConfig(prev => ({
+                                              ...prev,
+                                              fields: prev.fields.map(f => f.id === field.id ? { ...f, options: updated } : f)
+                                            }));
+                                            inputEl.value = '';
+                                          }
+                                        }}
+                                        className="px-3 py-1 rounded-lg text-xs font-bold text-white transition-colors"
+                                        style={{ background: '#C8860A' }}
+                                      >
+                                        + Add Option
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right: Live Interactive Form Preview (5 cols) */}
+                    <div className="lg:col-span-5 space-y-4">
+                      <div className="bg-gradient-to-br from-amber-500/10 to-amber-600/5 rounded-2xl border border-amber-200 p-5 sticky top-6 space-y-4">
+                        <div className="flex items-center justify-between border-b border-amber-200/60 pb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <h4 className="text-sm font-bold text-gray-900">Live Website Form Preview</h4>
+                          </div>
+                          <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider bg-amber-100 px-2 py-0.5 rounded-md">
+                            Realtime Sync
+                          </span>
+                        </div>
+
+                        {/* Form Mockup Container */}
+                        <div className="bg-white rounded-xl shadow-md border border-gray-100 p-5">
+                          <h2 className="text-base font-bold text-gray-900 text-center mb-0.5">
+                            {editableFormConfig.formTitle || 'Request a Booking'}
+                          </h2>
+                          <p className="text-xs text-gray-400 text-center mb-4">
+                            {editableFormConfig.formSubtitle || "Fill in your details and we'll get back to you within 24 hours"}
+                          </p>
+
+                          <div className="grid grid-cols-12 gap-2.5">
+                            {editableFormConfig.fields
+                              .filter(f => f.enabled)
+                              .sort((a, b) => a.order - b.order)
+                              .map(f => {
+                                const colClass = f.width === 'full' ? 'col-span-12' : f.width === 'third' ? 'col-span-4' : 'col-span-6';
+                                return (
+                                  <div key={f.id} className={colClass}>
+                                    <label className="block text-[11px] font-semibold text-gray-700 mb-0.5 truncate">
+                                      {f.label} {f.required && <span className="text-rose-500">*</span>}
+                                    </label>
+
+                                    {f.type === 'textarea' ? (
+                                      <textarea
+                                        disabled
+                                        rows={2}
+                                        placeholder={f.placeholder || 'Enter details...'}
+                                        className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-gray-50/60 cursor-not-allowed resize-none"
+                                      />
+                                    ) : f.type === 'select' ? (
+                                      <select
+                                        disabled
+                                        className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-gray-50/60 cursor-not-allowed text-gray-700"
+                                      >
+                                        <option value="">{f.placeholder || `Select ${f.label}`}</option>
+                                        {(f.options || []).map((o, idx) => (
+                                          <option key={idx} value={o}>{o}</option>
+                                        ))}
+                                      </select>
+                                    ) : f.type === 'time_select' ? (
+                                      <select
+                                        disabled
+                                        className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-gray-50/60 cursor-not-allowed text-gray-700"
+                                      >
+                                        <option value="">Select time</option>
+                                        <optgroup label={`── Outdoor Catering (${editableFormConfig.slotCapacity?.maxOutdoorCateringPerSlot || 4} bookings/slot) ──`}>
+                                          {(editableFormConfig.slotCapacity?.outdoorCateringTimeSlots || DEFAULT_OUTDOOR_TIME_SLOTS).map((o, idx) => (
+                                            <option key={`out-${idx}`} value={o}>{o}</option>
+                                          ))}
+                                        </optgroup>
+                                        <optgroup label="── Venue Hall Standard ──">
+                                          {(f.options || DEFAULT_TIME_SLOTS).map((o, idx) => (
+                                            <option key={`std-${idx}`} value={o}>{o}</option>
+                                          ))}
+                                        </optgroup>
+                                      </select>
+                                    ) : f.type === 'package_select' ? (
+                                      <select
+                                        disabled
+                                        className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-gray-50/60 cursor-not-allowed text-gray-700"
+                                      >
+                                        <option value="">Choose package</option>
+                                        {editableBanquetPackages.map(p => (
+                                          <option key={p.id} value={p.name}>{p.name} — £{p.pricePerPerson}/pp</option>
+                                        ))}
+                                      </select>
+                                    ) : f.type === 'tel' ? (
+                                      <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden bg-gray-50/60">
+                                        <span className="px-2 py-1.5 text-[11px] font-semibold text-gray-500 border-r border-gray-200 select-none bg-gray-100">+44</span>
+                                        <input
+                                          disabled
+                                          type="tel"
+                                          placeholder={f.placeholder || '07700 900000'}
+                                          className="w-full px-2 py-1.5 text-xs bg-transparent cursor-not-allowed"
+                                        />
+                                      </div>
+                                    ) : (
+                                      <input
+                                        disabled
+                                        type={f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : f.type === 'email' ? 'email' : 'text'}
+                                        placeholder={f.placeholder || ''}
+                                        className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-gray-50/60 cursor-not-allowed"
+                                      />
+                                    )}
+                                  </div>
+                                );
+                              })}
+                          </div>
+
+                          <div className="mt-4">
+                            <button
+                              disabled
+                              type="button"
+                              className="w-full text-white font-semibold py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm opacity-90 cursor-not-allowed"
+                              style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                            >
+                              <Icon name="CalendarDaysIcon" size={14} />
+                              {editableFormConfig.submitButtonText || 'Submit Booking Request'}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Information Tips */}
+                        <div className="bg-amber-50 rounded-xl p-3.5 border border-amber-200/80 text-xs text-amber-900 space-y-1.5">
+                          <div className="font-bold flex items-center gap-1.5 text-amber-950">
+                            <Icon name="InformationCircleIcon" size={16} />
+                            Automatic Data Routing
+                          </div>
+                          <p className="text-[11px] leading-relaxed text-amber-800">
+                            All standard and custom fields configured here are stored directly into customer booking records in Firestore. You can inspect all submitted answers in the <strong>Booking Details Drawer</strong> and customer timeline.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── SECTION 2: VENUE DETAILS ── */}
+              {settingsSection === 'venue' && (
+                <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-2xl space-y-4 shadow-sm">
+                  <h3 className="font-bold text-gray-900 flex items-center gap-2 text-base">
                     <Icon name="BuildingOfficeIcon" size={18} style={{ color: '#C8860A' }} />
-                    Venue Details
+                    Venue Profile & Details
                   </h3>
-                  <div className="space-y-3">
+                  <div className="space-y-3.5">
                     <div>
                       <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Venue Name</label>
                       <input type="text" value={venueDetails.venueName} onChange={(e) => setVenueDetails(prev => ({ ...prev, venueName: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50" />
@@ -3421,94 +4901,478 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <button
                       onClick={saveVenueDetails}
                       disabled={isSavingVenueDetails}
-                      className="text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition-all mt-1 shadow-md active:scale-95 disabled:opacity-50"
+                      className="text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition-all mt-2 shadow-md active:scale-95 disabled:opacity-50"
                       style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
                     >
-                      {isSavingVenueDetails ? 'Saving...' : 'Save Changes'}
+                      {isSavingVenueDetails ? 'Saving...' : 'Save Venue Details'}
                     </button>
                   </div>
                 </div>
+              )}
 
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
-                  <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              {/* ── SECTION: VENUE LOCATION & DELIVERY RULES ── */}
+              {settingsSection === 'location_delivery' && (
+                <div className="space-y-6">
+                  <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-3xl space-y-5 shadow-sm">
+                    <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                      <div>
+                        <h3 className="font-bold text-gray-900 flex items-center gap-2 text-base">
+                          <Icon name="MapPinIcon" size={20} style={{ color: '#C8860A' }} />
+                          Restaurant / Base Kitchen Location (Google Maps)
+                        </h3>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Set the restaurant address and GPS coordinates. Customer travel distances &amp; delivery charges are dynamically computed from this restaurant location.
+                        </p>
+                      </div>
+                      <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Live Map
+                      </span>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5">
+                          Restaurant Base Address (Google Places Autocomplete)
+                        </label>
+                        <GoogleLocationInput
+                          value={deliverySettings.venueAddress}
+                          placeholder="Search restaurant address or UK postcode..."
+                          showCoordinatesBadge={true}
+                          onChange={(address, coords) => updateAndSaveRestaurantLocation(address, coords)}
+                          onCoordinatesChange={(coords) => {
+                            if (coords) {
+                              updateAndSaveRestaurantLocation(deliverySettings.venueAddress, coords);
+                            }
+                          }}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                            Restaurant Postcode
+                          </label>
+                          <input
+                            type="text"
+                            value={deliverySettings.venuePostcode || ''}
+                            onChange={(e) => setDeliverySettings(prev => ({ ...prev, venuePostcode: e.target.value }))}
+                            placeholder="e.g. E1 6AN"
+                            className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none bg-gray-50 font-medium"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                            Latitude (GPS)
+                          </label>
+                          <input
+                            type="number"
+                            step="any"
+                            value={deliverySettings.venueLat}
+                            onChange={(e) => setDeliverySettings(prev => ({ ...prev, venueLat: parseFloat(e.target.value) || 0 }))}
+                            className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none bg-gray-50 font-mono text-gray-800"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                            Longitude (GPS)
+                          </label>
+                          <input
+                            type="number"
+                            step="any"
+                            value={deliverySettings.venueLng}
+                            onChange={(e) => setDeliverySettings(prev => ({ ...prev, venueLng: parseFloat(e.target.value) || 0 }))}
+                            className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none bg-gray-50 font-mono text-gray-800"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Google Maps Interactive Iframe Preview */}
+                      <div className="rounded-xl overflow-hidden border border-gray-200 shadow-inner h-48 w-full bg-gray-100 relative">
+                        <iframe
+                          title="Venue Location Map"
+                          width="100%"
+                          height="100%"
+                          frameBorder="0"
+                          style={{ border: 0 }}
+                          src={`https://maps.google.com/maps?q=${encodeURIComponent(deliverySettings.venueAddress || `${deliverySettings.venueLat},${deliverySettings.venueLng}`)}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                          allowFullScreen
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Dynamic Delivery & Distance Pricing Rules Card */}
+                  <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-3xl space-y-5 shadow-sm">
+                    <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                      <div>
+                        <h3 className="font-bold text-gray-900 flex items-center gap-2 text-base">
+                          <Icon name="TruckIcon" size={20} style={{ color: '#C8860A' }} />
+                          Dynamic Delivery &amp; Mileage Pricing Rules
+                        </h3>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Configure dynamic distance thresholds and mileage fees applied when customer selects their event location.
+                        </p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={deliverySettings.enableDeliveryCalculation}
+                          onChange={(e) => setDeliverySettings(prev => ({ ...prev, enableDeliveryCalculation: e.target.checked }))}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#C8860A]"></div>
+                      </label>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="bg-amber-50/50 border border-amber-200/80 rounded-xl p-4 space-y-2">
+                        <label className="block text-xs font-bold text-amber-950 uppercase tracking-wide">
+                          Free Delivery Radius
+                        </label>
+                        <p className="text-[11px] text-amber-800">
+                          Deliveries within this radius from base venue are completely free (£0.00).
+                        </p>
+                        <div className="flex items-center gap-2 pt-1">
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={deliverySettings.freeDeliveryRadiusMiles}
+                            onChange={(e) => setDeliverySettings(prev => ({ ...prev, freeDeliveryRadiusMiles: Number(e.target.value) || 0 }))}
+                            className="w-24 border border-amber-300 rounded-lg px-3 py-1.5 text-sm bg-white font-bold text-gray-900"
+                          />
+                          <span className="text-xs font-semibold text-amber-900">Miles</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-amber-50/50 border border-amber-200/80 rounded-xl p-4 space-y-2">
+                        <label className="block text-xs font-bold text-amber-950 uppercase tracking-wide">
+                          Charge / Mile Beyond Free Zone
+                        </label>
+                        <p className="text-[11px] text-amber-800">
+                          Applied per mile for distance exceeding the free radius.
+                        </p>
+                        <div className="flex items-center gap-2 pt-1">
+                          <span className="text-sm font-bold text-amber-900">£</span>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min={0}
+                            value={deliverySettings.chargePerMileAfterFree}
+                            onChange={(e) => setDeliverySettings(prev => ({ ...prev, chargePerMileAfterFree: parseFloat(e.target.value) || 0 }))}
+                            className="w-24 border border-amber-300 rounded-lg px-3 py-1.5 text-sm bg-white font-bold text-gray-900"
+                          />
+                          <span className="text-xs font-semibold text-amber-900">/ mile</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-2">
+                        <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide">
+                          Base Delivery Fee (Optional)
+                        </label>
+                        <p className="text-[11px] text-gray-500">
+                          Flat minimum booking dispatch fee if outside the free zone.
+                        </p>
+                        <div className="flex items-center gap-2 pt-1">
+                          <span className="text-sm font-bold text-gray-600">£</span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={deliverySettings.baseDeliveryFee}
+                            onChange={(e) => setDeliverySettings(prev => ({ ...prev, baseDeliveryFee: Number(e.target.value) || 0 }))}
+                            className="w-24 border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white font-bold text-gray-900"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-2">
+                        <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide">
+                          Maximum Standard Radius
+                        </label>
+                        <p className="text-[11px] text-gray-500">
+                          Events further than this will show a custom review notice.
+                        </p>
+                        <div className="flex items-center gap-2 pt-1">
+                          <input
+                            type="number"
+                            min={1}
+                            max={500}
+                            value={deliverySettings.maxDeliveryRadiusMiles}
+                            onChange={(e) => setDeliverySettings(prev => ({ ...prev, maxDeliveryRadiusMiles: Number(e.target.value) || 0 }))}
+                            className="w-24 border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white font-bold text-gray-900"
+                          />
+                          <span className="text-xs font-semibold text-gray-600">Miles</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Live Test Calculator for Admin */}
+                    <div className="bg-gradient-to-br from-amber-50 to-amber-100/50 border border-amber-300 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
+                          <Icon name="CalculatorIcon" size={15} className="text-[#C8860A]" />
+                          Interactive Mileage &amp; Delivery Fee Tester
+                        </span>
+                        <span className="text-[10px] bg-amber-200 text-amber-900 font-bold px-2 py-0.5 rounded">Test Simulator</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                          <GoogleLocationInput
+                            value={testPostcode}
+                            allowCurrentLocation={false}
+                            placeholder="Enter test UK postcode (e.g. CR0 1AA, UB1 1AA)..."
+                            onChange={(addr, coords) => {
+                              setTestPostcode(addr);
+                              if (coords) {
+                                const dist = calculateDistanceMiles(
+                                  deliverySettings.venueLat,
+                                  deliverySettings.venueLng,
+                                  coords.lat,
+                                  coords.lng
+                                );
+                                const res = calculateDeliveryCharge(dist, deliverySettings);
+                                setTestResult(res);
+                              } else {
+                                setTestResult(null);
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                      {testResult && (
+                        <div className="bg-white rounded-lg p-3 border border-amber-200 text-xs text-amber-950 space-y-1 shadow-2xs">
+                          <div className="flex items-center justify-between font-bold">
+                            <span>🚗 Distance from Restaurant: {testResult.distanceMiles} miles</span>
+                            <span className="text-emerald-700 font-bold text-sm">
+                              {testResult.isFree ? 'FREE Delivery (£0.00)' : `£${testResult.charge.toFixed(2)}`}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-gray-600">{testResult.breakdownText}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={saveDeliverySettings}
+                      disabled={isSavingDeliverySettings}
+                      className="w-full text-white font-semibold py-3 rounded-xl text-sm transition-all shadow-md active:scale-95 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+                      style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                    >
+                      {isSavingDeliverySettings ? 'Saving Restaurant Location & Rules...' : 'Save Restaurant Location & Delivery Rules'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ── SECTION 3: PRICING & DEPOSITS ── */}
+              {settingsSection === 'pricing' && (
+                <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-2xl space-y-4 shadow-sm">
+                  <h3 className="font-bold text-gray-900 flex items-center gap-2 text-base">
                     <Icon name="CalendarDaysIcon" size={18} style={{ color: '#C8860A' }} />
                     Pricing & Deposits
                   </h3>
-                  <div className="space-y-3">
+                  <div className="space-y-3.5">
                     <div className="flex items-center justify-between">
-                      <label className="text-sm text-gray-600">Deposit Amount</label>
+                      <label className="text-sm text-gray-700 font-medium">Deposit Amount</label>
                       <div className="flex items-center gap-1">
                         <span className="text-gray-500 text-sm">£</span>
-                        <input type="number" value={pricingDetails.depositPercentage} onChange={e => setPricingDetails(p => ({ ...p, depositPercentage: Number(e.target.value) }))} className="w-24 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none bg-gray-50" />
+                        <input type="number" value={pricingDetails.depositPercentage} onChange={e => setPricingDetails(p => ({ ...p, depositPercentage: Number(e.target.value) }))} className="w-24 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none bg-gray-50 font-bold text-gray-900" />
                       </div>
                     </div>
                     <div className="flex items-center justify-between">
-                      <label className="text-sm text-gray-600">Minimum Booking Hours</label>
-                      <input type="number" value={pricingDetails.minimumBookingHours} onChange={e => setPricingDetails(p => ({ ...p, minimumBookingHours: Number(e.target.value) }))} className="w-28 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none bg-gray-50" />
+                      <label className="text-sm text-gray-700 font-medium">Minimum Booking Hours</label>
+                      <input type="number" value={pricingDetails.minimumBookingHours} onChange={e => setPricingDetails(p => ({ ...p, minimumBookingHours: Number(e.target.value) }))} className="w-24 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none bg-gray-50 font-bold text-gray-900" />
                     </div>
                     <div className="flex items-center justify-between">
-                      <label className="text-sm text-gray-600">Weekday Rate (per hour)</label>
+                      <label className="text-sm text-gray-700 font-medium">Weekday Rate (per hour)</label>
                       <div className="flex items-center gap-1">
                         <span className="text-gray-500 text-sm">£</span>
-                        <input type="number" value={pricingDetails.weekdayRate} onChange={e => setPricingDetails(p => ({ ...p, weekdayRate: Number(e.target.value) }))} className="w-24 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none bg-gray-50" />
+                        <input type="number" value={pricingDetails.weekdayRate} onChange={e => setPricingDetails(p => ({ ...p, weekdayRate: Number(e.target.value) }))} className="w-24 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none bg-gray-50 font-bold text-gray-900" />
                       </div>
                     </div>
                     <div className="flex items-center justify-between">
-                      <label className="text-sm text-gray-600">Weekend Rate (per hour)</label>
+                      <label className="text-sm text-gray-700 font-medium">Weekend Rate (per hour)</label>
                       <div className="flex items-center gap-1">
                         <span className="text-gray-500 text-sm">£</span>
-                        <input type="number" value={pricingDetails.weekendRate} onChange={e => setPricingDetails(p => ({ ...p, weekendRate: Number(e.target.value) }))} className="w-24 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none bg-gray-50" />
+                        <input type="number" value={pricingDetails.weekendRate} onChange={e => setPricingDetails(p => ({ ...p, weekendRate: Number(e.target.value) }))} className="w-24 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none bg-gray-50 font-bold text-gray-900" />
                       </div>
                     </div>
                     <button
                       onClick={savePricingDetails}
                       disabled={isSavingPricingDetails}
-                      className="text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition-all mt-4 shadow-md active:scale-95 disabled:opacity-50 w-full"
+                      className="text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition-all mt-4 shadow-md active:scale-95 disabled:opacity-50 w-full"
                       style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
                     >
                       {isSavingPricingDetails ? 'Saving...' : 'Save Pricing & Deposits'}
                     </button>
                   </div>
                 </div>
-              </div>
+              )}
 
-              {/* Right Column */}
-              <div className="space-y-6">
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
-                  <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              {/* ── SECTION 4: BANK DETAILS ── */}
+              {settingsSection === 'bank' && (
+                <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-2xl space-y-4 shadow-sm">
+                  <h3 className="font-bold text-gray-900 flex items-center gap-2 text-base">
                     <Icon name="CreditCardIcon" size={18} style={{ color: '#C8860A' }} />
                     Bank Account Details
                   </h3>
                   <div className="space-y-3.5">
                     <div>
                       <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Account Name</label>
-                      <input type="text" value={bankDetails.accountName} onChange={(e) => updateBankDetail('accountName', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50" />
+                      <input type="text" value={bankDetails.accountName} onChange={(e) => updateBankDetail('accountName', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50 font-medium" />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Sort Code</label>
-                      <input type="text" value={bankDetails.sortCode} onChange={(e) => updateBankDetail('sortCode', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50" />
+                      <input type="text" value={bankDetails.sortCode} onChange={(e) => updateBankDetail('sortCode', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50 font-medium" />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Account Number</label>
-                      <input type="text" value={bankDetails.accountNumber} onChange={(e) => updateBankDetail('accountNumber', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50" />
+                      <input type="text" value={bankDetails.accountNumber} onChange={(e) => updateBankDetail('accountNumber', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50 font-medium" />
                     </div>
                   </div>
                 </div>
+              )}
 
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
-                  <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              {/* ── SECTION: STRIPE PAYMENT GATEWAY ── */}
+              {settingsSection === 'stripe_gateway' && (
+                <div className="bg-white rounded-2xl border border-gray-200 p-6 max-w-3xl space-y-6 shadow-sm">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <div>
+                      <h3 className="font-bold text-gray-900 flex items-center gap-2 text-base">
+                        <Icon name="CreditCardIcon" size={20} style={{ color: '#635BFF' }} />
+                        Stripe Payment Gateway Configuration
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Configure dynamic Stripe API keys for real-time online menu ordering and deposit payments.
+                      </p>
+                    </div>
+                    <span className={`text-[11px] font-bold px-2.5 py-1 rounded-md border flex items-center gap-1 ${
+                      paymentGatewaySettings.enabled
+                        ? 'text-emerald-800 bg-emerald-50 border-emerald-200'
+                        : 'text-gray-600 bg-gray-50 border-gray-200'
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${paymentGatewaySettings.enabled ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`} />
+                      {paymentGatewaySettings.enabled ? 'Gateway Active' : 'Gateway Disabled'}
+                    </span>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Enable Switch */}
+                    <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50 border border-gray-200">
+                      <div>
+                        <span className="font-bold text-gray-900 text-xs block">Enable Online Stripe Payments</span>
+                        <span className="text-[11px] text-gray-500">Allow customers to choose menu and pay online via Stripe</span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={paymentGatewaySettings.enabled}
+                        onChange={(e) => setPaymentGatewaySettings(prev => ({ ...prev, enabled: e.target.checked }))}
+                        className="w-5 h-5 rounded text-[#635BFF] focus:ring-[#635BFF] cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Publishable Key */}
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5">
+                        Stripe Publishable Key (Client Key)
+                      </label>
+                      <input
+                        type="text"
+                        value={paymentGatewaySettings.publishableKey}
+                        onChange={(e) => setPaymentGatewaySettings(prev => ({ ...prev, publishableKey: e.target.value }))}
+                        placeholder="pk_test_... or pk_live_..."
+                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-mono text-gray-800 focus:outline-none bg-gray-50 focus:bg-white focus:ring-2 focus:ring-[#635BFF]"
+                      />
+                    </div>
+
+                    {/* Secret Key */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                          Stripe Secret Key (Server Key)
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setShowSecretKey(!showSecretKey)}
+                          className="text-[11px] text-gray-500 hover:text-gray-800 font-semibold"
+                        >
+                          {showSecretKey ? 'Hide Secret Key' : 'Show Secret Key'}
+                        </button>
+                      </div>
+                      <input
+                        type={showSecretKey ? 'text' : 'password'}
+                        value={paymentGatewaySettings.secretKey}
+                        onChange={(e) => setPaymentGatewaySettings(prev => ({ ...prev, secretKey: e.target.value }))}
+                        placeholder="sk_test_... or sk_live_..."
+                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-mono text-gray-800 focus:outline-none bg-gray-50 focus:bg-white focus:ring-2 focus:ring-[#635BFF]"
+                      />
+                    </div>
+
+                    {/* Payment Mode & Deposit Percentage */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5">
+                          Online Payment Options Offered to Customer
+                        </label>
+                        <select
+                          value={paymentGatewaySettings.paymentMode}
+                          onChange={(e) => setPaymentGatewaySettings(prev => ({ ...prev, paymentMode: e.target.value as any }))}
+                          className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold bg-gray-50 focus:bg-white focus:outline-none"
+                        >
+                          <option value="both">Both 30% Deposit &amp; Full Payment (Recommended)</option>
+                          <option value="deposit">Deposit Only (e.g. 30%)</option>
+                          <option value="full">100% Full Payment Only</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5">
+                          Deposit Percentage (%)
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min="10"
+                            max="100"
+                            value={paymentGatewaySettings.depositPercentage}
+                            onChange={(e) => setPaymentGatewaySettings(prev => ({ ...prev, depositPercentage: parseInt(e.target.value) || 30 }))}
+                            className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-bold bg-gray-50 focus:bg-white focus:outline-none"
+                          />
+                          <span className="text-xs font-bold text-gray-600">%</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={savePaymentGatewaySettings}
+                      disabled={isSavingPaymentSettings}
+                      className="w-full text-white font-semibold py-3 rounded-xl text-sm transition-all shadow-md active:scale-95 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+                      style={{ background: 'linear-gradient(135deg, #635BFF, #4F46E5)' }}
+                    >
+                      {isSavingPaymentSettings ? 'Saving Stripe Configuration...' : 'Save Stripe Gateway Settings'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ── SECTION 5: BLOCK DATES ── */}
+              {settingsSection === 'block_dates' && (
+                <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-2xl space-y-4 shadow-sm">
+                  <h3 className="font-bold text-gray-900 flex items-center gap-2 text-base">
                     <Icon name="NoSymbolIcon" size={18} style={{ color: '#C8860A' }} />
-                    Block Dates
+                    Block Dates & Manage Venue Availability
                   </h3>
                   <div className="flex items-center gap-2">
                     <input type="date" value={blockDateInput} onChange={(e) => setBlockDateInput(e.target.value)} className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none bg-gray-50" />
                     <button onClick={handleBlockDate} className="bg-gray-900 hover:bg-gray-700 text-white font-medium px-4 py-2 rounded-xl text-sm transition-colors">Block Date</button>
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  <div className="mt-4 flex flex-wrap gap-2">
                     {blockedDates.map((d) => (
-                      <div key={d} className="flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-600 text-xs font-medium px-3 py-1.5 rounded-lg">
+                      <div key={d} className="flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-600 text-xs font-semibold px-3 py-1.5 rounded-lg">
                         {d}
-                        <button onClick={() => handleUnblockDate(d)} className="hover:text-red-800"><Icon name="XMarkIcon" size={12} /></button>
+                        <button onClick={() => handleUnblockDate(d)} className="hover:text-red-800 transition-colors p-0.5"><Icon name="XMarkIcon" size={12} /></button>
                       </div>
                     ))}
                     {blockedDates.length === 0 && (
@@ -3516,7 +5380,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     )}
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
           {/* ─── DISCOUNT APPROVALS ─── */}
@@ -3977,6 +5841,67 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 </div>
               </div>
 
+              {/* Special Consideration / Waitlist Alert Banner */}
+              {selectedBooking.isWaitlist && (
+                <div className="bg-amber-50 border border-amber-300 rounded-xl p-3.5 flex items-start gap-2.5 shadow-2xs">
+                  <span className="text-base flex-shrink-0">✨</span>
+                  <div className="text-xs">
+                    <span className="font-bold text-amber-950 block">High Demand / Capacity Exceeded Request</span>
+                    <p className="text-amber-800 text-[11px] mt-0.5 leading-relaxed">
+                      This customer submitted an enquiry for a time slot that had reached standard booking capacity. Please contact the client to discuss timing adjustments or custom accommodation.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Event Location & Delivery Card */}
+              {selectedBooking.location && (
+                <div className="bg-amber-50/70 border border-amber-200/90 rounded-xl p-4 space-y-2.5 shadow-2xs">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-amber-100/80 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <Icon name="MapPinIcon" size={17} className="text-[#C8860A]" />
+                      </div>
+                      <div>
+                        <div className="text-[11px] font-bold text-amber-950 uppercase tracking-wide">Event Location / Venue Address</div>
+                        <div className="text-sm font-semibold text-gray-900 mt-0.5">{selectedBooking.location}</div>
+                        {selectedBooking.distanceMiles ? (
+                          <div className="text-xs text-amber-900 mt-1.5 flex items-center gap-2 flex-wrap font-medium">
+                            <span className="bg-white px-2.5 py-0.5 rounded-md border border-amber-200 font-semibold text-gray-800 shadow-2xs">
+                              🚗 {selectedBooking.distanceMiles} miles from restaurant
+                            </span>
+                            {selectedBooking.deliveryCharge ? (
+                              <span className="bg-amber-100/90 text-amber-950 px-2.5 py-0.5 rounded-md font-bold border border-amber-300 shadow-2xs">
+                                🚚 +£{selectedBooking.deliveryCharge.toFixed(2)} Delivery Fee
+                              </span>
+                            ) : (
+                              <span className="bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-md font-bold">
+                                Free Delivery
+                              </span>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                    <a
+                      href={`https://www.google.com/maps/dir/?api=1&origin=${deliverySettings.venueLat},${deliverySettings.venueLng}&destination=${encodeURIComponent(selectedBooking.location)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-xs font-bold text-white px-3 py-2 rounded-lg transition-all shadow-sm flex-shrink-0 cursor-pointer active:scale-95"
+                      style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                    >
+                      <Icon name="MapIcon" size={14} />
+                      Directions
+                    </a>
+                  </div>
+                  {selectedBooking.deliveryBreakdown && (
+                    <div className="text-[11px] text-amber-800/90 bg-white/75 p-2 rounded-lg border border-amber-100">
+                      ℹ️ {selectedBooking.deliveryBreakdown}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Event details */}
               <div className="grid grid-cols-2 gap-3">
                 {!isEditingEventType ? (
@@ -4317,6 +6242,32 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   )
                 )}
               </div>
+
+              {/* ── CUSTOM DYNAMIC FORM RESPONSES ── */}
+              {selectedBooking.customFields && Object.keys(selectedBooking.customFields).length > 0 && (
+                <div className="bg-amber-50/60 border border-amber-200/80 rounded-xl p-4 space-y-2.5">
+                  <div className="text-xs font-semibold text-amber-900 uppercase tracking-wide flex items-center gap-1.5">
+                    <Icon name="ClipboardDocumentListIcon" size={14} style={{ color: '#C8860A' }} />
+                    Dynamic Form Submissions
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {Object.entries(selectedBooking.customFields).map(([key, val]) => {
+                      const fieldDef = formConfig.fields.find((f) => f.id === key);
+                      const label = fieldDef?.label || key.replace(/^custom_/, '').replace(/_/g, ' ');
+                      return (
+                        <div key={key} className="bg-white rounded-lg border border-amber-100 p-2.5 shadow-2xs">
+                          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-0.5">
+                            {label}
+                          </span>
+                          <span className="text-xs font-semibold text-gray-900 break-words">
+                            {String(val || '—')}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* ── STEP-SPECIFIC PANELS ── */}
 
@@ -5820,12 +7771,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     onChange={(e) => setNewBookingForm({ ...newBookingForm, eventType: e.target.value })}
                     className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-white"
                   >
-                    <option value="Wedding">Wedding</option>
-                    <option value="Birthday">Birthday</option>
-                    <option value="Corporate">Corporate</option>
-                    <option value="Anniversary">Anniversary</option>
-                    <option value="Graduation">Graduation</option>
-                    <option value="Other">Other</option>
+                    {(editableFormConfig.fields.find(f => f.id === 'eventType')?.options || DEFAULT_EVENT_TYPES).map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -5848,8 +7796,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     onChange={(e) => setNewBookingForm({ ...newBookingForm, time: e.target.value })}
                     className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-white"
                   >
-                    <option value="Lunch (12:00pm – 4:00pm)">Lunch (12:00pm – 4:00pm)</option>
-                    <option value="Dinner (6:00pm – 11:30pm)">Dinner (6:00pm – 11:30pm)</option>
+                    {(editableFormConfig.fields.find(f => f.id === 'timeOfDay')?.options || DEFAULT_TIME_SLOTS).map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -5959,6 +7908,388 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
         </div>
       )}
 
+      {/* ─── ADD CUSTOM FIELD MODAL ─── */}
+      {showAddFieldModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg border border-gray-100 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-200 mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
+                  <Icon name="PlusCircleIcon" size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">Add New Form Field</h3>
+                  <p className="text-xs text-gray-500">Create a dynamic custom field for the booking form</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAddFieldModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <Icon name="XMarkIcon" size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Field Label *</label>
+                <input
+                  type="text"
+                  required
+                  value={newFieldForm.label || ''}
+                  onChange={(e) => {
+                    const label = e.target.value;
+                    const autoId = label.toLowerCase().replace(/[^a-z0-9]/g, '_');
+                    setNewFieldForm(prev => ({
+                      ...prev,
+                      label,
+                      id: prev.id && prev.id !== autoId.slice(0, -1) ? prev.id : autoId
+                    }));
+                  }}
+                  placeholder="e.g. Dietary Preferences, Venue Postcode, Service Type"
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A]"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Field Identifier (Code Key)</label>
+                  <input
+                    type="text"
+                    value={newFieldForm.id || ''}
+                    onChange={(e) => setNewFieldForm(prev => ({ ...prev, id: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') }))}
+                    placeholder="e.g. dietary_pref"
+                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A] font-mono text-xs bg-gray-50"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Field Input Type</label>
+                  <select
+                    value={newFieldForm.type || 'text'}
+                    onChange={(e) => setNewFieldForm(prev => ({ ...prev, type: e.target.value as FormFieldType }))}
+                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-white font-medium"
+                  >
+                    <option value="text">Single Line Text</option>
+                    <option value="email">Email Address</option>
+                    <option value="tel">Phone / WhatsApp Number</option>
+                    <option value="number">Number</option>
+                    <option value="date">Date Picker</option>
+                    <option value="select">Dropdown Select List</option>
+                    <option value="textarea">Multi-line Text Area</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Layout Width</label>
+                  <select
+                    value={newFieldForm.width || 'half'}
+                    onChange={(e) => setNewFieldForm(prev => ({ ...prev, width: e.target.value as FieldWidth }))}
+                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-white"
+                  >
+                    <option value="full">Full Width (100%)</option>
+                    <option value="half">Half Width (50%)</option>
+                    <option value="third">One Third (33%)</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center pt-5">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={!!newFieldForm.required}
+                      onChange={(e) => setNewFieldForm(prev => ({ ...prev, required: e.target.checked }))}
+                      className="w-4 h-4 rounded text-amber-600 focus:ring-[#C8860A]"
+                    />
+                    <span className="text-xs font-semibold text-gray-700">Mark as Required field</span>
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Placeholder Text</label>
+                <input
+                  type="text"
+                  value={newFieldForm.placeholder || ''}
+                  onChange={(e) => setNewFieldForm(prev => ({ ...prev, placeholder: e.target.value }))}
+                  placeholder="e.g. Enter your venue postcode or street..."
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Helper Text (Optional subtitle)</label>
+                <input
+                  type="text"
+                  value={newFieldForm.helperText || ''}
+                  onChange={(e) => setNewFieldForm(prev => ({ ...prev, helperText: e.target.value }))}
+                  placeholder="e.g. If you require outdoor setup, please specify"
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A]"
+                />
+              </div>
+
+              {/* If type is select: options editor */}
+              {newFieldForm.type === 'select' && (
+                <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-3.5 space-y-2.5">
+                  <label className="block text-xs font-bold text-amber-900 uppercase tracking-wide">
+                    Dropdown Options List
+                  </label>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {(newFieldForm.options || []).map((opt, i) => (
+                      <span key={i} className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-white border border-amber-200 text-gray-800">
+                        {opt}
+                        <button
+                          type="button"
+                          onClick={() => setNewFieldForm(prev => ({ ...prev, options: (prev.options || []).filter((_, idx) => idx !== i) }))}
+                          className="text-gray-400 hover:text-rose-600 transition-colors"
+                        >
+                          <Icon name="XMarkIcon" size={12} />
+                        </button>
+                      </span>
+                    ))}
+                    {(!newFieldForm.options || newFieldForm.options.length === 0) && (
+                      <span className="text-xs text-gray-400 italic">No options added yet</span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <input
+                      type="text"
+                      placeholder="Add an option (e.g. Buffet, Plated, Live Counter)..."
+                      value={newOptionInput}
+                      onChange={(e) => setNewOptionInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const trimmed = newOptionInput.trim();
+                          if (trimmed && !(newFieldForm.options || []).includes(trimmed)) {
+                            setNewFieldForm(prev => ({ ...prev, options: [...(prev.options || []), trimmed] }));
+                            setNewOptionInput('');
+                          }
+                        }
+                      }}
+                      className="flex-1 border border-amber-200 bg-white rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[#C8860A]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const trimmed = newOptionInput.trim();
+                        if (trimmed && !(newFieldForm.options || []).includes(trimmed)) {
+                          setNewFieldForm(prev => ({ ...prev, options: [...(prev.options || []), trimmed] }));
+                          setNewOptionInput('');
+                        }
+                      }}
+                      className="px-3 py-1 rounded-lg text-xs font-bold text-white transition-colors"
+                      style={{ background: '#C8860A' }}
+                    >
+                      + Add Option
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddFieldModal(false)}
+                  className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateNewField}
+                  className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all shadow-md active:scale-95 flex items-center justify-center gap-2"
+                  style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                >
+                  <Icon name="PlusIcon" size={16} />
+                  Add Field
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── EDIT FIELD MODAL ─── */}
+      {editingFieldModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg border border-gray-100 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-200 mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
+                  <Icon name="PencilSquareIcon" size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">Edit Field: {editingFieldModal.label}</h3>
+                  <p className="text-xs font-mono text-gray-400">id: {editingFieldModal.id}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingFieldModal(null)}
+                className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <Icon name="XMarkIcon" size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Field Label *</label>
+                <input
+                  type="text"
+                  required
+                  value={editingFieldModal.label}
+                  onChange={(e) => setEditingFieldModal({ ...editingFieldModal, label: e.target.value })}
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A]"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Layout Width</label>
+                  <select
+                    value={editingFieldModal.width}
+                    onChange={(e) => setEditingFieldModal({ ...editingFieldModal, width: e.target.value as FieldWidth })}
+                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-white"
+                  >
+                    <option value="full">Full Width (100%)</option>
+                    <option value="half">Half Width (50%)</option>
+                    <option value="third">One Third (33%)</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center pt-5">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={editingFieldModal.required}
+                      onChange={(e) => setEditingFieldModal({ ...editingFieldModal, required: e.target.checked })}
+                      className="w-4 h-4 rounded text-amber-600 focus:ring-[#C8860A]"
+                    />
+                    <span className="text-xs font-semibold text-gray-700">Required field</span>
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Placeholder Text</label>
+                <input
+                  type="text"
+                  value={editingFieldModal.placeholder || ''}
+                  onChange={(e) => setEditingFieldModal({ ...editingFieldModal, placeholder: e.target.value })}
+                  placeholder="e.g. Enter details..."
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Helper Text</label>
+                <input
+                  type="text"
+                  value={editingFieldModal.helperText || ''}
+                  onChange={(e) => setEditingFieldModal({ ...editingFieldModal, helperText: e.target.value })}
+                  placeholder="Optional guidance for customer..."
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A]"
+                />
+              </div>
+
+              {/* Options manager if field has options */}
+              {(editingFieldModal.type === 'select' || editingFieldModal.type === 'time_select') && (
+                <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-3.5 space-y-2.5">
+                  <label className="block text-xs font-bold text-amber-900 uppercase tracking-wide">
+                    Dropdown Options List ({editingFieldModal.options?.length || 0})
+                  </label>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {(editingFieldModal.options || []).map((opt, i) => (
+                      <span key={i} className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-white border border-amber-200 text-gray-800">
+                        {opt}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = (editingFieldModal.options || []).filter((_, idx) => idx !== i);
+                            setEditingFieldModal({ ...editingFieldModal, options: updated });
+                          }}
+                          className="text-gray-400 hover:text-rose-600 transition-colors"
+                        >
+                          <Icon name="XMarkIcon" size={12} />
+                        </button>
+                      </span>
+                    ))}
+                    {(!editingFieldModal.options || editingFieldModal.options.length === 0) && (
+                      <span className="text-xs text-gray-400 italic">No options defined</span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <input
+                      type="text"
+                      placeholder="Add an option..."
+                      value={newOptionInput}
+                      onChange={(e) => setNewOptionInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const trimmed = newOptionInput.trim();
+                          if (trimmed && !(editingFieldModal.options || []).includes(trimmed)) {
+                            setEditingFieldModal({
+                              ...editingFieldModal,
+                              options: [...(editingFieldModal.options || []), trimmed]
+                            });
+                            setNewOptionInput('');
+                          }
+                        }
+                      }}
+                      className="flex-1 border border-amber-200 bg-white rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[#C8860A]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const trimmed = newOptionInput.trim();
+                        if (trimmed && !(editingFieldModal.options || []).includes(trimmed)) {
+                          setEditingFieldModal({
+                            ...editingFieldModal,
+                            options: [...(editingFieldModal.options || []), trimmed]
+                          });
+                          setNewOptionInput('');
+                        }
+                      }}
+                      className="px-3 py-1 rounded-lg text-xs font-bold text-white transition-colors"
+                      style={{ background: '#C8860A' }}
+                    >
+                      + Add
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingFieldModal(null)}
+                  className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveFieldModal(editingFieldModal)}
+                  className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all shadow-md active:scale-95 flex items-center justify-center gap-2"
+                  style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                >
+                  <Icon name="CheckIcon" size={16} />
+                  Save Field
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── CUSTOM ALERT MODAL ─── */}
       {customAlert && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
@@ -5975,6 +8306,228 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             >
               OK
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── KITCHEN PREPARATION SLIP MODAL ─── */}
+      {showKitchenSlipModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-6 sm:p-8 border border-gray-200 space-y-6 my-auto">
+            <div className="flex items-center justify-between border-b border-gray-200 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-100 text-[#C8860A] flex items-center justify-center font-bold">
+                  <Icon name="ClipboardDocumentCheckIcon" size={20} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-gray-900 text-base">Kitchen Preparation Order Slip</h3>
+                  <p className="text-xs text-gray-500 font-mono">Order Ref: #{showKitchenSlipModal.id}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowKitchenSlipModal(null)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+              >
+                <Icon name="XMarkIcon" size={20} />
+              </button>
+            </div>
+
+            {/* Print Area */}
+            <div id="kitchen-slip-print" className="space-y-4 text-xs">
+              <div className="bg-amber-50/70 p-4 rounded-2xl border border-amber-200 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-gray-500 block">Event Date</span>
+                  <span className="font-extrabold text-sm text-gray-900">📅 {showKitchenSlipModal.date}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-gray-500 block">Time Slot</span>
+                  <span className="font-bold text-gray-900">⏰ {showKitchenSlipModal.time || showKitchenSlipModal.timeOfDay || 'Time TBD'}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-gray-500 block">Headcount</span>
+                  <span className="font-extrabold text-sm text-[#C8860A]">👥 {showKitchenSlipModal.guests} Guests</span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-gray-500 block">Package</span>
+                  <span className="font-bold text-gray-900">{showKitchenSlipModal.package || 'Custom Menu'}</span>
+                </div>
+              </div>
+
+              {/* Customer & Location */}
+              <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-xs">
+                <div className="font-bold text-gray-900">Customer: {showKitchenSlipModal.name} ({showKitchenSlipModal.phone})</div>
+                <div className="text-gray-600 mt-0.5">📍 Venue: {showKitchenSlipModal.location || 'Base Venue'}</div>
+                {showKitchenSlipModal.notes && (
+                  <div className="mt-1.5 p-2 bg-amber-100/70 rounded-lg text-amber-950 font-semibold">
+                    ⚠️ Special Chef Instructions: {showKitchenSlipModal.notes}
+                  </div>
+                )}
+              </div>
+
+              {/* Dishes Checklist */}
+              <div className="space-y-3">
+                <h4 className="font-bold text-gray-900 uppercase tracking-wider text-xs border-b border-gray-200 pb-1">
+                  Culinary Team Dishes Checklist
+                </h4>
+
+                {showKitchenSlipModal.selectedMenuDishes && Object.keys(showKitchenSlipModal.selectedMenuDishes).length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {Object.entries(showKitchenSlipModal.selectedMenuDishes).map(([catKey, dishList]: [string, any]) => {
+                      if (!Array.isArray(dishList) || dishList.length === 0) return null;
+                      const catTitle = catKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                      return (
+                        <div key={catKey} className="p-3 bg-white border border-gray-200 rounded-xl space-y-1.5">
+                          <span className="font-bold text-amber-950 block text-[11px] uppercase tracking-wide">
+                            {catTitle} ({dishList.length})
+                          </span>
+                          <div className="space-y-1 pl-1">
+                            {dishList.map((dish: any, dIdx: number) => {
+                              const dishText = typeof dish === 'string'
+                                ? dish
+                                : dish?.name
+                                  ? `${dish.name}${dish.price ? ` (+£${dish.price}${dish.perPerson ? '/person' : ''})` : ''}`
+                                  : JSON.stringify(dish);
+                              return (
+                                <label key={dIdx} className="flex items-center gap-2 cursor-pointer font-medium text-gray-800">
+                                  <input type="checkbox" className="rounded text-[#C8860A]" />
+                                  <span>{dishText}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="p-4 bg-gray-50 rounded-xl text-gray-500 italic text-center">
+                    Standard package dishes selected: {showKitchenSlipModal.package}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setShowKitchenSlipModal(null)}
+                className="px-4 py-2 rounded-xl border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-5 py-2.5 rounded-xl bg-gray-900 text-white font-bold text-xs shadow-md hover:bg-gray-800 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Icon name="PrinterIcon" size={15} />
+                Print Kitchen Slip
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── OFFICIAL DIGITAL INVOICE MODAL ─── */}
+      {showInvoiceModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-6 sm:p-8 border border-gray-200 space-y-6 my-auto">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+              <div>
+                <h3 className="font-extrabold text-gray-900 text-base">Tax Invoice &amp; Payment Receipt</h3>
+                <p className="text-xs text-gray-500 font-mono">Invoice #{showInvoiceModal.id}</p>
+              </div>
+              <button
+                onClick={() => setShowInvoiceModal(null)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+              >
+                <Icon name="XMarkIcon" size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="flex justify-between items-start bg-gray-50 p-4 rounded-2xl border border-gray-200">
+                <div>
+                  <span className="font-bold text-gray-900 block text-sm">Billed To:</span>
+                  <div className="font-semibold text-gray-800 mt-0.5">{showInvoiceModal.name}</div>
+                  <div className="text-gray-500">{showInvoiceModal.email}</div>
+                  <div className="text-gray-500">{showInvoiceModal.phone}</div>
+                  <div className="text-gray-500 mt-1">📍 {showInvoiceModal.location || 'Venue Location TBD'}</div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200 inline-block mb-1">
+                    {showInvoiceModal.depositPaid ? 'PAID VIA STRIPE ✓' : 'DEPOSIT PENDING'}
+                  </span>
+                  <div className="text-gray-500 text-[11px]">Event Date: {showInvoiceModal.date}</div>
+                  <div className="text-gray-500 text-[11px]">Guests: {showInvoiceModal.guests}</div>
+                  {showInvoiceModal.stripePaymentIntentId && (
+                    <div className="font-mono text-[9px] text-gray-400 mt-1 truncate max-w-[180px]">
+                      Stripe: {showInvoiceModal.stripePaymentIntentId}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Financial Table */}
+              <div className="rounded-xl border border-gray-200 overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-100/70 font-bold text-gray-700 text-[11px]">
+                    <tr>
+                      <th className="py-2.5 px-3 text-left">Description</th>
+                      <th className="py-2.5 px-3 text-center">Qty / Guests</th>
+                      <th className="py-2.5 px-3 text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    <tr>
+                      <td className="py-2.5 px-3 font-medium text-gray-900">{showInvoiceModal.package || 'Catering Package'}</td>
+                      <td className="py-2.5 px-3 text-center text-gray-600">{showInvoiceModal.guests}</td>
+                      <td className="py-2.5 px-3 text-right font-semibold">
+                        £{((showInvoiceModal.totalEstimatedAmount || showInvoiceModal.baseAmount || 0) - (showInvoiceModal.deliveryCharge || 0)).toFixed(2)}
+                      </td>
+                    </tr>
+                    {showInvoiceModal.deliveryCharge && showInvoiceModal.deliveryCharge > 0 ? (
+                      <tr>
+                        <td className="py-2.5 px-3 font-medium text-gray-900">Long-Distance Delivery Fee ({showInvoiceModal.distanceMiles}m)</td>
+                        <td className="py-2.5 px-3 text-center text-gray-600">1</td>
+                        <td className="py-2.5 px-3 text-right font-semibold">+£{showInvoiceModal.deliveryCharge.toFixed(2)}</td>
+                      </tr>
+                    ) : null}
+                    <tr className="bg-amber-50/70 font-bold">
+                      <td colSpan={2} className="py-2.5 px-3 text-right uppercase text-[10px]">Grand Total:</td>
+                      <td className="py-2.5 px-3 text-right text-sm text-[#C8860A]">
+                        £{(showInvoiceModal.totalEstimatedAmount || showInvoiceModal.baseAmount || 0).toFixed(2)}
+                      </td>
+                    </tr>
+                    <tr className="bg-emerald-50 text-emerald-950 font-bold">
+                      <td colSpan={2} className="py-2.5 px-3 text-right">Amount Paid via Stripe:</td>
+                      <td className="py-2.5 px-3 text-right text-emerald-700">
+                        -£{(showInvoiceModal.deposit || showInvoiceModal.amountPaidSoFar || 0).toFixed(2)} (PAID)
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setShowInvoiceModal(null)}
+                className="px-4 py-2 rounded-xl border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-5 py-2.5 rounded-xl bg-[#C8860A] text-white font-bold text-xs shadow-md hover:opacity-95 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Icon name="PrinterIcon" size={15} />
+                Print / Download Invoice
+              </button>
+            </div>
           </div>
         </div>
       )}
