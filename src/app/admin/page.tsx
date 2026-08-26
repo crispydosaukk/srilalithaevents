@@ -2,7 +2,21 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Icon from '@/components/ui/AppIcon';
-import { INDIAN_MENU, SRI_LANKAN_MENU, LIVE_COUNTER_PACKAGE, BANQUET_PACKAGES, VENUE_HALL_CHARGES, TABLE_SERVICE, KIDS_PRICING, DRY_HIRE_PRICES, TERMS_AND_CONDITIONS, STANDARD_SETUP } from '@/app/data/menuData';
+import {
+  INDIAN_MENU,
+  SRI_LANKAN_MENU,
+  LIVE_COUNTER_PACKAGE,
+  BANQUET_PACKAGES,
+  VENUE_HALL_CHARGES,
+  TABLE_SERVICE,
+  KIDS_PRICING,
+  DRY_HIRE_PRICES,
+  TERMS_AND_CONDITIONS,
+  STANDARD_SETUP,
+  MENU_CATEGORIES,
+  LIVE_DOSA_MENU,
+  SOUTH_INDIAN_BUFFET,
+} from '@/app/data/menuData';
 import {
   DEFAULT_FORM_CONFIG,
   BookingFormConfig,
@@ -428,7 +442,7 @@ export default function AdminPage() {
     const seedSiteDataDefaults = async () => {
       try {
         const menuSnap = await getDoc(doc(db, 'site_data', 'menus'));
-        if (!menuSnap.exists()) {
+        if (!menuSnap.exists() || !menuSnap.data()?.MENU_CATEGORIES) {
           await setDoc(doc(db, 'site_data', 'menus'), {
             INDIAN_MENU,
             SRI_LANKAN_MENU,
@@ -440,6 +454,9 @@ export default function AdminPage() {
             DRY_HIRE_PRICES,
             TERMS_AND_CONDITIONS,
             STANDARD_SETUP,
+            MENU_CATEGORIES,
+            LIVE_DOSA_MENU,
+            SOUTH_INDIAN_BUFFET,
           }, { merge: true });
         }
 
@@ -948,8 +965,34 @@ export default function AdminPage() {
   };
 
   // ─── REAL MENU EDITABLE STATE ─────────────────────────────────────────────
-  type AdminMenuTab = 'banquet' | 'indian' | 'srilankan' | 'live';
-  const [adminMenuTab, setAdminMenuTab] = useState<AdminMenuTab>('banquet');
+  // ─── REAL MENU EDITABLE STATE ─────────────────────────────────────────────
+  type AdminMenuTab = 'categories' | 'live-dosa' | 'buffet' | 'banquet';
+  const [adminMenuTab, setAdminMenuTab] = useState<AdminMenuTab>('categories');
+  const [selectedAdminCategoryIndex, setSelectedAdminCategoryIndex] = useState<number>(0);
+
+  // Editable restaurant categories
+  const [editableMenuCategories, setEditableMenuCategories] = useState(
+    MENU_CATEGORIES.map(cat => ({
+      ...cat,
+      items: cat.items.map(item => ({ ...item, tags: [...(item.tags || [])] }))
+    }))
+  );
+
+  // Editable Live Dosa Menu
+  const [editableLiveDosaMenu, setEditableLiveDosaMenu] = useState({
+    title: LIVE_DOSA_MENU.title,
+    tagline: LIVE_DOSA_MENU.tagline,
+    subtitle: LIVE_DOSA_MENU.subtitle,
+    items: LIVE_DOSA_MENU.items.map(item => ({ ...item, tags: [...(item.tags || [])] })),
+  });
+
+  // Editable South Indian Buffet
+  const [editableSouthIndianBuffet, setEditableSouthIndianBuffet] = useState({
+    ...SOUTH_INDIAN_BUFFET,
+    weekday: { ...SOUTH_INDIAN_BUFFET.weekday, slots: [...SOUTH_INDIAN_BUFFET.weekday.slots] },
+    weekend: { ...SOUTH_INDIAN_BUFFET.weekend, slots: [...SOUTH_INDIAN_BUFFET.weekend.slots] },
+    items: SOUTH_INDIAN_BUFFET.items.map(i => ({ ...i, tags: [...i.tags] })),
+  });
 
   // Editable banquet packages
   const [editableBanquetPackages, setEditableBanquetPackages] = useState(
@@ -958,33 +1001,6 @@ export default function AdminPage() {
   const [editingPackageId, setEditingPackageId] = useState<string | null>(null);
   const [editingPackageData, setEditingPackageData] = useState<typeof BANQUET_PACKAGES[0] | null>(null);
 
-  // Editable Indian menu
-  const [editableIndianMenu, setEditableIndianMenu] = useState({
-    vegStarters: [...INDIAN_MENU.starters.vegetarian],
-    nonVegStarters: [...INDIAN_MENU.starters.nonVegetarian],
-    vegMains: [...INDIAN_MENU.mains.vegetarian],
-    nonVegMains: [...INDIAN_MENU.mains.nonVegetarian],
-    sundries: [...INDIAN_MENU.sundries],
-    desserts: [...INDIAN_MENU.desserts],
-  });
-
-  // Editable Sri Lankan menu
-  const [editableSLMenu, setEditableSLMenu] = useState({
-    vegStarters: [...SRI_LANKAN_MENU.starters.vegetarian],
-    nonVegStarters: [...SRI_LANKAN_MENU.starters.nonVegetarian],
-    vegMains: [...SRI_LANKAN_MENU.mains.vegetarian],
-    nonVegMains: [...SRI_LANKAN_MENU.mains.nonVegetarian],
-    sundries: [...SRI_LANKAN_MENU.sundries],
-    desserts: [...SRI_LANKAN_MENU.desserts],
-  });
-
-  // Editable live counter
-  const [editableLiveCounter, setEditableLiveCounter] = useState({
-    srilankanSouthIndian: LIVE_COUNTER_PACKAGE.srilankanSouthIndian.map(i => ({ ...i })),
-    northIndian: LIVE_COUNTER_PACKAGE.northIndian.map(i => ({ ...i })),
-    extras: LIVE_COUNTER_PACKAGE.extras.map(i => ({ ...i })),
-  });
-
   // Editable venue/table/kids
   const [editableVenueCharges, setEditableVenueCharges] = useState(VENUE_HALL_CHARGES.map(v => ({ ...v })));
   const [editableTableService, setEditableTableService] = useState(TABLE_SERVICE.map(t => ({ ...t })));
@@ -992,35 +1008,27 @@ export default function AdminPage() {
   const [editableDryHirePrices, setEditableDryHirePrices] = useState(DRY_HIRE_PRICES.map(p => ({ ...p })));
 
   // New item inputs
-  const [newMenuItemInput, setNewMenuItemInput] = useState('');
-  const [newLiveItemName, setNewLiveItemName] = useState('');
-  const [newLiveItemPrice, setNewLiveItemPrice] = useState('');
+  const [newDishName, setNewDishName] = useState('');
+  const [newDishDescription, setNewDishDescription] = useState('');
+  const [newDishTags, setNewDishTags] = useState('V');
+  const [newLiveDosaName, setNewLiveDosaName] = useState('');
+  const [newLiveDosaDesc, setNewLiveDosaDesc] = useState('');
+  const [newBuffetItemName, setNewBuffetItemName] = useState('');
+  const [newBuffetItemDesc, setNewBuffetItemDesc] = useState('');
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'site_data', 'menus'), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data.INDIAN_MENU) {
-          setEditableIndianMenu({
-            vegStarters: data.INDIAN_MENU.starters?.vegetarian || [],
-            nonVegStarters: data.INDIAN_MENU.starters?.nonVegetarian || [],
-            vegMains: data.INDIAN_MENU.mains?.vegetarian || [],
-            nonVegMains: data.INDIAN_MENU.mains?.nonVegetarian || [],
-            sundries: data.INDIAN_MENU.sundries || [],
-            desserts: data.INDIAN_MENU.desserts || [],
-          });
+        if (data.MENU_CATEGORIES && Array.isArray(data.MENU_CATEGORIES) && data.MENU_CATEGORIES.length > 0) {
+          setEditableMenuCategories(data.MENU_CATEGORIES);
         }
-        if (data.SRI_LANKAN_MENU) {
-          setEditableSLMenu({
-            vegStarters: data.SRI_LANKAN_MENU.starters?.vegetarian || [],
-            nonVegStarters: data.SRI_LANKAN_MENU.starters?.nonVegetarian || [],
-            vegMains: data.SRI_LANKAN_MENU.mains?.vegetarian || [],
-            nonVegMains: data.SRI_LANKAN_MENU.mains?.nonVegetarian || [],
-            sundries: data.SRI_LANKAN_MENU.sundries || [],
-            desserts: data.SRI_LANKAN_MENU.desserts || [],
-          });
+        if (data.LIVE_DOSA_MENU) {
+          setEditableLiveDosaMenu(data.LIVE_DOSA_MENU);
         }
-        if (data.LIVE_COUNTER_PACKAGE) setEditableLiveCounter(data.LIVE_COUNTER_PACKAGE);
+        if (data.SOUTH_INDIAN_BUFFET) {
+          setEditableSouthIndianBuffet(data.SOUTH_INDIAN_BUFFET);
+        }
         if (data.BANQUET_PACKAGES) setEditableBanquetPackages(data.BANQUET_PACKAGES);
         if (data.VENUE_HALL_CHARGES) setEditableVenueCharges(data.VENUE_HALL_CHARGES);
         if (data.TABLE_SERVICE) setEditableTableService(data.TABLE_SERVICE);
@@ -1036,45 +1044,21 @@ export default function AdminPage() {
     setIsSavingMenus(true);
     try {
       await setDoc(doc(db, 'site_data', 'menus'), {
-        INDIAN_MENU: {
-          name: 'Indian Menu',
-          starters: {
-            vegetarian: editableIndianMenu.vegStarters,
-            nonVegetarian: editableIndianMenu.nonVegStarters,
-          },
-          mains: {
-            vegetarian: editableIndianMenu.vegMains,
-            nonVegetarian: editableIndianMenu.nonVegMains,
-          },
-          sundries: editableIndianMenu.sundries,
-          desserts: editableIndianMenu.desserts,
-          allergyNotice: 'Food Prepared in our restaurant may contain following ingredients such as Milk, Egg, Wheat, Gluten, Crustaceans, Lupin, Mustard, Nuts, Sulphur',
-        },
-        SRI_LANKAN_MENU: {
-          name: 'Sri Lankan Menu',
-          starters: {
-            vegetarian: editableSLMenu.vegStarters,
-            nonVegetarian: editableSLMenu.nonVegStarters,
-          },
-          mains: {
-            vegetarian: editableSLMenu.vegMains,
-            nonVegetarian: editableSLMenu.nonVegMains,
-          },
-          sundries: editableSLMenu.sundries,
-          desserts: editableSLMenu.desserts,
-          allergyNotice: 'Food Prepared in our restaurant may contain following ingredients such as Milk, Egg, Wheat, Gluten, Crustaceans, Lupin, Mustard, Nuts, Sulphur',
-        },
-        LIVE_COUNTER_PACKAGE: editableLiveCounter,
+        MENU_CATEGORIES: editableMenuCategories,
+        LIVE_DOSA_MENU: editableLiveDosaMenu,
+        SOUTH_INDIAN_BUFFET: editableSouthIndianBuffet,
         BANQUET_PACKAGES: editableBanquetPackages,
         VENUE_HALL_CHARGES: editableVenueCharges,
         TABLE_SERVICE: editableTableService,
         KIDS_PRICING: editableKidsPricing,
         DRY_HIRE_PRICES: editableDryHirePrices,
+        TERMS_AND_CONDITIONS,
+        STANDARD_SETUP,
       }, { merge: true });
-      setCustomAlert({ message: 'Menus successfully updated on the website!', type: 'success' });
-    } catch (error) {
+      setCustomAlert({ message: 'All menus & categories successfully updated on the website!', type: 'success' });
+    } catch (error: any) {
       console.error(error);
-      setCustomAlert({ message: 'Error saving menus.', type: 'error' });
+      setCustomAlert({ message: `Error saving menus: ${error?.message || 'Unknown error'}`, type: 'error' });
     } finally {
       setIsSavingMenus(false);
     }
@@ -1094,18 +1078,19 @@ export default function AdminPage() {
 
   const buildMenuWhatsAppText = (customerName: string, customerPhone: string, menuType: string, guestCount: number) => {
     let text = `Hi ${customerName}, here are our *${menuType}* options from SriLalitha:\n\n`;
-    if (menuType === 'Indian Menu') {
-      text += `🥗 *Vegetarian Starters:*\n${(editableIndianMenu.vegStarters || []).map(i => `• ${i}`).join('\n')}\n\n`;
-      text += `🍗 *Non-Veg Starters:*\n${(editableIndianMenu.nonVegStarters || []).map(i => `• ${i}`).join('\n')}\n\n`;
-      text += `🍛 *Vegetarian Mains:*\n${(editableIndianMenu.vegMains || []).map(i => `• ${i}`).join('\n')}\n\n`;
-      text += `🍖 *Non-Veg Mains:*\n${(editableIndianMenu.nonVegMains || []).map(i => `• ${i}`).join('\n')}\n\n`;
-      text += `🍮 *Desserts:*\n${(editableIndianMenu.desserts || []).map(i => `• ${i}`).join('\n')}\n\n`;
-    } else if (menuType === 'Sri Lankan Menu') {
-      text += `🥗 *Vegetarian Starters:*\n${(editableSLMenu.vegStarters || []).map(i => `• ${i}`).join('\n')}\n\n`;
-      text += `🍗 *Non-Veg Starters:*\n${(editableSLMenu.nonVegStarters || []).map(i => `• ${i}`).join('\n')}\n\n`;
-      text += `🍛 *Vegetarian Mains:*\n${(editableSLMenu.vegMains || []).map(i => `• ${i}`).join('\n')}\n\n`;
-      text += `🍖 *Non-Veg Mains:*\n${(editableSLMenu.nonVegMains || []).map(i => `• ${i}`).join('\n')}\n\n`;
-      text += `🍮 *Desserts:*\n${(editableSLMenu.desserts || []).map(i => `• ${i}`).join('\n')}\n\n`;
+    
+    const matchedCategory = editableMenuCategories.find(c => c.title.toLowerCase() === menuType.toLowerCase() || c.id === menuType);
+    if (matchedCategory) {
+      text += `🍽️ *${matchedCategory.title} (${matchedCategory.items.length} items):*\n\n`;
+      text += matchedCategory.items.map(i => `• *${i.name}*\n  ${i.description}`).join('\n\n') + '\n\n';
+    } else if (menuType === 'Live Dosa Station' || menuType === 'Live Counter') {
+      text += `🎪 *Live Dosa Station Menu (12 Live Dishes):*\n\n`;
+      text += editableLiveDosaMenu.items.map(i => `• *${i.name}*\n  ${i.description}`).join('\n\n') + '\n\n';
+    } else if (menuType === 'South Indian Buffet') {
+      text += `🍲 *South Indian Special Buffet (${editableSouthIndianBuffet.items.length} Dishes):*\n`;
+      text += `• Weekday (Mon-Fri): ${editableSouthIndianBuffet.weekday.price}\n`;
+      text += `• Weekend & Holidays: ${editableSouthIndianBuffet.weekend.price}\n\n`;
+      text += `*Inclusions:*\n` + editableSouthIndianBuffet.items.map(i => `• ${i.name} (${i.description})`).join('\n') + '\n\n';
     } else if (menuType === 'Venue Hall Charges') {
       text += editableVenueCharges.map(row => `• *${row.day}:* ${row.charge} ${row.note ? `(${row.note})` : ''}`).join('\n') + '\n\n';
       text += `🍷 *ALCOHOL:*\nCorkage fee - Charges for outside Alcohol in Venue which will be discussed as per guests.\n\n`;
@@ -1115,15 +1100,9 @@ export default function AdminPage() {
       text += `(Only Applies for over 50 Adults)\n\n`;
       text += editableKidsPricing.map(kp => `• *${kp.ageRange}:* ${kp.price}`).join('\n') + '\n\n';
       text += `*NOTE:* Minimum Number of Guests will be charged as agreed. As per our policy and food safety, we don't allow any food takeaway from Banquet Venue.\n\n`;
-    } else if (menuType === 'Extras') {
-      text += (editableLiveCounter.extras || []).map(e => `• *${e.name}:* £${e.price}`).join('\n') + '\n\n';
     }
-    
-    if (menuType.includes('Menu') || menuType === 'Extras') {
-      text += `Please reply with your preferred selections. We look forward to serving you! 🙏`;
-    } else {
-      text += `Please let us know if you have any questions or would like to proceed with booking! 🙏`;
-    }
+
+    text += `Please reply with your preferred selections. We look forward to serving you! 🙏`;
     return buildWhatsAppLink(customerPhone, text);
   };
 
@@ -3606,22 +3585,549 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {/* Menu Sub-tabs */}
               <div className="flex flex-wrap gap-2">
                 {([
+                  { id: 'categories', label: '📋 Restaurant Menus (9 Categories)' },
+                  { id: 'live-dosa', label: '🎪 Live Dosa Station' },
+                  { id: 'buffet', label: '🍛 South Indian Buffet' },
                   { id: 'banquet', label: '🎁 Banquet Packages' },
-                  { id: 'indian', label: '🍛 Indian Menu' },
-                  { id: 'srilankan', label: '🌴 Sri Lankan Menu' },
-                  { id: 'live', label: '🎪 Live Counter' },
                 ] as { id: AdminMenuTab; label: string }[]).map((tab) => (
                   <button key={tab.id} onClick={() => setAdminMenuTab(tab.id)}
-                    className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${adminMenuTab === tab.id ? 'text-white shadow-md' : 'bg-white border border-gray-200 text-gray-600 hover:border-yellow-400'}`}
+                    className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${adminMenuTab === tab.id ? 'text-white shadow-md scale-[1.02]' : 'bg-white border border-gray-200 text-gray-700 hover:border-amber-400 shadow-2xs'}`}
                     style={adminMenuTab === tab.id ? { background: 'linear-gradient(135deg, #C8860A, #F0A830)' } : {}}>
                     {tab.label}
                   </button>
                 ))}
               </div>
 
-              {/* ─── BANQUET PACKAGES ─── */}
+              {/* ─── TAB 1: RESTAURANT CATEGORIES (9 EXACT CATEGORIES) ─── */}
+              {adminMenuTab === 'categories' && (
+                <div className="space-y-5 animate-in fade-in duration-300">
+                  {/* Category Selector Pills */}
+                  <div className="flex flex-wrap gap-2 bg-white p-3 rounded-2xl border border-gray-200 shadow-2xs">
+                    {editableMenuCategories.map((cat, idx) => {
+                      const isSelected = selectedAdminCategoryIndex === idx;
+                      let bg = '#C8860A';
+                      if (cat.id === 'super-starters') bg = '#3D2614';
+                      if (cat.id === 'chat-corners') bg = '#4CAF50';
+                      return (
+                        <button
+                          key={cat.id}
+                          onClick={() => setSelectedAdminCategoryIndex(idx)}
+                          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                            isSelected ? 'text-white shadow-md ring-2 ring-amber-400 ring-offset-1' : 'opacity-85 hover:opacity-100 text-white'
+                          }`}
+                          style={{ background: bg }}
+                        >
+                          <span>{cat.icon || '🍽️'}</span>
+                          <span>{cat.title}</span>
+                          <span className="text-[10px] bg-black/20 px-1.5 py-0.2 rounded-full font-mono">
+                            {cat.items.length}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {(() => {
+                    const activeCat = editableMenuCategories[selectedAdminCategoryIndex] || editableMenuCategories[0];
+                    return (
+                      <div className="space-y-4">
+                        {/* WhatsApp Broadcast Card for this Category */}
+                        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-2xs">
+                          <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                            <p className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                              <span>📱</span>
+                              <span>Send *{activeCat.title}* ({activeCat.items.length} items) to a Customer via WhatsApp:</span>
+                            </p>
+                            <span className="text-[11px] text-amber-700 font-semibold">{activeCat.description}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {enquiries.concat(activeBookings).slice(0, 6).map((b) => (
+                              <a
+                                key={b.id}
+                                href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, activeCat.title, b.guests)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white shadow-2xs hover:opacity-90"
+                                style={{ background: '#25D366' }}
+                              >
+                                <Icon name="ChatBubbleLeftRightIcon" size={12} />
+                                Send to {b.name.split(' ')[0]}
+                              </a>
+                            ))}
+                            {enquiries.concat(activeBookings).length === 0 && (
+                              <span className="text-xs text-gray-400 italic">No active customers</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Items List in Active Category */}
+                        <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
+                          <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+                            <div>
+                              <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                                <span>{activeCat.icon}</span>
+                                <span>{activeCat.title} Dishes</span>
+                              </h3>
+                              <p className="text-xs text-gray-500">{activeCat.description}</p>
+                            </div>
+                            <span className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-900">
+                              {activeCat.items.length} Dishes
+                            </span>
+                          </div>
+
+                          <div className="space-y-3">
+                            {activeCat.items.map((item, itemIdx) => (
+                              <div
+                                key={`${item.name}-${itemIdx}`}
+                                className="p-3.5 rounded-xl border border-gray-200/80 bg-gray-50/50 hover:bg-white hover:border-amber-300 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
+                              >
+                                <div className="flex-1 space-y-1.5 w-full sm:w-auto">
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-5 h-5 rounded-full bg-gray-200 text-gray-700 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                                      {itemIdx + 1}
+                                    </span>
+                                    <input
+                                      type="text"
+                                      value={item.name}
+                                      onChange={(e) => {
+                                        const updatedName = e.target.value;
+                                        setEditableMenuCategories(prev => prev.map((cat, cIdx) => {
+                                          if (cIdx !== selectedAdminCategoryIndex) return cat;
+                                          return {
+                                            ...cat,
+                                            items: cat.items.map((it, itIdx) => itIdx === itemIdx ? { ...it, name: updatedName } : it),
+                                          };
+                                        }));
+                                      }}
+                                      className="font-bold text-sm text-gray-900 bg-white border border-gray-200 rounded-lg px-2.5 py-1 flex-1 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                      placeholder="Dish Name"
+                                    />
+                                  </div>
+
+                                  <input
+                                    type="text"
+                                    value={item.description}
+                                    onChange={(e) => {
+                                      const updatedDesc = e.target.value;
+                                      setEditableMenuCategories(prev => prev.map((cat, cIdx) => {
+                                        if (cIdx !== selectedAdminCategoryIndex) return cat;
+                                        return {
+                                          ...cat,
+                                          items: cat.items.map((it, itIdx) => itIdx === itemIdx ? { ...it, description: updatedDesc } : it),
+                                        };
+                                      }));
+                                    }}
+                                    className="text-xs text-gray-600 bg-white border border-gray-200 rounded-lg px-2.5 py-1 w-full focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                    placeholder="Dish Description"
+                                  />
+                                </div>
+
+                                <div className="flex items-center gap-2 self-end sm:self-center">
+                                  <input
+                                    type="text"
+                                    value={(item.tags || []).join(', ')}
+                                    onChange={(e) => {
+                                      const tagsArr = e.target.value.split(',').map(t => t.trim()).filter(Boolean);
+                                      setEditableMenuCategories(prev => prev.map((cat, cIdx) => {
+                                        if (cIdx !== selectedAdminCategoryIndex) return cat;
+                                        return {
+                                          ...cat,
+                                          items: cat.items.map((it, itIdx) => itIdx === itemIdx ? { ...it, tags: tagsArr } : it),
+                                        };
+                                      }));
+                                    }}
+                                    className="w-24 text-[11px] font-bold text-center border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none"
+                                    placeholder="Tags (V, M, N...)"
+                                    title="Dietary Tags: V, M, N, OJ, J, S"
+                                  />
+
+                                  {currentUser?.role === 'Super Admin' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditableMenuCategories(prev => prev.map((cat, cIdx) => {
+                                          if (cIdx !== selectedAdminCategoryIndex) return cat;
+                                          return {
+                                            ...cat,
+                                            items: cat.items.filter((_, itIdx) => itIdx !== itemIdx),
+                                          };
+                                        }));
+                                      }}
+                                      className="p-1.5 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
+                                      title="Delete Dish"
+                                    >
+                                      <Icon name="TrashIcon" size={14} />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Add New Dish to this Category */}
+                          <div className="pt-4 border-t border-gray-100 bg-amber-50/40 p-4 rounded-xl border border-amber-200/70 space-y-2.5">
+                            <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider">
+                              + Add New Dish to {activeCat.title}
+                            </h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                              <input
+                                type="text"
+                                placeholder="Dish name (e.g. Masala Dosa)"
+                                value={newDishName}
+                                onChange={(e) => setNewDishName(e.target.value)}
+                                className="sm:col-span-4 border border-gray-200 rounded-lg px-3 py-2 text-xs bg-white focus:outline-none"
+                              />
+                              <input
+                                type="text"
+                                placeholder="Description (e.g. Crisp & golden, the classic favourite)"
+                                value={newDishDescription}
+                                onChange={(e) => setNewDishDescription(e.target.value)}
+                                className="sm:col-span-6 border border-gray-200 rounded-lg px-3 py-2 text-xs bg-white focus:outline-none"
+                              />
+                              <input
+                                type="text"
+                                placeholder="Tags (V, M)"
+                                value={newDishTags}
+                                onChange={(e) => setNewDishTags(e.target.value)}
+                                className="sm:col-span-2 border border-gray-200 rounded-lg px-3 py-2 text-xs bg-white focus:outline-none text-center"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (newDishName.trim()) {
+                                  const tagsArr = newDishTags.split(',').map(t => t.trim()).filter(Boolean);
+                                  setEditableMenuCategories(prev => prev.map((cat, cIdx) => {
+                                    if (cIdx !== selectedAdminCategoryIndex) return cat;
+                                    return {
+                                      ...cat,
+                                      items: [...cat.items, { name: newDishName.trim(), description: newDishDescription.trim() || 'Freshly prepared vegetarian specialty', tags: tagsArr }],
+                                    };
+                                  }));
+                                  setNewDishName('');
+                                  setNewDishDescription('');
+                                  setNewDishTags('V');
+                                }
+                              }}
+                              className="px-4 py-2 rounded-lg text-xs font-bold text-white shadow-sm hover:shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+                              style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                            >
+                              <Icon name="PlusIcon" size={14} />
+                              Add Dish to {activeCat.title}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* ─── TAB 2: LIVE DOSA STATION EDITOR ─── */}
+              {adminMenuTab === 'live-dosa' && (
+                <div className="space-y-4 animate-in fade-in duration-300">
+                  {/* WhatsApp Broadcast */}
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-2xs">
+                    <p className="text-xs font-bold text-amber-900 mb-2 flex items-center gap-1.5">
+                      <span>🎪</span>
+                      <span>Send Full Live Dosa Station Menu to a Customer:</span>
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {enquiries.concat(activeBookings).slice(0, 6).map((b) => (
+                        <a
+                          key={b.id}
+                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'Live Dosa Station', b.guests)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white shadow-2xs hover:opacity-90"
+                          style={{ background: '#25D366' }}
+                        >
+                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
+                          Send to {b.name.split(' ')[0]}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
+                    <div className="border-b border-gray-100 pb-3">
+                      <h3 className="text-base font-bold text-gray-900">Live Dosa Station (12 Live Dishes)</h3>
+                      <p className="text-xs text-gray-500">Each item is prepared fresh on the spot with theatrical flair</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {editableLiveDosaMenu.items.map((item, idx) => (
+                        <div key={idx} className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/60 flex items-start justify-between gap-2">
+                          <div className="flex-1 space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                                {idx + 1}
+                              </span>
+                              <input
+                                type="text"
+                                value={item.name}
+                                onChange={(e) => {
+                                  const name = e.target.value;
+                                  setEditableLiveDosaMenu(prev => ({
+                                    ...prev,
+                                    items: prev.items.map((it, i) => i === idx ? { ...it, name } : it),
+                                  }));
+                                }}
+                                className="font-bold text-xs text-gray-900 bg-white border border-gray-200 rounded px-2 py-1 w-full"
+                              />
+                            </div>
+                            <input
+                              type="text"
+                              value={item.description}
+                              onChange={(e) => {
+                                const description = e.target.value;
+                                setEditableLiveDosaMenu(prev => ({
+                                  ...prev,
+                                  items: prev.items.map((it, i) => i === idx ? { ...it, description } : it),
+                                }));
+                              }}
+                              className="text-[11px] text-gray-500 bg-white border border-gray-200 rounded px-2 py-1 w-full"
+                            />
+                          </div>
+
+                          {currentUser?.role === 'Super Admin' && (
+                            <button
+                              onClick={() => {
+                                setEditableLiveDosaMenu(prev => ({
+                                  ...prev,
+                                  items: prev.items.filter((_, i) => i !== idx),
+                                }));
+                              }}
+                              className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-500"
+                            >
+                              <Icon name="TrashIcon" size={13} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Add Live Dosa Dish */}
+                    <div className="pt-3 border-t border-gray-100 flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Live dish name..."
+                        value={newLiveDosaName}
+                        onChange={(e) => setNewLiveDosaName(e.target.value)}
+                        className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-xs bg-gray-50"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Description..."
+                        value={newLiveDosaDesc}
+                        onChange={(e) => setNewLiveDosaDesc(e.target.value)}
+                        className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-xs bg-gray-50"
+                      />
+                      <button
+                        onClick={() => {
+                          if (newLiveDosaName.trim()) {
+                            setEditableLiveDosaMenu(prev => ({
+                              ...prev,
+                              items: [...prev.items, { name: newLiveDosaName.trim(), description: newLiveDosaDesc.trim() || 'Crisp & golden, the classic favourite', tags: ['V'] }],
+                            }));
+                            setNewLiveDosaName('');
+                            setNewLiveDosaDesc('');
+                          }
+                        }}
+                        className="px-3 py-2 rounded-lg text-white font-bold text-xs"
+                        style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                      >
+                        <Icon name="PlusIcon" size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ─── TAB 3: SOUTH INDIAN BUFFET EDITOR ─── */}
+              {adminMenuTab === 'buffet' && (
+                <div className="space-y-4 animate-in fade-in duration-300">
+                  {/* WhatsApp Broadcast */}
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 shadow-2xs">
+                    <p className="text-xs font-bold text-emerald-900 mb-2 flex items-center gap-1.5">
+                      <span>🍲</span>
+                      <span>Send South Indian Buffet Menu to a Customer:</span>
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {enquiries.concat(activeBookings).slice(0, 6).map((b) => (
+                        <a
+                          key={b.id}
+                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'South Indian Buffet', b.guests)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white shadow-2xs hover:opacity-90"
+                          style={{ background: '#25D366' }}
+                        >
+                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
+                          Send to {b.name.split(' ')[0]}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Schedule & Pricing Editor */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-white p-5 rounded-2xl border border-gray-200 space-y-3">
+                      <h4 className="font-bold text-sm text-gray-900">Weekday Schedule &amp; Pricing</h4>
+                      <div>
+                        <label className="text-[11px] font-bold text-gray-500 block mb-1">Days</label>
+                        <input
+                          type="text"
+                          value={editableSouthIndianBuffet.weekday.days}
+                          onChange={(e) => setEditableSouthIndianBuffet(prev => ({
+                            ...prev,
+                            weekday: { ...prev.weekday, days: e.target.value }
+                          }))}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-semibold"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-gray-500 block mb-1">Price</label>
+                        <input
+                          type="text"
+                          value={editableSouthIndianBuffet.weekday.price}
+                          onChange={(e) => setEditableSouthIndianBuffet(prev => ({
+                            ...prev,
+                            weekday: { ...prev.weekday, price: e.target.value }
+                          }))}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold text-emerald-700"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-5 rounded-2xl border border-gray-200 space-y-3">
+                      <h4 className="font-bold text-sm text-gray-900">Weekend Schedule &amp; Pricing</h4>
+                      <div>
+                        <label className="text-[11px] font-bold text-gray-500 block mb-1">Days</label>
+                        <input
+                          type="text"
+                          value={editableSouthIndianBuffet.weekend.days}
+                          onChange={(e) => setEditableSouthIndianBuffet(prev => ({
+                            ...prev,
+                            weekend: { ...prev.weekend, days: e.target.value }
+                          }))}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-semibold"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-gray-500 block mb-1">Price</label>
+                        <input
+                          type="text"
+                          value={editableSouthIndianBuffet.weekend.price}
+                          onChange={(e) => setEditableSouthIndianBuffet(prev => ({
+                            ...prev,
+                            weekend: { ...prev.weekend, price: e.target.value }
+                          }))}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold text-amber-700"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 14 Buffet Spread Dishes Editor */}
+                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
+                    <div className="border-b border-gray-100 pb-3 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-base font-bold text-gray-900">Buffet Spread Items</h3>
+                        <p className="text-xs text-gray-500">Unlimited servings included in South Indian Buffet</p>
+                      </div>
+                      <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-900">
+                        {editableSouthIndianBuffet.items.length} Inclusions
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {editableSouthIndianBuffet.items.map((bItem, idx) => (
+                        <div key={idx} className="p-3 rounded-xl border border-gray-200 bg-gray-50/60 flex items-start justify-between gap-2">
+                          <div className="flex-1 space-y-1">
+                            <input
+                              type="text"
+                              value={bItem.name}
+                              onChange={(e) => {
+                                const name = e.target.value;
+                                setEditableSouthIndianBuffet(prev => ({
+                                  ...prev,
+                                  items: prev.items.map((it, i) => i === idx ? { ...it, name } : it),
+                                }));
+                              }}
+                              className="font-bold text-xs text-gray-900 bg-white border border-gray-200 rounded px-2 py-1 w-full"
+                            />
+                            <input
+                              type="text"
+                              value={bItem.description}
+                              onChange={(e) => {
+                                const description = e.target.value;
+                                setEditableSouthIndianBuffet(prev => ({
+                                  ...prev,
+                                  items: prev.items.map((it, i) => i === idx ? { ...it, description } : it),
+                                }));
+                              }}
+                              className="text-[11px] text-gray-500 bg-white border border-gray-200 rounded px-2 py-1 w-full"
+                            />
+                          </div>
+
+                          {currentUser?.role === 'Super Admin' && (
+                            <button
+                              onClick={() => {
+                                setEditableSouthIndianBuffet(prev => ({
+                                  ...prev,
+                                  items: prev.items.filter((_, i) => i !== idx),
+                                }));
+                              }}
+                              className="p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-500"
+                            >
+                              <Icon name="TrashIcon" size={13} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Add Buffet Item */}
+                    <div className="pt-3 border-t border-gray-100 flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Buffet dish name..."
+                        value={newBuffetItemName}
+                        onChange={(e) => setNewBuffetItemName(e.target.value)}
+                        className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-xs bg-gray-50"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Description..."
+                        value={newBuffetItemDesc}
+                        onChange={(e) => setNewBuffetItemDesc(e.target.value)}
+                        className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-xs bg-gray-50"
+                      />
+                      <button
+                        onClick={() => {
+                          if (newBuffetItemName.trim()) {
+                            setEditableSouthIndianBuffet(prev => ({
+                              ...prev,
+                              items: [...prev.items, { name: newBuffetItemName.trim(), description: newBuffetItemDesc.trim() || 'Unlimited buffet dish', tags: ['V'] }],
+                            }));
+                            setNewBuffetItemName('');
+                            setNewBuffetItemDesc('');
+                          }
+                        }}
+                        className="px-3 py-2 rounded-lg text-white font-bold text-xs"
+                        style={{ background: 'linear-gradient(135deg, #2E7D32, #4CAF50)' }}
+                      >
+                        <Icon name="PlusIcon" size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ─── TAB 4: BANQUET PACKAGES & VENUE SERVICES ─── */}
               {adminMenuTab === 'banquet' && (
-                <div className="space-y-4">
+                <div className="space-y-4 animate-in fade-in duration-300">
                   {editableBanquetPackages.map((pkg) => (
                     <div key={pkg.id} className="bg-white rounded-xl border border-gray-200 p-5">
                       {editingPackageId === pkg.id && editingPackageData ? (
@@ -3804,178 +4310,6 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
-
-              {/* ─── INDIAN MENU EDITOR ─── */}
-              {adminMenuTab === 'indian' && (
-                <div className="space-y-4">
-                  {/* Send full Indian menu to customer */}
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                    <p className="text-xs font-semibold text-amber-700 mb-2">📱 Send Full Indian Menu to a Customer:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {enquiries.concat(activeBookings).slice(0, 5).map((b) => (
-                        <a key={b.id}
-                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'Indian Menu', b.guests)}
-                          target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
-                          style={{ background: '#25D366', color: 'white' }}>
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Send to {b.name.split(' ')[0]}
-                        </a>
-                      ))}
-                      {enquiries.concat(activeBookings).length === 0 && <span className="text-xs text-gray-400 italic">No active customers</span>}
-                    </div>
-                  </div>
-
-                  {[
-                    { label: 'Vegetarian Starters', key: 'vegStarters' as const },
-                    { label: 'Non-Vegetarian Starters', key: 'nonVegStarters' as const },
-                    { label: 'Vegetarian Mains', key: 'vegMains' as const },
-                    { label: 'Non-Vegetarian Mains', key: 'nonVegMains' as const },
-                    { label: 'Sundries', key: 'sundries' as const },
-                    { label: 'Desserts', key: 'desserts' as const },
-                  ].map((section) => (
-                    <div key={section.key} className="bg-white rounded-xl border border-gray-200 p-5">
-                      <h3 className="font-semibold text-gray-900 mb-3">{section.label}</h3>
-                      <div className="space-y-2 mb-3">
-                        {editableIndianMenu[section.key].map((item, i) => (
-                          <div key={i} className="flex items-center gap-2">
-                            <input type="text" value={item} onChange={(e) => setEditableIndianMenu(prev => ({ ...prev, [section.key]: prev[section.key].map((v, idx) => idx === i ? e.target.value : v) }))} className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                            {currentUser?.role === 'Super Admin' && (
-                              <button onClick={() => setEditableIndianMenu(prev => ({ ...prev, [section.key]: prev[section.key].filter((_, idx) => idx !== i) }))} className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-500 transition-colors">
-                                <Icon name="TrashIcon" size={14} />
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex gap-2">
-                        <input type="text" placeholder={`Add new ${section.label.toLowerCase()} item...`} value={newMenuItemInput} onChange={(e) => setNewMenuItemInput(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter' && newMenuItemInput.trim()) { setEditableIndianMenu(prev => ({ ...prev, [section.key]: [...prev[section.key], newMenuItemInput.trim()] })); setNewMenuItemInput(''); } }}
-                          className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none bg-gray-50" />
-                        <button onClick={() => { if (newMenuItemInput.trim()) { setEditableIndianMenu(prev => ({ ...prev, [section.key]: [...prev[section.key], newMenuItemInput.trim()] })); setNewMenuItemInput(''); } }}
-                          className="text-white text-sm font-semibold px-3 py-2 rounded-lg" style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
-                          <Icon name="PlusIcon" size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* ─── SRI LANKAN MENU EDITOR ─── */}
-              {adminMenuTab === 'srilankan' && (
-                <div className="space-y-4">
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                    <p className="text-xs font-semibold text-amber-700 mb-2">📱 Send Full Sri Lankan Menu to a Customer:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {enquiries.concat(activeBookings).slice(0, 5).map((b) => (
-                        <a key={b.id}
-                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'Sri Lankan Menu', b.guests)}
-                          target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
-                          style={{ background: '#25D366', color: 'white' }}>
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Send to {b.name.split(' ')[0]}
-                        </a>
-                      ))}
-                      {enquiries.concat(activeBookings).length === 0 && <span className="text-xs text-gray-400 italic">No active customers</span>}
-                    </div>
-                  </div>
-
-                  {[
-                    { label: 'Vegetarian Starters', key: 'vegStarters' as const },
-                    { label: 'Non-Vegetarian Starters', key: 'nonVegStarters' as const },
-                    { label: 'Vegetarian Mains', key: 'vegMains' as const },
-                    { label: 'Non-Vegetarian Mains', key: 'nonVegMains' as const },
-                    { label: 'Sundries', key: 'sundries' as const },
-                    { label: 'Desserts', key: 'desserts' as const },
-                  ].map((section) => (
-                    <div key={section.key} className="bg-white rounded-xl border border-gray-200 p-5">
-                      <h3 className="font-semibold text-gray-900 mb-3">{section.label}</h3>
-                      <div className="space-y-2 mb-3">
-                        {editableSLMenu[section.key].map((item, i) => (
-                          <div key={i} className="flex items-center gap-2">
-                            <input type="text" value={item} onChange={(e) => setEditableSLMenu(prev => ({ ...prev, [section.key]: prev[section.key].map((v, idx) => idx === i ? e.target.value : v) }))} className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                            {currentUser?.role === 'Super Admin' && (
-                              <button onClick={() => setEditableSLMenu(prev => ({ ...prev, [section.key]: prev[section.key].filter((_, idx) => idx !== i) }))} className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-500 transition-colors">
-                                <Icon name="TrashIcon" size={14} />
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex gap-2">
-                        <input type="text" placeholder={`Add new ${section.label.toLowerCase()} item...`} value={newMenuItemInput} onChange={(e) => setNewMenuItemInput(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter' && newMenuItemInput.trim()) { setEditableSLMenu(prev => ({ ...prev, [section.key]: [...prev[section.key], newMenuItemInput.trim()] })); setNewMenuItemInput(''); } }}
-                          className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none bg-gray-50" />
-                        <button onClick={() => { if (newMenuItemInput.trim()) { setEditableSLMenu(prev => ({ ...prev, [section.key]: [...prev[section.key], newMenuItemInput.trim()] })); setNewMenuItemInput(''); } }}
-                          className="text-white text-sm font-semibold px-3 py-2 rounded-lg" style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
-                          <Icon name="PlusIcon" size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* ─── LIVE COUNTER EDITOR ─── */}
-              {adminMenuTab === 'live' && (
-                <div className="space-y-4">
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                    <p className="text-xs font-semibold text-amber-700 mb-2">📱 Send Live Counter Package to a Customer:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {enquiries.concat(activeBookings).slice(0, 5).map((b) => (
-                        <a key={b.id}
-                          href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, here is our *Live Counter Package* from SriLalitha:\n\n🎪 *Sri Lankan & South Indian:*\n${editableLiveCounter.srilankanSouthIndian.map(i => `• ${i.name} — £${i.price.toFixed(2)}/person`).join('\n')}\n\n🎪 *North Indian:*\n${editableLiveCounter.northIndian.map(i => `• ${i.name} — £${i.price.toFixed(2)}/person`).join('\n')}\n\n✨ *Extras:*\n${editableLiveCounter.extras.map(i => `• ${i.name} — £${i.price.toFixed(2)}`).join('\n')}\n\nPlease let us know which items you'd like to add to your event! 🙏`)}
-                          target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
-                          style={{ background: '#25D366', color: 'white' }}>
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Send to {b.name.split(' ')[0]}
-                        </a>
-                      ))}
-                      {enquiries.concat(activeBookings).length === 0 && <span className="text-xs text-gray-400 italic">No active customers</span>}
-                    </div>
-                  </div>
-
-                  {[
-                    { label: 'Sri Lankan & South Indian', key: 'srilankanSouthIndian' as const },
-                    { label: 'North Indian', key: 'northIndian' as const },
-                    { label: 'Extras', key: 'extras' as const },
-                  ].map((section) => (
-                    <div key={section.key} className="bg-white rounded-xl border border-gray-200 p-5">
-                      <h3 className="font-semibold text-gray-900 mb-3">{section.label}</h3>
-                      <div className="space-y-2 mb-3">
-                        {editableLiveCounter[section.key].map((item, i) => (
-                          <div key={i} className="flex items-center gap-2">
-                            <input type="text" value={item.name} onChange={(e) => setEditableLiveCounter(prev => ({ ...prev, [section.key]: prev[section.key].map((v, idx) => idx === i ? { ...v, name: e.target.value } : v) }))} className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                            <div className="flex items-center gap-1">
-                              <span className="text-sm text-gray-500">£</span>
-                              <input type="number" step="0.01" value={item.price} onChange={(e) => setEditableLiveCounter(prev => ({ ...prev, [section.key]: prev[section.key].map((v, idx) => idx === i ? { ...v, price: parseFloat(e.target.value) || 0 } : v) }))} className="w-20 border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none text-right" />
-                            </div>
-                            {currentUser?.role === 'Super Admin' && (
-                              <button onClick={() => setEditableLiveCounter(prev => ({ ...prev, [section.key]: prev[section.key].filter((_, idx) => idx !== i) }))} className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-500 transition-colors">
-                                <Icon name="TrashIcon" size={14} />
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex gap-2">
-                        <input type="text" placeholder="Item name..." value={newLiveItemName} onChange={(e) => setNewLiveItemName(e.target.value)} className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none bg-gray-50" />
-                        <div className="flex items-center gap-1">
-                          <span className="text-sm text-gray-500">£</span>
-                          <input type="number" step="0.01" placeholder="0.00" value={newLiveItemPrice} onChange={(e) => setNewLiveItemPrice(e.target.value)} className="w-20 border border-dashed border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none bg-gray-50" />
-                        </div>
-                        <button onClick={() => { if (newLiveItemName.trim()) { setEditableLiveCounter(prev => ({ ...prev, [section.key]: [...prev[section.key], { name: newLiveItemName.trim(), price: parseFloat(newLiveItemPrice) || 0 }] })); setNewLiveItemName(''); setNewLiveItemPrice(''); } }}
-                          className="text-white text-sm font-semibold px-3 py-2 rounded-lg" style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
-                          <Icon name="PlusIcon" size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
                 </div>
               )}
             </div>

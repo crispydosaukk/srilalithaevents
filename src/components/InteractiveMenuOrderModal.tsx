@@ -86,15 +86,15 @@ export default function InteractiveMenuOrderModal({
 
   const activeMenu = cuisineType === 'indian' ? INDIAN_MENU : SRI_LANKAN_MENU;
 
-  // Quotas based on active package
+  // Quotas based on active package (combining veg + non-veg count for pure vegetarian banquet selection)
   const quotas = useMemo(() => {
     return {
-      canapesVeg: (activePackage as any).canapes?.veg || 0,
-      canapesNonVeg: (activePackage as any).canapes?.nonVeg || 0,
-      startersVeg: activePackage.starters.veg || 0,
-      startersNonVeg: activePackage.starters.nonVeg || 0,
-      mainsVeg: activePackage.mains.veg || 0,
-      mainsNonVeg: activePackage.mains.nonVeg || 0,
+      canapesVeg: (activePackage as any).canapes ? ((activePackage as any).canapes.veg || 0) + ((activePackage as any).canapes.nonVeg || 0) : 0,
+      canapesNonVeg: 0,
+      startersVeg: (activePackage.starters.veg || 0) + (activePackage.starters.nonVeg || 0),
+      startersNonVeg: 0,
+      mainsVeg: (activePackage.mains.veg || 0) + (activePackage.mains.nonVeg || 0),
+      mainsNonVeg: 0,
       desserts: activePackage.desserts.length || 1,
     };
   }, [activePackage]);
