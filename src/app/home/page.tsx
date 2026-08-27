@@ -44,7 +44,7 @@ import {
 import GoogleLocationInput from '@/components/GoogleLocationInput';
 import InteractiveMenuOrderModal from '@/components/InteractiveMenuOrderModal';
 
-type MenuTab = 'full-menu' | 'live-dosa' | 'buffet' | 'packages';
+type MenuTab = 'full-menu' | 'live-dosa' | 'buffet';
 
 export default function HomePage() {
   const [isMenuOrderModalOpen, setIsMenuOrderModalOpen] = useState(false);
@@ -676,31 +676,6 @@ export default function HomePage() {
               <option value="South Indian Special Buffet (Weekday)">South Indian Special Buffet (Weekday: Mon-Fri) — £11.99/person</option>
               <option value="South Indian Special Buffet (Weekend)">South Indian Special Buffet (Weekend &amp; Holidays) — £13.99/person</option>
             </optgroup>
-
-            <optgroup label="── 🎁 Banquet Catering Packages ──">
-              {(menus.BANQUET_PACKAGES || BANQUET_PACKAGES).map((pkg) => (
-                <option key={pkg.id} value={pkg.name}>
-                  {pkg.name} — £{pkg.pricePerPerson}/person
-                </option>
-              ))}
-            </optgroup>
-
-            <optgroup label="── 🏛️ Venue & Hall Hire ──">
-              <option value="Venue Hall (Monday to Thursday)">Venue Hall Hire (Monday to Thursday) — £100</option>
-              <option value="Venue Hall (Friday & Sunday)">Venue Hall Hire (Friday &amp; Sunday) — £250</option>
-              <option value="Venue Hall (Saturday Lunch)">Venue Hall Hire (Saturday Lunch) — £250</option>
-              <option value="Venue Hall (Saturday Dinner)">Venue Hall Hire (Saturday Dinner) — £500</option>
-              <option value="Dry Hire">Dry Hire (Hall Only)</option>
-              <option value="Kids Pricing">Kids Pricing (Age 3-10: £20)</option>
-            </optgroup>
-
-            <optgroup label="── ✨ Event Extras & Production ──">
-              {((menus.LIVE_COUNTER_PACKAGE?.extras) || (LIVE_COUNTER_PACKAGE?.extras) || []).map((extra, idx) => (
-                <option key={idx} value={extra.name}>
-                  {extra.name} — £{extra.price}
-                </option>
-              ))}
-            </optgroup>
           </select>
         )}
 
@@ -934,7 +909,7 @@ export default function HomePage() {
             </span>
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">Our Menus &amp; Specials</h2>
             <p className="text-gray-500 max-w-2xl mx-auto text-sm sm:text-base">
-              Explore our freshly prepared vegetarian delicacies, live dosa stations, special buffet, and bespoke banquet catering packages.
+              Explore our freshly prepared vegetarian delicacies, live dosa stations, and special buffet.
             </p>
           </div>
 
@@ -944,7 +919,6 @@ export default function HomePage() {
               { id: 'full-menu', label: '📋 Complete Restaurant Menu', count: `${MENU_CATEGORIES.reduce((acc, c) => acc + c.items.length, 0)}+ Dishes` },
               { id: 'live-dosa', label: '🎪 Live Dosa Station', count: '12 Live Dishes' },
               { id: 'buffet', label: '🍛 South Indian Buffet', count: 'From £11.99' },
-              { id: 'packages', label: '🎁 Banquet Packages', count: '6 Packages' },
             ] as { id: MenuTab; label: string; count: string }[]).map((tab) => {
               const isActive = activeMenuTab === tab.id;
               return (
@@ -1502,204 +1476,6 @@ export default function HomePage() {
                   >
                     Enquire for Private Catering
                   </a>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════════════════════════════
-              TAB 4: BANQUET PACKAGES & VENUE SERVICES
-              ══════════════════════════════════════════════════════════════ */}
-          {activeMenuTab === 'packages' && (
-            <div className="space-y-8 animate-in fade-in duration-300">
-              {/* Standard Setup */}
-              <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
-                <h3 className="text-xl font-bold text-gray-900 mb-1 text-center">Standard Setup Includes</h3>
-                <p className="text-center text-sm font-semibold mb-4" style={{ color: '#C8860A' }}>(Minimum {STANDARD_SETUP.minimumAdults} Adults Chargeable)</p>
-                <div className="flex flex-wrap justify-center gap-3 mb-4">
-                  {STANDARD_SETUP.includes.map((item) => (
-                    <span key={item} className="bg-amber-50 border border-amber-200 text-amber-800 text-sm px-4 py-1.5 rounded-full">{item}</span>
-                  ))}
-                </div>
-                <div className="flex flex-wrap justify-center gap-4 text-sm text-gray-700">
-                  {STANDARD_SETUP.hallInfo.map((h) => (
-                    <span key={h.type}><strong>{h.type}</strong> ({h.detail})</span>
-                  ))}
-                </div>
-              </div>
-
-              {/* 5 Hour Event label */}
-              <div className="text-center">
-                <span className="inline-block bg-gray-900 text-white text-xs font-semibold uppercase tracking-widest px-5 py-2 rounded-full">5 Hour Event — Buffet Packages (Excl. VAT)</span>
-              </div>
-
-              {/* Package Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {BANQUET_PACKAGES.map((pkg) => (
-                  <div key={pkg.id} className={`bg-white rounded-2xl border-2 shadow-sm hover:shadow-md transition-shadow flex flex-col`}
-                    style={{ borderColor: pkg.id === 'gold' ? '#C8860A' : pkg.id === 'srilalitha' ? '#7C3AED' : '#E5E7EB' }}>
-                    <div className="p-5 flex-1">
-                      {pkg.tag && (
-                        <div className="mb-2">
-                          <span className="text-xs font-bold px-3 py-1 rounded-full" style={{ background: pkg.id === 'srilalitha' ? '#7C3AED' : 'rgba(200,134,10,0.1)', color: pkg.id === 'srilalitha' ? 'white' : '#C8860A' }}>
-                            {pkg.tag}
-                          </span>
-                        </div>
-                      )}
-                      <h3 className="text-xl font-bold text-gray-900 mb-0.5">{pkg.name}</h3>
-                      <div className="text-3xl font-bold mb-1" style={{ color: pkg.color }}>£{pkg.pricePerPerson}<span className="text-base font-normal text-gray-500"> /person</span></div>
-                      {pkg.guestLabel && <p className="text-xs text-gray-500 mb-3">{pkg.guestLabel}</p>}
-
-                      <div className="space-y-3 mt-4">
-                        {'canapes' in pkg && pkg.canapes && (
-                          <div>
-                            <div className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-1">Canapés</div>
-                            <div className="text-sm text-gray-700">{pkg.canapes.veg} Vegetarian · {pkg.canapes.nonVeg} Non-vegetarian</div>
-                          </div>
-                        )}
-                        <div>
-                          <div className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-1">Starters</div>
-                          <div className="text-sm text-gray-700">{pkg.starters.veg} Vegetarian · {pkg.starters.nonVeg} Non-vegetarian</div>
-                        </div>
-                        <div>
-                          <div className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-1">Mains</div>
-                          <div className="text-sm text-gray-700">{pkg.mains.veg} Vegetarian · {pkg.mains.nonVeg} Non-vegetarian</div>
-                        </div>
-                        <div>
-                          <div className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-1">Desserts</div>
-                          {pkg.desserts.map((d) => <div key={d} className="text-sm text-gray-700">{d}</div>)}
-                        </div>
-                        {pkg.drinks.length > 0 && (
-                          <div>
-                            <div className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-1">Drinks</div>
-                            {pkg.drinks.map((d) => <div key={d} className="text-sm text-gray-700">{d}</div>)}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="px-5 pb-5 space-y-2">
-                      <button
-                        onClick={() => {
-                          setSelectedPackageForModal(pkg.name);
-                          setIsMenuOrderModalOpen(true);
-                        }}
-                        className="w-full flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-[0.98] cursor-pointer"
-                        style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)', color: 'white' }}
-                      >
-                        <Icon name="SparklesIcon" size={14} />
-                        Select Menu &amp; Order Online
-                      </button>
-                      <button
-                        onClick={() => handleEnquireNow(pkg.name)}
-                        className="w-full flex items-center justify-center gap-1 text-xs font-semibold py-2 rounded-xl transition-colors border border-gray-200 text-gray-700 hover:bg-gray-50 cursor-pointer"
-                      >
-                        Send Enquiry
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Venue & Dry Hire Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {/* Venue Hall Charges */}
-                <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm flex flex-col">
-                  <h3 className="text-xl font-bold text-gray-900 mb-4 text-center">"Venue" Hall Charges</h3>
-                  <div className="overflow-x-auto flex-grow mb-6">
-                    <table className="w-full text-sm">
-                      <tbody className="divide-y divide-gray-100">
-                        {VENUE_HALL_CHARGES.map((row, i) => (
-                          <tr key={i} className="hover:bg-gray-50">
-                            <td className="py-3 pr-4 font-semibold text-gray-800">{row.day}</td>
-                            <td className="py-3 font-bold text-right" style={{ color: '#C8860A' }}>{row.charge}</td>
-                            {row.note && <td className="py-3 text-gray-500 italic text-xs text-right pl-2">({row.note})</td>}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="mt-auto">
-                    <button
-                      onClick={() => handleEnquireNow('Venue Hall')}
-                      className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-2.5 rounded-xl transition-all shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-[0.98] mb-4 cursor-pointer"
-                      style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)', color: 'white' }}
-                    >
-                      Enquire Now
-                    </button>
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                      <p className="text-sm font-semibold text-amber-800 mb-1">🍷 ALCOHOL</p>
-                      <p className="text-sm text-amber-700">{TERMS_AND_CONDITIONS.alcohol}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Dry Hire */}
-                <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm flex flex-col">
-                  <h3 className="text-xl font-bold text-gray-900 mb-4 text-center">Dry Hire</h3>
-                  <div className="overflow-x-auto flex-grow mb-6">
-                    <table className="w-full text-sm">
-                      <tbody className="divide-y divide-gray-100">
-                        {DRY_HIRE_PRICES?.map((row, i) => (
-                          <tr key={i} className="hover:bg-gray-50">
-                            <td className="py-3 pr-4 font-semibold text-gray-800">{row.day}</td>
-                            <td className="py-3 pr-4 text-gray-600 text-right">{row.session}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="mt-auto">
-                    <button
-                      onClick={() => handleEnquireNow('Dry Hire')}
-                      className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-2.5 rounded-xl transition-all shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-                      style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)', color: 'white' }}
-                    >
-                      Enquire Now
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Table Service & Kids Pricing */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm flex flex-col">
-                  <h3 className="text-lg font-bold text-gray-900 mb-1">Table Service <span className="text-sm font-normal text-gray-500">(Extra Charges Apply)</span></h3>
-                  <div className="grid grid-cols-2 gap-3 mt-4 flex-grow">
-                    {TABLE_SERVICE.map((ts) => (
-                      <div key={ts.service} className="bg-gray-50 rounded-xl p-3">
-                        <div className="text-xs text-gray-500 mb-0.5">{ts.service}</div>
-                        <div className="text-sm font-bold" style={{ color: '#C8860A' }}>{ts.price}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm flex flex-col">
-                  <h3 className="text-lg font-bold text-gray-900 mb-1">Kids Pricing <span className="text-sm font-normal text-gray-500">(Only Applies for over 50 Adults)</span></h3>
-                  <div className="overflow-x-auto mt-4 mb-6">
-                    <table className="w-full text-sm">
-                      <tbody className="divide-y divide-gray-100">
-                        {KIDS_PRICING.map((row, i) => (
-                          <tr key={i} className="hover:bg-gray-50">
-                            <td className="py-3 pr-4 font-semibold text-gray-800">{row.ageRange}</td>
-                            <td className="py-3 font-bold text-right" style={{ color: '#C8860A' }}>{row.price}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div className="mt-auto">
-                    <button
-                      onClick={() => handleEnquireNow('Kids Pricing')}
-                      className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-2.5 rounded-xl transition-all shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-[0.98] mb-3 cursor-pointer"
-                      style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)', color: 'white' }}
-                    >
-                      Enquire Now
-                    </button>
-                    <div className="text-xs text-gray-500 bg-gray-50 rounded-lg p-3">
-                      <strong>NOTE:</strong> Minimum Number of Guests will be charged as agreed. As per our policy and food safety, we don't allow any food takeaway from Banquet Venue.
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
