@@ -14,8 +14,21 @@ import {
   TERMS_AND_CONDITIONS,
   STANDARD_SETUP,
   MENU_CATEGORIES,
+  LIVE_DOSA_OPTION_1,
+  LIVE_DOSA_OPTION_2,
   LIVE_DOSA_MENU,
+  MADRAS_THALI_OPTION_3,
+  TAILOR_MENU_OPTION_4,
+  DOSA_FESTIVAL_OPTION_5,
+  CANAPE_OPTION_6,
+  NORTH_INDIAN_OPTION_7,
+  GUJARATI_OPTION_8,
+  PUNJABI_OPTION_9,
   SOUTH_INDIAN_BUFFET,
+  MENU_UPGRADES,
+  calculateLiveDosaPrice,
+  isWeekendOrBankHoliday,
+  MenuUpgradeItem,
 } from '@/app/data/menuData';
 import {
   DEFAULT_FORM_CONFIG,
@@ -455,7 +468,10 @@ export default function AdminPage() {
             TERMS_AND_CONDITIONS,
             STANDARD_SETUP,
             MENU_CATEGORIES,
+            LIVE_DOSA_OPTION_1,
+            LIVE_DOSA_OPTION_2,
             LIVE_DOSA_MENU,
+            MENU_UPGRADES,
             SOUTH_INDIAN_BUFFET,
           }, { merge: true });
         }
@@ -966,7 +982,7 @@ export default function AdminPage() {
 
   // ─── REAL MENU EDITABLE STATE ─────────────────────────────────────────────
   // ─── REAL MENU EDITABLE STATE ─────────────────────────────────────────────
-  type AdminMenuTab = 'categories' | 'live-dosa' | 'buffet' | 'banquet';
+  type AdminMenuTab = 'categories' | 'live-dosa-1' | 'live-dosa-2' | 'madras-thali' | 'tailor-menu' | 'dosa-festival' | 'canape' | 'north-indian' | 'gujarati' | 'punjabi' | 'upgrades' | 'buffet' | 'banquet' | 'live-dosa';
   const [adminMenuTab, setAdminMenuTab] = useState<AdminMenuTab>('categories');
   const [selectedAdminCategoryIndex, setSelectedAdminCategoryIndex] = useState<number>(0);
 
@@ -978,12 +994,103 @@ export default function AdminPage() {
     }))
   );
 
-  // Editable Live Dosa Menu
-  const [editableLiveDosaMenu, setEditableLiveDosaMenu] = useState({
-    title: LIVE_DOSA_MENU.title,
-    tagline: LIVE_DOSA_MENU.tagline,
-    subtitle: LIVE_DOSA_MENU.subtitle,
-    items: LIVE_DOSA_MENU.items.map(item => ({ ...item, tags: [...(item.tags || [])] })),
+  // Editable Live Dosa Option 1
+  const [editableLiveDosa1, setEditableLiveDosa1] = useState({
+    ...LIVE_DOSA_OPTION_1,
+    pricing: { ...LIVE_DOSA_OPTION_1.pricing },
+    items: LIVE_DOSA_OPTION_1.items.map(item => ({ ...item, tags: [...(item.tags || [])] })),
+  });
+
+  // Editable Live Dosa Option 2
+  const [editableLiveDosa2, setEditableLiveDosa2] = useState({
+    ...LIVE_DOSA_OPTION_2,
+    pricing: { ...LIVE_DOSA_OPTION_2.pricing },
+    inclusions: [...LIVE_DOSA_OPTION_2.inclusions],
+    items: LIVE_DOSA_OPTION_2.items.map(item => ({ ...item, tags: [...(item.tags || [])] })),
+  });
+
+  // Editable Madras Thali Option 3
+  const [editableMadrasThali, setEditableMadrasThali] = useState({
+    ...MADRAS_THALI_OPTION_3,
+    coreDishes: MADRAS_THALI_OPTION_3.coreDishes.map(d => ({ ...d })),
+    variantOptions: {
+      sambarOptions: [...MADRAS_THALI_OPTION_3.variantOptions.sambarOptions],
+      rasamOptions: [...MADRAS_THALI_OPTION_3.variantOptions.rasamOptions],
+      koottuOptions: [...MADRAS_THALI_OPTION_3.variantOptions.koottuOptions],
+      poriyalOptions: [...MADRAS_THALI_OPTION_3.variantOptions.poriyalOptions],
+      kaarakolambuOptions: [...MADRAS_THALI_OPTION_3.variantOptions.kaarakolambuOptions],
+      sweetOptions: [...MADRAS_THALI_OPTION_3.variantOptions.sweetOptions],
+    },
+    additions: MADRAS_THALI_OPTION_3.additions.map(a => ({ ...a })),
+  });
+
+  // Editable Tailor Your Own Menu Option 4
+  const [editableTailorMenu4, setEditableTailorMenu4] = useState({
+    ...TAILOR_MENU_OPTION_4,
+    liveStationsFeatured: TAILOR_MENU_OPTION_4.liveStationsFeatured.map(s => ({ ...s })),
+    whatWeBring: [...TAILOR_MENU_OPTION_4.whatWeBring],
+    whatWeNeedFromYou: [...TAILOR_MENU_OPTION_4.whatWeNeedFromYou],
+    depositPolicy: { ...TAILOR_MENU_OPTION_4.depositPolicy },
+  });
+
+  // Editable Dosa Festival Option 5
+  const [editableDosaFestival5, setEditableDosaFestival5] = useState({
+    ...DOSA_FESTIVAL_OPTION_5,
+    dosaVarieties: [...DOSA_FESTIVAL_OPTION_5.dosaVarieties],
+  });
+
+  // Editable Canapé Service Option 6
+  const [editableCanape6, setEditableCanape6] = useState({
+    ...CANAPE_OPTION_6,
+    suggestedItems: [...CANAPE_OPTION_6.suggestedItems],
+  });
+
+  // Editable North Indian Option 7
+  const [editableNorthIndian7, setEditableNorthIndian7] = useState({
+    ...NORTH_INDIAN_OPTION_7,
+    inclusions: [...NORTH_INDIAN_OPTION_7.inclusions],
+    breadOptions: [...NORTH_INDIAN_OPTION_7.breadOptions],
+    subjiOptions: [...NORTH_INDIAN_OPTION_7.subjiOptions],
+    dalOptions: [...NORTH_INDIAN_OPTION_7.dalOptions],
+    riceOptions: [...NORTH_INDIAN_OPTION_7.riceOptions],
+  });
+
+  // Editable Gujarati Option 8
+  const [editableGujarati8, setEditableGujarati8] = useState({
+    ...GUJARATI_OPTION_8,
+    categories: {
+      mithai: [...GUJARATI_OPTION_8.categories.mithai],
+      farsan: [...GUJARATI_OPTION_8.categories.farsan],
+      shaak: [...GUJARATI_OPTION_8.categories.shaak],
+      dal: [...GUJARATI_OPTION_8.categories.dal],
+      breads: [...GUJARATI_OPTION_8.categories.breads],
+      rice: [...GUJARATI_OPTION_8.categories.rice],
+      condiments: [...GUJARATI_OPTION_8.categories.condiments],
+    },
+  });
+
+  // Editable Punjabi Option 9
+  const [editablePunjabi9, setEditablePunjabi9] = useState({
+    ...PUNJABI_OPTION_9,
+    categories: {
+      starters: [...PUNJABI_OPTION_9.categories.starters],
+      subjies: [...PUNJABI_OPTION_9.categories.subjies],
+      dal: [...PUNJABI_OPTION_9.categories.dal],
+      mithai: [...PUNJABI_OPTION_9.categories.mithai],
+      breads: [...PUNJABI_OPTION_9.categories.breads],
+      rice: [...PUNJABI_OPTION_9.categories.rice],
+      condiments: [...PUNJABI_OPTION_9.categories.condiments],
+    },
+  });
+
+  // Editable Live Dosa Menu (alias)
+  const editableLiveDosaMenu = editableLiveDosa1;
+
+  // Editable Upgrades
+  const [editableUpgrades, setEditableUpgrades] = useState({
+    title: MENU_UPGRADES.title,
+    subtitle: MENU_UPGRADES.subtitle,
+    items: MENU_UPGRADES.items.map(u => ({ ...u })),
   });
 
   // Editable South Indian Buffet
@@ -1015,6 +1122,19 @@ export default function AdminPage() {
   const [newLiveDosaDesc, setNewLiveDosaDesc] = useState('');
   const [newBuffetItemName, setNewBuffetItemName] = useState('');
   const [newBuffetItemDesc, setNewBuffetItemDesc] = useState('');
+  const [newThaliAdditionName, setNewThaliAdditionName] = useState('');
+  const [newThaliAdditionPrice, setNewThaliAdditionPrice] = useState<number>(2.5);
+  const [newFestivalDosaName, setNewFestivalDosaName] = useState('');
+  const [newCanapeItemName, setNewCanapeItemName] = useState('');
+  const [newNorthIndianItemName, setNewNorthIndianItemName] = useState('');
+  const [newNorthIndianSection, setNewNorthIndianSection] = useState<'breadOptions' | 'subjiOptions' | 'dalOptions' | 'riceOptions'>('subjiOptions');
+  const [newGujaratiItemName, setNewGujaratiItemName] = useState('');
+  const [newGujaratiSection, setNewGujaratiSection] = useState<'mithai' | 'farsan' | 'shaak' | 'dal' | 'breads' | 'rice'>('mithai');
+  const [newPunjabiItemName, setNewPunjabiItemName] = useState('');
+  const [newPunjabiSection, setNewPunjabiSection] = useState<'starters' | 'subjies' | 'dal' | 'mithai' | 'breads' | 'rice'>('starters');
+  const [newUpgradeName, setNewUpgradeName] = useState('');
+  const [newUpgradePrice, setNewUpgradePrice] = useState('');
+  const [newUpgradeDesc, setNewUpgradeDesc] = useState('');
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'site_data', 'menus'), (docSnap) => {
@@ -1023,8 +1143,52 @@ export default function AdminPage() {
         if (data.MENU_CATEGORIES && Array.isArray(data.MENU_CATEGORIES) && data.MENU_CATEGORIES.length > 0) {
           setEditableMenuCategories(data.MENU_CATEGORIES);
         }
-        if (data.LIVE_DOSA_MENU) {
-          setEditableLiveDosaMenu(data.LIVE_DOSA_MENU);
+        if (data.LIVE_DOSA_OPTION_1 || data.LIVE_DOSA_MENU) {
+          const d1 = data.LIVE_DOSA_OPTION_1 || data.LIVE_DOSA_MENU;
+          setEditableLiveDosa1({
+            ...d1,
+            pricing: d1.pricing || LIVE_DOSA_OPTION_1.pricing,
+            items: (d1.items || LIVE_DOSA_OPTION_1.items).map((i: any) => ({ ...i, tags: [...(i.tags || [])] })),
+          });
+        }
+        if (data.LIVE_DOSA_OPTION_2) {
+          const d2 = data.LIVE_DOSA_OPTION_2;
+          setEditableLiveDosa2({
+            ...d2,
+            pricing: d2.pricing || LIVE_DOSA_OPTION_2.pricing,
+            inclusions: d2.inclusions || [...LIVE_DOSA_OPTION_2.inclusions],
+            items: (d2.items || LIVE_DOSA_OPTION_2.items).map((i: any) => ({ ...i, tags: [...(i.tags || [])] })),
+          });
+        }
+        if (data.MADRAS_THALI_OPTION_3) {
+          const d3 = data.MADRAS_THALI_OPTION_3;
+          setEditableMadrasThali({
+            ...d3,
+            coreDishes: (d3.coreDishes || MADRAS_THALI_OPTION_3.coreDishes).map((i: any) => ({ ...i })),
+            variantOptions: d3.variantOptions || MADRAS_THALI_OPTION_3.variantOptions,
+            additions: (d3.additions || MADRAS_THALI_OPTION_3.additions).map((i: any) => ({ ...i })),
+          });
+        }
+        if (data.TAILOR_MENU_OPTION_4) {
+          setEditableTailorMenu4(data.TAILOR_MENU_OPTION_4);
+        }
+        if (data.DOSA_FESTIVAL_OPTION_5) {
+          setEditableDosaFestival5(data.DOSA_FESTIVAL_OPTION_5);
+        }
+        if (data.CANAPE_OPTION_6) {
+          setEditableCanape6(data.CANAPE_OPTION_6);
+        }
+        if (data.NORTH_INDIAN_OPTION_7) {
+          setEditableNorthIndian7(data.NORTH_INDIAN_OPTION_7);
+        }
+        if (data.GUJARATI_OPTION_8) {
+          setEditableGujarati8(data.GUJARATI_OPTION_8);
+        }
+        if (data.PUNJABI_OPTION_9) {
+          setEditablePunjabi9(data.PUNJABI_OPTION_9);
+        }
+        if (data.MENU_UPGRADES) {
+          setEditableUpgrades(data.MENU_UPGRADES);
         }
         if (data.SOUTH_INDIAN_BUFFET) {
           setEditableSouthIndianBuffet(data.SOUTH_INDIAN_BUFFET);
@@ -1045,7 +1209,17 @@ export default function AdminPage() {
     try {
       await setDoc(doc(db, 'site_data', 'menus'), {
         MENU_CATEGORIES: editableMenuCategories,
-        LIVE_DOSA_MENU: editableLiveDosaMenu,
+        LIVE_DOSA_OPTION_1: editableLiveDosa1,
+        LIVE_DOSA_OPTION_2: editableLiveDosa2,
+        LIVE_DOSA_MENU: editableLiveDosa1,
+        MADRAS_THALI_OPTION_3: editableMadrasThali,
+        TAILOR_MENU_OPTION_4: editableTailorMenu4,
+        DOSA_FESTIVAL_OPTION_5: editableDosaFestival5,
+        CANAPE_OPTION_6: editableCanape6,
+        NORTH_INDIAN_OPTION_7: editableNorthIndian7,
+        GUJARATI_OPTION_8: editableGujarati8,
+        PUNJABI_OPTION_9: editablePunjabi9,
+        MENU_UPGRADES: editableUpgrades,
         SOUTH_INDIAN_BUFFET: editableSouthIndianBuffet,
         BANQUET_PACKAGES: editableBanquetPackages,
         VENUE_HALL_CHARGES: editableVenueCharges,
@@ -1083,9 +1257,89 @@ export default function AdminPage() {
     if (matchedCategory) {
       text += `🍽️ *${matchedCategory.title} (${matchedCategory.items.length} items):*\n\n`;
       text += matchedCategory.items.map(i => `• *${i.name}*\n  ${i.description}`).join('\n\n') + '\n\n';
-    } else if (menuType === 'Live Dosa Station' || menuType === 'Live Counter') {
-      text += `🎪 *Live Dosa Station Menu (12 Live Dishes):*\n\n`;
-      text += editableLiveDosaMenu.items.map(i => `• *${i.name}*\n  ${i.description}`).join('\n\n') + '\n\n';
+    } else if (menuType === 'Live Dosa Option 2' || menuType.toLowerCase().includes('option 2')) {
+      text += `👑 *Live Dosa Option 2 (3 Hours Service + 1 Main + 1 Dessert):*\n`;
+      text += `• *Weekdays (Mon-Fri):* £${editableLiveDosa2.pricing?.weekday?.pricePerPerson || 16.50} / per person (35 people min · Min Call-Out: £${editableLiveDosa2.pricing?.weekday?.minCallOutCharge || 577.50})\n`;
+      text += `• *Weekends & Bank Holidays:* £${editableLiveDosa2.pricing?.weekend?.pricePerPerson || 17.50} / per person (40 people min · Min Call-Out: £${editableLiveDosa2.pricing?.weekend?.minCallOutCharge || 700})\n`;
+      text += `ℹ️ _Minimum call out charge can be reached by the number of people or by the menu & upgrades._\n\n`;
+      text += `*Inclusions (Option 2):*\n`;
+      text += `• 12 Live On-Site Dishes (Idly Or Veg Biryani, Meduvada, 5 Dosas, 5 Uthappams, Chutneys & Sambar)\n`;
+      text += `• 1 Main Course Dish (Selected from restaurant mains)\n`;
+      text += `• 1 Dessert (Selected from traditional desserts)\n`;
+      text += `• 3 Hours On-site Chef Service (instead of 2 hours)\n\n`;
+      text += `*✨ Optional Upgrades:*\n`;
+      text += editableUpgrades.items.map(u => `• *${u.name}:* ${u.priceLabel}\n  ${u.description}`).join('\n\n') + '\n\n';
+    } else if (menuType === 'Madras Thali (Option 3)' || menuType.toLowerCase().includes('thali') || menuType.toLowerCase().includes('bhojanam') || menuType.toLowerCase().includes('option 3')) {
+      text += `🍲 *${editableMadrasThali.title}:*\n`;
+      text += `• *Price:* £${editableMadrasThali.pricePerPerson} / per person\n\n`;
+      text += `*12 Core Dishes Included:*\n`;
+      text += editableMadrasThali.coreDishes.map(d => `• *${d.name}:* ${d.description}`).join('\n') + '\n\n';
+      text += `*Customizable Flavour Options:*\n`;
+      text += `• *Sambar Options:* ${editableMadrasThali.variantOptions.sambarOptions.join(', ')}\n`;
+      text += `• *Rasam Options:* ${editableMadrasThali.variantOptions.rasamOptions.join(', ')}\n`;
+      text += `• *Koottu Options:* ${editableMadrasThali.variantOptions.koottuOptions.join(', ')}\n`;
+      text += `• *Poriyal Options:* ${editableMadrasThali.variantOptions.poriyalOptions.join(', ')}\n`;
+      text += `• *Kaarakolambu Options:* ${editableMadrasThali.variantOptions.kaarakolambuOptions.join(', ')}\n`;
+      text += `• *Sweet Options:* ${editableMadrasThali.variantOptions.sweetOptions.join(', ')}\n\n`;
+      text += `*✨ Optional Additions (from £2.50):*\n`;
+      text += editableMadrasThali.additions.map(a => `• ${a.name} (+£${a.price.toFixed(2)})`).join('\n') + '\n\n';
+      text += `*✨ Upgrades:*\n`;
+      text += editableUpgrades.items.map(u => `• *${u.name}:* ${u.priceLabel} (${u.description})`).join('\n\n') + '\n\n';
+    } else if (menuType === 'Tailor Your Own Menu (Option 4)' || menuType.toLowerCase().includes('tailor')) {
+      text += `🎨 *${editableTailorMenu4.title} (Option 4):*\n`;
+      text += `• *Price:* ${editableTailorMenu4.priceLabel}\n`;
+      text += `• *Deposit:* 50% deposit at booking, balance by cash after event.\n\n`;
+      text += `*4 Signature Live Stations:*\n`;
+      text += editableTailorMenu4.liveStationsFeatured.map(s => `• ${s.name}: ${s.description}`).join('\n') + '\n\n';
+      text += `*🚚 What We Bring:*\n` + editableTailorMenu4.whatWeBring.map(b => `✓ ${b}`).join('\n') + '\n\n';
+      text += `*🔌 What We Need From You:*\n` + editableTailorMenu4.whatWeNeedFromYou.map(n => `• ${n}`).join('\n') + '\n\n';
+      text += `*✨ Optional Upgrades:*\n`;
+      text += editableUpgrades.items.map(u => `• *${u.name}:* ${u.priceLabel} (${u.description})`).join('\n\n') + '\n\n';
+    } else if (menuType === 'Dosa Festival At Your Home (Option 5)' || menuType.toLowerCase().includes('festival')) {
+      text += `🥞 *${editableDosaFestival5.title} (Option 5):*\n`;
+      text += `• *Price:* £${editableDosaFestival5.pricePerPerson} / per person\n`;
+      text += `• *Heritage:* 16 Years of Quality and Trust in London\n\n`;
+      text += `*34+ Signature Festival Dosa Varieties:*\n`;
+      text += editableDosaFestival5.dosaVarieties.map(d => `• ${d}`).join('\n') + '\n\n';
+      text += `*Inclusions:*\n${editableDosaFestival5.inclusions}\n\n`;
+      text += `*✨ Optional Upgrades:*\n`;
+      text += editableUpgrades.items.map(u => `• *${u.name}:* ${u.priceLabel} (${u.description})`).join('\n\n') + '\n\n';
+    } else if (menuType === 'Canapé Service (Option 6)' || menuType.toLowerCase().includes('canape')) {
+      text += `🍢 *${editableCanape6.title} (Option 6):*\n`;
+      text += `• *Price:* From £${editableCanape6.pricePerPerson} / per person\n\n`;
+      text += `*Canapé Suggestions:*\n` + editableCanape6.suggestedItems.map(i => `• ${i}`).join('\n') + '\n\n';
+      text += `*✨ Optional Upgrades:*\n`;
+      text += editableUpgrades.items.map(u => `• *${u.name}:* ${u.priceLabel} (${u.description})`).join('\n\n') + '\n\n';
+    } else if (menuType === 'North Indian Standard Menu (Option 7)' || menuType.toLowerCase().includes('north indian')) {
+      text += `🍛 *${editableNorthIndian7.title} (Option 7):*\n`;
+      text += `• *Price:* £${editableNorthIndian7.pricePerPerson} / per person (Min 25 guests)\n\n`;
+      text += `*Inclusions:*\n` + editableNorthIndian7.inclusions.map(i => `✓ ${i}`).join('\n') + '\n\n';
+      text += `*✨ Optional Upgrades:*\n`;
+      text += editableUpgrades.items.map(u => `• *${u.name}:* ${u.priceLabel} (${u.description})`).join('\n\n') + '\n\n';
+    } else if (menuType === 'Gujarati Menu (Option 8)' || menuType.toLowerCase().includes('gujarati')) {
+      text += `🪔 *${editableGujarati8.title} (Option 8):*\n`;
+      text += `• *Price:* £${editableGujarati8.pricePerPerson} / per person\n\n`;
+      text += `*Signature Gujarati Courses Included:* Mithai, Farsan, Classic Shaak (Undhiyu), Kadhi & Breads\n\n`;
+      text += `*✨ Optional Upgrades:*\n`;
+      text += editableUpgrades.items.map(u => `• *${u.name}:* ${u.priceLabel} (${u.description})`).join('\n\n') + '\n\n';
+    } else if (menuType === 'Punjabi Menu (Option 9)' || menuType.toLowerCase().includes('punjabi')) {
+      text += `👑 *${editablePunjabi9.title} (Option 9):*\n`;
+      text += `• *Price:* £${editablePunjabi9.pricePerPerson} / per person\n\n`;
+      text += `*Signature Punjabi Courses:* Chaats, Paneer Tikkas, Royal Subjies, Dal Makhani & Breads\n\n`;
+      text += `*✨ Optional Upgrades:*\n`;
+      text += editableUpgrades.items.map(u => `• *${u.name}:* ${u.priceLabel} (${u.description})`).join('\n\n') + '\n\n';
+    } else if (menuType === 'Live Dosa Station' || menuType === 'Live Dosa Option 1' || menuType === 'Live Counter') {
+      text += `🎪 *Live Dosa Option 1 (12 Live Dishes · 2 Hours Service):*\n`;
+      text += `• *Weekdays (Mon-Fri):* £${editableLiveDosa1.pricing?.weekday?.pricePerPerson || 11} / per person (35 people min · Min Call-Out: £${editableLiveDosa1.pricing?.weekday?.minCallOutCharge || 385})\n`;
+      text += `• *Weekends & Bank Holidays:* £${editableLiveDosa1.pricing?.weekend?.pricePerPerson || 12} / per person (40 people min · Min Call-Out: £${editableLiveDosa1.pricing?.weekend?.minCallOutCharge || 480})\n`;
+      text += `ℹ️ _Minimum call out charge can be reached by the number of people or by the menu & upgrades._\n\n`;
+      text += `*Included 12 Live Specialties:*\n`;
+      text += editableLiveDosa1.items.map(i => `• *${i.name}*\n  ${i.description}`).join('\n\n') + '\n\n';
+      text += `*✨ Optional Upgrades:*\n`;
+      text += editableUpgrades.items.map(u => `• *${u.name}:* ${u.priceLabel}\n  ${u.description}`).join('\n\n') + '\n\n';
+    } else if (menuType === 'Upgrades') {
+      text += `✨ *Event Upgrades from SriLalitha:*\n\n`;
+      text += editableUpgrades.items.map(u => `• *${u.name}* (${u.priceLabel})\n  ${u.description}`).join('\n\n') + '\n\n';
     } else if (menuType === 'South Indian Buffet') {
       text += `🍲 *South Indian Special Buffet (${editableSouthIndianBuffet.items.length} Dishes):*\n`;
       text += `• Weekday (Mon-Fri): ${editableSouthIndianBuffet.weekday.price}\n`;
@@ -1209,7 +1463,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
   };
 
   const buildExtraInvoiceWhatsAppText = (booking: Booking, bank: typeof bankDetails) => {
-    const nonPreset = (booking.extraCharges || []).filter(c => !c.isPreset && !(editableLiveCounter?.extras || []).some(preset => preset.name === c.label));
+    const nonPreset = (booking.extraCharges || []).filter(c => !c.isPreset && !(editableUpgrades?.items || []).some(preset => preset.name === c.label));
     const extraChargesTotal = nonPreset.reduce((sum, c) => sum + c.amount, 0);
     const extrasList = nonPreset.map(c => `• ${c.label}: £${c.amount.toLocaleString()}`).join('\n');
 
@@ -1272,8 +1526,24 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
       const totalGuests = (adults + kids4to10 + kidsUnder4) || Number(newBookingForm.guests) || 1;
 
       const selectedPkg = editableBanquetPackages.find(p => p.name === newBookingForm.package);
-      const pricePerPerson = selectedPkg?.pricePerPerson || 0;
-      const baseAmount = adults * pricePerPerson;
+      let baseAmount = 0;
+      const pkgLower = (newBookingForm.package || '').toLowerCase();
+      if (pkgLower.includes('live dosa')) {
+        const isOption2 = pkgLower.includes('option 2');
+        const liveCalc = calculateLiveDosaPrice(
+          newBookingForm.date,
+          adults,
+          0,
+          isOption2 ? 'live-dosa-2' : 'live-dosa-1',
+          isOption2 ? editableLiveDosa2.pricing : editableLiveDosa1.pricing
+        );
+        baseAmount = liveCalc.finalSubtotal;
+      } else if (selectedPkg) {
+        baseAmount = adults * selectedPkg.pricePerPerson;
+      } else {
+        baseAmount = adults * 25;
+      }
+
       const depositPercent = pricingDetails.depositPercentage || 30;
       const deposit = Math.round((baseAmount * depositPercent) / 100);
 
@@ -3585,14 +3855,23 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {/* Menu Sub-tabs */}
               <div className="flex flex-wrap gap-2">
                 {([
-                  { id: 'categories', label: '📋 Restaurant Menus (9 Categories)' },
-                  { id: 'live-dosa', label: '🎪 Live Dosa Station' },
-                  { id: 'buffet', label: '🍛 South Indian Buffet' },
-                  { id: 'banquet', label: '🎁 Banquet Packages' },
+                  { id: 'categories', label: '📋 Restaurant Menus' },
+                  { id: 'live-dosa-1', label: '🎪 Option 1: Live Dosa 1' },
+                  { id: 'live-dosa-2', label: '👑 Option 2: Live Dosa 2' },
+                  { id: 'madras-thali', label: '🍲 Option 3: Thali (£10.99)' },
+                  { id: 'tailor-menu', label: '🎨 Option 4: Tailor' },
+                  { id: 'dosa-festival', label: '🥞 Option 5: Festival' },
+                  { id: 'canape', label: '🍢 Option 6: Canapés' },
+                  { id: 'north-indian', label: '🍛 Option 7: North Indian' },
+                  { id: 'gujarati', label: '🪔 Option 8: Gujarati' },
+                  { id: 'punjabi', label: '👑 Option 9: Punjabi' },
+                  { id: 'upgrades', label: '✨ Upgrades' },
+                  { id: 'buffet', label: '🍛 Buffet' },
+                  { id: 'banquet', label: '🎁 Banquet' },
                 ] as { id: AdminMenuTab; label: string }[]).map((tab) => (
                   <button key={tab.id} onClick={() => setAdminMenuTab(tab.id)}
-                    className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${adminMenuTab === tab.id ? 'text-white shadow-md scale-[1.02]' : 'bg-white border border-gray-200 text-gray-700 hover:border-amber-400 shadow-2xs'}`}
-                    style={adminMenuTab === tab.id ? { background: 'linear-gradient(135deg, #C8860A, #F0A830)' } : {}}>
+                    className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${adminMenuTab === tab.id || (adminMenuTab === 'live-dosa' && tab.id === 'live-dosa-1') ? 'text-white shadow-md scale-[1.02]' : 'bg-white border border-gray-200 text-gray-700 hover:border-amber-400 shadow-2xs'}`}
+                    style={adminMenuTab === tab.id || (adminMenuTab === 'live-dosa' && tab.id === 'live-dosa-1') ? { background: 'linear-gradient(135deg, #C8860A, #F0A830)' } : {}}>
                     {tab.label}
                   </button>
                 ))}
@@ -3741,24 +4020,22 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                     title="Dietary Tags: V, M, N, OJ, J, S"
                                   />
 
-                                  {currentUser?.role === 'Super Admin' && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setEditableMenuCategories(prev => prev.map((cat, cIdx) => {
-                                          if (cIdx !== selectedAdminCategoryIndex) return cat;
-                                          return {
-                                            ...cat,
-                                            items: cat.items.filter((_, itIdx) => itIdx !== itemIdx),
-                                          };
-                                        }));
-                                      }}
-                                      className="p-1.5 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
-                                      title="Delete Dish"
-                                    >
-                                      <Icon name="TrashIcon" size={14} />
-                                    </button>
-                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditableMenuCategories(prev => prev.map((cat, cIdx) => {
+                                        if (cIdx !== selectedAdminCategoryIndex) return cat;
+                                        return {
+                                          ...cat,
+                                          items: cat.items.filter((_, itIdx) => itIdx !== itemIdx),
+                                        };
+                                      }));
+                                    }}
+                                    className="p-1.5 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
+                                    title="Delete Dish"
+                                  >
+                                    <Icon name="TrashIcon" size={14} />
+                                  </button>
                                 </div>
                               </div>
                             ))}
@@ -3823,20 +4100,20 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 </div>
               )}
 
-              {/* ─── TAB 2: LIVE DOSA STATION EDITOR ─── */}
-              {adminMenuTab === 'live-dosa' && (
+              {/* ─── TAB 2: LIVE DOSA OPTION 1 EDITOR ─── */}
+              {(adminMenuTab === 'live-dosa-1' || adminMenuTab === 'live-dosa') && (
                 <div className="space-y-4 animate-in fade-in duration-300">
                   {/* WhatsApp Broadcast */}
                   <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-2xs">
                     <p className="text-xs font-bold text-amber-900 mb-2 flex items-center gap-1.5">
                       <span>🎪</span>
-                      <span>Send Full Live Dosa Station Menu to a Customer:</span>
+                      <span>Send Full Live Dosa Option 1 Menu (2 Hours) to a Customer:</span>
                     </p>
                     <div className="flex flex-wrap gap-2">
                       {enquiries.concat(activeBookings).slice(0, 6).map((b) => (
                         <a
                           key={b.id}
-                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'Live Dosa Station', b.guests)}
+                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'Live Dosa Option 1', b.guests)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white shadow-2xs hover:opacity-90"
@@ -3850,13 +4127,163 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   </div>
 
                   <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
-                    <div className="border-b border-gray-100 pb-3">
-                      <h3 className="text-base font-bold text-gray-900">Live Dosa Station (12 Live Dishes)</h3>
-                      <p className="text-xs text-gray-500">Each item is prepared fresh on the spot with theatrical flair</p>
+                    <div className="border-b border-gray-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <h3 className="text-base font-bold text-gray-900">{editableLiveDosa1.title} (12 Live Dishes · 2 Hours)</h3>
+                        <p className="text-xs text-gray-500">Each item is prepared fresh on the spot with theatrical flair</p>
+                      </div>
+                      <span className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-900">
+                        2 Hours Service Floor
+                      </span>
+                    </div>
+
+                    {/* Live Dosa Option 1 Pricing Rules */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-amber-50/50 p-4 rounded-2xl border border-amber-200">
+                      {/* Weekday Pricing */}
+                      <div className="bg-white p-3.5 rounded-xl border border-amber-200 space-y-2.5 shadow-2xs">
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                          <span className="text-xs font-bold text-gray-900">📅 Weekdays (Monday to Friday)</span>
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-amber-100 text-amber-900">Standard Tier</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Price / Person</label>
+                            <div className="flex items-center">
+                              <span className="text-gray-500 text-xs mr-1">£</span>
+                              <input
+                                type="number"
+                                step="0.5"
+                                value={editableLiveDosa1.pricing?.weekday?.pricePerPerson ?? 11}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  setEditableLiveDosa1(prev => ({
+                                    ...prev,
+                                    pricing: {
+                                      ...prev.pricing,
+                                      weekday: { ...prev.pricing.weekday, pricePerPerson: val }
+                                    }
+                                  }));
+                                }}
+                                className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Min Guests</label>
+                            <input
+                              type="number"
+                              value={editableLiveDosa1.pricing?.weekday?.minGuests ?? 35}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value) || 0;
+                                setEditableLiveDosa1(prev => ({
+                                  ...prev,
+                                  pricing: {
+                                    ...prev.pricing,
+                                    weekday: { ...prev.pricing.weekday, minGuests: val }
+                                  }
+                                }));
+                              }}
+                              className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Min Call Out</label>
+                            <div className="flex items-center">
+                              <span className="text-gray-500 text-xs mr-1">£</span>
+                              <input
+                                type="number"
+                                value={editableLiveDosa1.pricing?.weekday?.minCallOutCharge ?? 385}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  setEditableLiveDosa1(prev => ({
+                                    ...prev,
+                                    pricing: {
+                                      ...prev.pricing,
+                                      weekday: { ...prev.pricing.weekday, minCallOutCharge: val }
+                                    }
+                                  }));
+                                }}
+                                className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Weekend Pricing */}
+                      <div className="bg-white p-3.5 rounded-xl border border-amber-200 space-y-2.5 shadow-2xs">
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                          <span className="text-xs font-bold text-gray-900">🌟 Weekends &amp; Bank Holidays</span>
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-purple-100 text-purple-900">Peak Tier</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Price / Person</label>
+                            <div className="flex items-center">
+                              <span className="text-gray-500 text-xs mr-1">£</span>
+                              <input
+                                type="number"
+                                step="0.5"
+                                value={editableLiveDosa1.pricing?.weekend?.pricePerPerson ?? 12}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  setEditableLiveDosa1(prev => ({
+                                    ...prev,
+                                    pricing: {
+                                      ...prev.pricing,
+                                      weekend: { ...prev.pricing.weekend, pricePerPerson: val }
+                                    }
+                                  }));
+                                }}
+                                className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Min Guests</label>
+                            <input
+                              type="number"
+                              value={editableLiveDosa1.pricing?.weekend?.minGuests ?? 40}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value) || 0;
+                                setEditableLiveDosa1(prev => ({
+                                  ...prev,
+                                  pricing: {
+                                    ...prev.pricing,
+                                    weekend: { ...prev.pricing.weekend, minGuests: val }
+                                  }
+                                }));
+                              }}
+                              className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Min Call Out</label>
+                            <div className="flex items-center">
+                              <span className="text-gray-500 text-xs mr-1">£</span>
+                              <input
+                                type="number"
+                                value={editableLiveDosa1.pricing?.weekend?.minCallOutCharge ?? 480}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  setEditableLiveDosa1(prev => ({
+                                    ...prev,
+                                    pricing: {
+                                      ...prev.pricing,
+                                      weekend: { ...prev.pricing.weekend, minCallOutCharge: val }
+                                    }
+                                  }));
+                                }}
+                                className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {editableLiveDosaMenu.items.map((item, idx) => (
+                      {editableLiveDosa1.items.map((item, idx) => (
                         <div key={idx} className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/60 flex items-start justify-between gap-2">
                           <div className="flex-1 space-y-1">
                             <div className="flex items-center gap-2">
@@ -3868,7 +4295,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                 value={item.name}
                                 onChange={(e) => {
                                   const name = e.target.value;
-                                  setEditableLiveDosaMenu(prev => ({
+                                  setEditableLiveDosa1(prev => ({
                                     ...prev,
                                     items: prev.items.map((it, i) => i === idx ? { ...it, name } : it),
                                   }));
@@ -3881,7 +4308,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               value={item.description}
                               onChange={(e) => {
                                 const description = e.target.value;
-                                setEditableLiveDosaMenu(prev => ({
+                                setEditableLiveDosa1(prev => ({
                                   ...prev,
                                   items: prev.items.map((it, i) => i === idx ? { ...it, description } : it),
                                 }));
@@ -3890,24 +4317,23 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             />
                           </div>
 
-                          {currentUser?.role === 'Super Admin' && (
-                            <button
-                              onClick={() => {
-                                setEditableLiveDosaMenu(prev => ({
-                                  ...prev,
-                                  items: prev.items.filter((_, i) => i !== idx),
-                                }));
-                              }}
-                              className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-500"
-                            >
-                              <Icon name="TrashIcon" size={13} />
-                            </button>
-                          )}
+                          <button
+                            onClick={() => {
+                              setEditableLiveDosa1(prev => ({
+                                ...prev,
+                                items: prev.items.filter((_, i) => i !== idx),
+                              }));
+                            }}
+                            className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-500 cursor-pointer"
+                            title="Delete Dish"
+                          >
+                            <Icon name="TrashIcon" size={13} />
+                          </button>
                         </div>
                       ))}
                     </div>
 
-                    {/* Add Live Dosa Dish */}
+                    {/* Add Live Dosa Option 1 Dish */}
                     <div className="pt-3 border-t border-gray-100 flex gap-2">
                       <input
                         type="text"
@@ -3926,18 +4352,1518 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       <button
                         onClick={() => {
                           if (newLiveDosaName.trim()) {
-                            setEditableLiveDosaMenu(prev => ({
+                            setEditableLiveDosa1(prev => ({
                               ...prev,
-                              items: [...prev.items, { name: newLiveDosaName.trim(), description: newLiveDosaDesc.trim() || 'Crisp & golden, the classic favourite', tags: ['V'] }],
+                              items: [...prev.items, { name: newLiveDosaName.trim(), description: newLiveDosaDesc.trim() || 'Crisp & golden, the classic favourite', tags: ['V'], isLive: true }],
                             }));
                             setNewLiveDosaName('');
                             setNewLiveDosaDesc('');
                           }
                         }}
-                        className="px-3 py-2 rounded-lg text-white font-bold text-xs"
+                        className="px-3 py-2 rounded-lg text-white font-bold text-xs cursor-pointer"
                         style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
                       >
                         <Icon name="PlusIcon" size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ─── TAB: LIVE DOSA OPTION 2 EDITOR (3 HOURS + MAIN + DESSERT) ─── */}
+              {adminMenuTab === 'live-dosa-2' && (
+                <div className="space-y-4 animate-in fade-in duration-300">
+                  {/* WhatsApp Broadcast */}
+                  <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 shadow-2xs">
+                    <p className="text-xs font-bold text-purple-950 mb-2 flex items-center gap-1.5">
+                      <span>👑</span>
+                      <span>Send Full Live Dosa Option 2 Menu (3 Hours + 1 Main + 1 Dessert) to a Customer:</span>
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {enquiries.concat(activeBookings).slice(0, 6).map((b) => (
+                        <a
+                          key={b.id}
+                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'Live Dosa Option 2', b.guests)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white shadow-2xs hover:opacity-90"
+                          style={{ background: '#25D366' }}
+                        >
+                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
+                          Send to {b.name.split(' ')[0]}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
+                    <div className="border-b border-gray-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <h3 className="text-base font-bold text-gray-900">{editableLiveDosa2.title}</h3>
+                        <p className="text-xs text-gray-500">12 Live Dishes + 1 Main Course + 1 Dessert + 3 Hours Continuous Service</p>
+                      </div>
+                      <span className="text-xs font-bold px-3 py-1 rounded-full bg-purple-100 text-purple-900 border border-purple-200">
+                        3 Hours Service Floor
+                      </span>
+                    </div>
+
+                    {/* Live Dosa Option 2 Pricing Rules */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-purple-50/40 p-4 rounded-2xl border border-purple-200">
+                      {/* Weekday Pricing */}
+                      <div className="bg-white p-3.5 rounded-xl border border-purple-200 space-y-2.5 shadow-2xs">
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                          <span className="text-xs font-bold text-gray-900">📅 Weekdays (Monday to Friday)</span>
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-purple-100 text-purple-900">Option 2 Weekday</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Price / Person</label>
+                            <div className="flex items-center">
+                              <span className="text-gray-500 text-xs mr-1">£</span>
+                              <input
+                                type="number"
+                                step="0.5"
+                                value={editableLiveDosa2.pricing?.weekday?.pricePerPerson ?? 16.50}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  setEditableLiveDosa2(prev => ({
+                                    ...prev,
+                                    pricing: {
+                                      ...prev.pricing,
+                                      weekday: { ...prev.pricing.weekday, pricePerPerson: val }
+                                    }
+                                  }));
+                                }}
+                                className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Min Guests</label>
+                            <input
+                              type="number"
+                              value={editableLiveDosa2.pricing?.weekday?.minGuests ?? 35}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value) || 0;
+                                setEditableLiveDosa2(prev => ({
+                                  ...prev,
+                                  pricing: {
+                                    ...prev.pricing,
+                                    weekday: { ...prev.pricing.weekday, minGuests: val }
+                                  }
+                                }));
+                              }}
+                              className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Min Call Out</label>
+                            <div className="flex items-center">
+                              <span className="text-gray-500 text-xs mr-1">£</span>
+                              <input
+                                type="number"
+                                value={editableLiveDosa2.pricing?.weekday?.minCallOutCharge ?? 577.50}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  setEditableLiveDosa2(prev => ({
+                                    ...prev,
+                                    pricing: {
+                                      ...prev.pricing,
+                                      weekday: { ...prev.pricing.weekday, minCallOutCharge: val }
+                                    }
+                                  }));
+                                }}
+                                className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Weekend Pricing */}
+                      <div className="bg-white p-3.5 rounded-xl border border-purple-200 space-y-2.5 shadow-2xs">
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                          <span className="text-xs font-bold text-gray-900">🌟 Weekends &amp; Bank Holidays</span>
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-purple-200 text-purple-950">Option 2 Weekend</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Price / Person</label>
+                            <div className="flex items-center">
+                              <span className="text-gray-500 text-xs mr-1">£</span>
+                              <input
+                                type="number"
+                                step="0.5"
+                                value={editableLiveDosa2.pricing?.weekend?.pricePerPerson ?? 17.50}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  setEditableLiveDosa2(prev => ({
+                                    ...prev,
+                                    pricing: {
+                                      ...prev.pricing,
+                                      weekend: { ...prev.pricing.weekend, pricePerPerson: val }
+                                    }
+                                  }));
+                                }}
+                                className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Min Guests</label>
+                            <input
+                              type="number"
+                              value={editableLiveDosa2.pricing?.weekend?.minGuests ?? 40}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value) || 0;
+                                setEditableLiveDosa2(prev => ({
+                                  ...prev,
+                                  pricing: {
+                                    ...prev.pricing,
+                                    weekend: { ...prev.pricing.weekend, minGuests: val }
+                                  }
+                                }));
+                              }}
+                              className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Min Call Out</label>
+                            <div className="flex items-center">
+                              <span className="text-gray-500 text-xs mr-1">£</span>
+                              <input
+                                type="number"
+                                value={editableLiveDosa2.pricing?.weekend?.minCallOutCharge ?? 700}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  setEditableLiveDosa2(prev => ({
+                                    ...prev,
+                                    pricing: {
+                                      ...prev.pricing,
+                                      weekend: { ...prev.pricing.weekend, minCallOutCharge: val }
+                                    }
+                                  }));
+                                }}
+                                className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {editableLiveDosa2.items.map((item, idx) => (
+                        <div key={idx} className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/60 flex items-start justify-between gap-2">
+                          <div className="flex-1 space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                                {idx + 1}
+                              </span>
+                              <input
+                                type="text"
+                                value={item.name}
+                                onChange={(e) => {
+                                  const name = e.target.value;
+                                  setEditableLiveDosa2(prev => ({
+                                    ...prev,
+                                    items: prev.items.map((it, i) => i === idx ? { ...it, name } : it),
+                                  }));
+                                }}
+                                className="font-bold text-xs text-gray-900 bg-white border border-gray-200 rounded px-2 py-1 w-full"
+                              />
+                            </div>
+                            <input
+                              type="text"
+                              value={item.description}
+                              onChange={(e) => {
+                                const description = e.target.value;
+                                setEditableLiveDosa2(prev => ({
+                                  ...prev,
+                                  items: prev.items.map((it, i) => i === idx ? { ...it, description } : it),
+                                }));
+                              }}
+                              className="text-[11px] text-gray-500 bg-white border border-gray-200 rounded px-2 py-1 w-full"
+                            />
+                          </div>
+
+                          <button
+                            onClick={() => {
+                              setEditableLiveDosa2(prev => ({
+                                ...prev,
+                                items: prev.items.filter((_, i) => i !== idx),
+                              }));
+                            }}
+                            className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-500 cursor-pointer"
+                            title="Delete Dish"
+                          >
+                            <Icon name="TrashIcon" size={13} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Add Live Dosa Option 2 Dish */}
+                    <div className="pt-3 border-t border-gray-100 flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Live dish name..."
+                        value={newLiveDosaName}
+                        onChange={(e) => setNewLiveDosaName(e.target.value)}
+                        className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-xs bg-gray-50"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Description..."
+                        value={newLiveDosaDesc}
+                        onChange={(e) => setNewLiveDosaDesc(e.target.value)}
+                        className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-xs bg-gray-50"
+                      />
+                      <button
+                        onClick={() => {
+                          if (newLiveDosaName.trim()) {
+                            setEditableLiveDosa2(prev => ({
+                              ...prev,
+                              items: [...prev.items, { name: newLiveDosaName.trim(), description: newLiveDosaDesc.trim() || 'Live theatrical delicacy', tags: ['V'], isLive: true }],
+                            }));
+                            setNewLiveDosaName('');
+                            setNewLiveDosaDesc('');
+                          }
+                        }}
+                        className="px-4 py-2 rounded-lg text-xs font-bold text-white shadow-sm hover:shadow-md transition-all cursor-pointer flex items-center gap-1 flex-shrink-0"
+                        style={{ background: 'linear-gradient(135deg, #7C3AED, #A855F7)' }}
+                      >
+                        <Icon name="PlusIcon" size={14} />
+                        Add Dish
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ─── TAB: MADRAS THALI (OPTION 3) EDITOR ─── */}
+              {adminMenuTab === 'madras-thali' && (
+                <div className="space-y-5 animate-in fade-in duration-300">
+                  {/* WhatsApp Broadcast for Thali */}
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-2xs">
+                    <p className="text-xs font-bold text-amber-950 mb-2 flex items-center gap-1.5">
+                      <span>🍲</span>
+                      <span>Send Madras Thali (Option 3: 12 Items + Flavours + Additions) to a Customer via WhatsApp:</span>
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {enquiries.concat(activeBookings).slice(0, 6).map((b) => (
+                        <a
+                          key={b.id}
+                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'Madras Thali (Option 3)', b.guests)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white shadow-2xs hover:opacity-90"
+                          style={{ background: '#25D366' }}
+                        >
+                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
+                          Send to {b.name.split(' ')[0]}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-5">
+                    {/* Header & Price per person */}
+                    <div className="border-b border-gray-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-base font-bold text-gray-900">{editableMadrasThali.title}</h3>
+                        <p className="text-xs text-gray-500">12 Traditional Core Dishes + 6 Flavour Preparations + Additions</p>
+                      </div>
+                      <div className="flex items-center gap-2 bg-amber-50 p-2.5 rounded-xl border border-amber-200">
+                        <label className="text-xs font-bold text-amber-900 whitespace-nowrap">Price / Person:</label>
+                        <div className="flex items-center">
+                          <span className="text-gray-600 font-bold mr-1">£</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={editableMadrasThali.pricePerPerson}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value) || 0;
+                              setEditableMadrasThali(prev => ({ ...prev, pricePerPerson: val }));
+                            }}
+                            className="w-20 font-extrabold text-sm text-gray-900 bg-white border border-amber-300 rounded px-2 py-1"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 12 Core Dishes Editor */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-extrabold text-gray-900 uppercase tracking-wide">
+                          12 Core Included Dishes
+                        </h4>
+                        <span className="text-[11px] text-gray-500">Standard for each guest plate</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                        {editableMadrasThali.coreDishes.map((dish, idx) => (
+                          <div key={idx} className="p-3 rounded-xl border border-gray-200 bg-gray-50/70 space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="w-4 h-4 rounded-full bg-amber-100 text-amber-800 text-[9px] font-bold flex items-center justify-center flex-shrink-0">
+                                {idx + 1}
+                              </span>
+                              <input
+                                type="text"
+                                value={dish.name}
+                                onChange={(e) => {
+                                  const name = e.target.value;
+                                  setEditableMadrasThali(prev => ({
+                                    ...prev,
+                                    coreDishes: prev.coreDishes.map((d, i) => i === idx ? { ...d, name } : d),
+                                  }));
+                                }}
+                                className="font-bold text-xs text-gray-900 bg-white border border-gray-200 rounded px-2 py-0.5 w-full"
+                              />
+                            </div>
+                            <input
+                              type="text"
+                              value={dish.description}
+                              onChange={(e) => {
+                                const description = e.target.value;
+                                setEditableMadrasThali(prev => ({
+                                  ...prev,
+                                  coreDishes: prev.coreDishes.map((d, i) => i === idx ? { ...d, description } : d),
+                                }));
+                              }}
+                              className="text-[11px] text-gray-500 bg-white border border-gray-200 rounded px-2 py-0.5 w-full"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 6 Custom Flavour Course Varieties */}
+                    <div className="space-y-3 pt-3 border-t border-gray-100">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-extrabold text-gray-900 uppercase tracking-wide">
+                          6 Customizable Course Flavours &amp; Preparations
+                        </h4>
+                        <span className="text-[11px] text-gray-500">Comma-separated options available to customer</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Sambar */}
+                        <div className="p-3 rounded-xl border border-amber-200 bg-amber-50/30 space-y-1">
+                          <label className="block text-xs font-bold text-amber-950">Option for Sambar:</label>
+                          <input
+                            type="text"
+                            value={editableMadrasThali.variantOptions.sambarOptions.join(', ')}
+                            onChange={(e) => {
+                              const opts = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                              setEditableMadrasThali(prev => ({
+                                ...prev,
+                                variantOptions: { ...prev.variantOptions, sambarOptions: opts },
+                              }));
+                            }}
+                            className="w-full text-xs font-semibold bg-white border border-gray-200 rounded p-2 text-gray-900"
+                          />
+                        </div>
+
+                        {/* Rasam */}
+                        <div className="p-3 rounded-xl border border-amber-200 bg-amber-50/30 space-y-1">
+                          <label className="block text-xs font-bold text-amber-950">Options for Rasam:</label>
+                          <input
+                            type="text"
+                            value={editableMadrasThali.variantOptions.rasamOptions.join(', ')}
+                            onChange={(e) => {
+                              const opts = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                              setEditableMadrasThali(prev => ({
+                                ...prev,
+                                variantOptions: { ...prev.variantOptions, rasamOptions: opts },
+                              }));
+                            }}
+                            className="w-full text-xs font-semibold bg-white border border-gray-200 rounded p-2 text-gray-900"
+                          />
+                        </div>
+
+                        {/* Koottu */}
+                        <div className="p-3 rounded-xl border border-amber-200 bg-amber-50/30 space-y-1">
+                          <label className="block text-xs font-bold text-amber-950">Options for Koottu:</label>
+                          <input
+                            type="text"
+                            value={editableMadrasThali.variantOptions.koottuOptions.join(', ')}
+                            onChange={(e) => {
+                              const opts = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                              setEditableMadrasThali(prev => ({
+                                ...prev,
+                                variantOptions: { ...prev.variantOptions, koottuOptions: opts },
+                              }));
+                            }}
+                            className="w-full text-xs font-semibold bg-white border border-gray-200 rounded p-2 text-gray-900"
+                          />
+                        </div>
+
+                        {/* Poriyal */}
+                        <div className="p-3 rounded-xl border border-amber-200 bg-amber-50/30 space-y-1">
+                          <label className="block text-xs font-bold text-amber-950">Options for Poriyal:</label>
+                          <input
+                            type="text"
+                            value={editableMadrasThali.variantOptions.poriyalOptions.join(', ')}
+                            onChange={(e) => {
+                              const opts = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                              setEditableMadrasThali(prev => ({
+                                ...prev,
+                                variantOptions: { ...prev.variantOptions, poriyalOptions: opts },
+                              }));
+                            }}
+                            className="w-full text-xs font-semibold bg-white border border-gray-200 rounded p-2 text-gray-900"
+                          />
+                        </div>
+
+                        {/* Kaarakolambu */}
+                        <div className="p-3 rounded-xl border border-amber-200 bg-amber-50/30 space-y-1">
+                          <label className="block text-xs font-bold text-amber-950">Options for Kaarakolambu:</label>
+                          <input
+                            type="text"
+                            value={editableMadrasThali.variantOptions.kaarakolambuOptions.join(', ')}
+                            onChange={(e) => {
+                              const opts = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                              setEditableMadrasThali(prev => ({
+                                ...prev,
+                                variantOptions: { ...prev.variantOptions, kaarakolambuOptions: opts },
+                              }));
+                            }}
+                            className="w-full text-xs font-semibold bg-white border border-gray-200 rounded p-2 text-gray-900"
+                          />
+                        </div>
+
+                        {/* Sweet */}
+                        <div className="p-3 rounded-xl border border-amber-200 bg-amber-50/30 space-y-1">
+                          <label className="block text-xs font-bold text-amber-950">Options for Sweet:</label>
+                          <input
+                            type="text"
+                            value={editableMadrasThali.variantOptions.sweetOptions.join(', ')}
+                            onChange={(e) => {
+                              const opts = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                              setEditableMadrasThali(prev => ({
+                                ...prev,
+                                variantOptions: { ...prev.variantOptions, sweetOptions: opts },
+                              }));
+                            }}
+                            className="w-full text-xs font-semibold bg-white border border-gray-200 rounded p-2 text-gray-900"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Additions List Editor */}
+                    <div className="space-y-3 pt-3 border-t border-gray-100">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-extrabold text-gray-900 uppercase tracking-wide">
+                          Additions &amp; Extra Courses ({editableMadrasThali.additions.length} Items)
+                        </h4>
+                        <span className="text-[11px] text-gray-500">Configure prices for extra dishes</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-72 overflow-y-auto pr-1">
+                        {editableMadrasThali.additions.map((addition, idx) => (
+                          <div key={idx} className="p-2.5 rounded-xl border border-gray-200 bg-gray-50/70 flex items-center justify-between gap-2">
+                            <input
+                              type="text"
+                              value={addition.name}
+                              onChange={(e) => {
+                                const name = e.target.value;
+                                setEditableMadrasThali(prev => ({
+                                  ...prev,
+                                  additions: prev.additions.map((a, i) => i === idx ? { ...a, name } : a),
+                                }));
+                              }}
+                              className="font-semibold text-xs text-gray-900 bg-white border border-gray-200 rounded px-2 py-1 flex-1 truncate"
+                            />
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] text-gray-500 font-bold">£</span>
+                              <input
+                                type="number"
+                                step="0.5"
+                                value={addition.price}
+                                onChange={(e) => {
+                                  const price = parseFloat(e.target.value) || 0;
+                                  setEditableMadrasThali(prev => ({
+                                    ...prev,
+                                    additions: prev.additions.map((a, i) => i === idx ? { ...a, price } : a),
+                                  }));
+                                }}
+                                className="w-14 text-xs font-bold text-[#C8860A] bg-white border border-gray-200 rounded px-1.5 py-1 text-right"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditableMadrasThali(prev => ({
+                                    ...prev,
+                                    additions: prev.additions.filter((_, i) => i !== idx),
+                                  }));
+                                }}
+                                className="p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-500 cursor-pointer"
+                                title="Delete Addition"
+                              >
+                                <Icon name="TrashIcon" size={12} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Add New Addition */}
+                      <div className="pt-2 flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="New addition dish name (e.g. Curd Rice)..."
+                          value={newThaliAdditionName}
+                          onChange={(e) => setNewThaliAdditionName(e.target.value)}
+                          className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-xs bg-gray-50"
+                        />
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs text-gray-500 font-bold">£</span>
+                          <input
+                            type="number"
+                            step="0.5"
+                            value={newThaliAdditionPrice}
+                            onChange={(e) => setNewThaliAdditionPrice(parseFloat(e.target.value) || 0)}
+                            className="w-16 border border-gray-300 rounded-lg px-2 py-2 text-xs font-bold text-center"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (newThaliAdditionName.trim()) {
+                              setEditableMadrasThali(prev => ({
+                                ...prev,
+                                additions: [...prev.additions, { name: newThaliAdditionName.trim(), price: newThaliAdditionPrice, category: 'Additions' }],
+                              }));
+                              setNewThaliAdditionName('');
+                              setNewThaliAdditionPrice(2.5);
+                            }
+                          }}
+                          className="px-3.5 py-2 rounded-lg text-xs font-bold text-white shadow-xs cursor-pointer flex items-center gap-1"
+                          style={{ background: '#C8860A' }}
+                        >
+                          <Icon name="PlusIcon" size={14} />
+                          Add Addition
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ─── TAB: TAILOR YOUR OWN MENU (OPTION 4) EDITOR ─── */}
+              {adminMenuTab === 'tailor-menu' && (
+                <div className="space-y-5 animate-in fade-in duration-300">
+                  {/* WhatsApp Broadcast for Option 4 */}
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-2xs">
+                    <p className="text-xs font-bold text-amber-950 mb-2 flex items-center gap-1.5">
+                      <span>🎨</span>
+                      <span>Send Option 4: Tailor Your Own Menu to a Customer via WhatsApp:</span>
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {enquiries.concat(activeBookings).slice(0, 6).map((b) => (
+                        <a
+                          key={b.id}
+                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'Tailor Your Own Menu (Option 4)', b.guests)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white shadow-2xs hover:opacity-90"
+                          style={{ background: '#25D366' }}
+                        >
+                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
+                          Send to {b.name.split(' ')[0]}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-5">
+                    <div className="border-b border-gray-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-base font-bold text-gray-900">{editableTailorMenu4.title}</h3>
+                        <p className="text-xs text-gray-500">4 Signature Live Stations • Logistics &amp; Equipment Requirements</p>
+                      </div>
+                      <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
+                        50% Deposit Policy
+                      </span>
+                    </div>
+
+                    {/* 4 Live Stations Editor */}
+                    <div className="space-y-3">
+                      <h4 className="text-xs font-extrabold text-gray-900 uppercase tracking-wide">
+                        4 Featured Live Stations
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {editableTailorMenu4.liveStationsFeatured.map((stn, idx) => (
+                          <div key={idx} className="p-3.5 rounded-xl border border-amber-200 bg-amber-50/40 space-y-1.5">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xl">{stn.icon}</span>
+                              <input
+                                type="text"
+                                value={stn.name}
+                                onChange={(e) => {
+                                  const name = e.target.value;
+                                  setEditableTailorMenu4(prev => ({
+                                    ...prev,
+                                    liveStationsFeatured: prev.liveStationsFeatured.map((s, i) => i === idx ? { ...s, name } : s),
+                                  }));
+                                }}
+                                className="font-bold text-xs text-gray-900 bg-white border border-gray-200 rounded px-2 py-1 flex-1"
+                              />
+                            </div>
+                            <input
+                              type="text"
+                              value={stn.description}
+                              onChange={(e) => {
+                                const description = e.target.value;
+                                setEditableTailorMenu4(prev => ({
+                                  ...prev,
+                                  liveStationsFeatured: prev.liveStationsFeatured.map((s, i) => i === idx ? { ...s, description } : s),
+                                }));
+                              }}
+                              className="text-[11px] text-gray-600 bg-white border border-gray-200 rounded px-2 py-1 w-full"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Logistics Requirements */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-gray-100">
+                      <div className="space-y-2">
+                        <label className="block text-xs font-bold text-emerald-950">🚚 What We Bring (List):</label>
+                        <div className="space-y-1.5">
+                          {editableTailorMenu4.whatWeBring.map((item, idx) => (
+                            <input
+                              key={idx}
+                              type="text"
+                              value={item}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setEditableTailorMenu4(prev => ({
+                                  ...prev,
+                                  whatWeBring: prev.whatWeBring.map((b, i) => i === idx ? val : b),
+                                }));
+                              }}
+                              className="w-full text-xs font-medium bg-emerald-50/50 border border-emerald-200 rounded p-1.5 text-gray-900"
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="block text-xs font-bold text-amber-950">🔌 What We Need From You (List):</label>
+                        <div className="space-y-1.5">
+                          {editableTailorMenu4.whatWeNeedFromYou.map((item, idx) => (
+                            <input
+                              key={idx}
+                              type="text"
+                              value={item}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setEditableTailorMenu4(prev => ({
+                                  ...prev,
+                                  whatWeNeedFromYou: prev.whatWeNeedFromYou.map((n, i) => i === idx ? val : n),
+                                }));
+                              }}
+                              className="w-full text-xs font-medium bg-amber-50/50 border border-amber-200 rounded p-1.5 text-gray-900"
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ─── TAB: DOSA FESTIVAL AT YOUR HOME (OPTION 5) EDITOR ─── */}
+              {adminMenuTab === 'dosa-festival' && (
+                <div className="space-y-5 animate-in fade-in duration-300">
+                  {/* WhatsApp Broadcast for Option 5 */}
+                  <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 shadow-2xs">
+                    <p className="text-xs font-bold text-orange-950 mb-2 flex items-center gap-1.5">
+                      <span>🥞</span>
+                      <span>Send Option 5: Dosa Festival (34+ Varieties) to a Customer via WhatsApp:</span>
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {enquiries.concat(activeBookings).slice(0, 6).map((b) => (
+                        <a
+                          key={b.id}
+                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'Dosa Festival At Your Home (Option 5)', b.guests)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white shadow-2xs hover:opacity-90"
+                          style={{ background: '#25D366' }}
+                        >
+                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
+                          Send to {b.name.split(' ')[0]}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-5">
+                    <div className="border-b border-gray-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-base font-bold text-gray-900">{editableDosaFestival5.title}</h3>
+                        <p className="text-xs text-gray-500">16 Years Quality &amp; Trust in London • 34+ Signature Dosa Varieties</p>
+                      </div>
+                      <div className="flex items-center gap-2 bg-orange-50 p-2.5 rounded-xl border border-orange-200">
+                        <label className="text-xs font-bold text-orange-950 whitespace-nowrap">Price / Person:</label>
+                        <div className="flex items-center">
+                          <span className="text-gray-600 font-bold mr-1">£</span>
+                          <input
+                            type="number"
+                            step="0.5"
+                            value={editableDosaFestival5.pricePerPerson}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value) || 0;
+                              setEditableDosaFestival5(prev => ({ ...prev, pricePerPerson: val }));
+                            }}
+                            className="w-20 font-extrabold text-sm text-gray-900 bg-white border border-orange-300 rounded px-2 py-1"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Inclusions Text */}
+                    <div className="p-3.5 rounded-xl border border-orange-200 bg-orange-50/40 space-y-1">
+                      <label className="block text-xs font-bold text-orange-950">Inclusions &amp; Sides Text:</label>
+                      <input
+                        type="text"
+                        value={editableDosaFestival5.inclusions}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEditableDosaFestival5(prev => ({ ...prev, inclusions: val }));
+                        }}
+                        className="w-full text-xs font-medium bg-white border border-gray-200 rounded p-2 text-gray-900"
+                      />
+                    </div>
+
+                    {/* 34+ Dosa Varieties Grid */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-extrabold text-gray-900 uppercase tracking-wide">
+                          Signature Dosa Varieties ({editableDosaFestival5.dosaVarieties.length} Dosas)
+                        </h4>
+                        <span className="text-[11px] text-gray-500">Live theatrical tawa specialties</span>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 max-h-80 overflow-y-auto pr-1">
+                        {editableDosaFestival5.dosaVarieties.map((dosa, idx) => (
+                          <div key={idx} className="p-2 rounded-xl border border-gray-200 bg-gray-50 flex items-center gap-1.5">
+                            <span className="w-4 h-4 rounded-full bg-orange-100 text-orange-900 font-bold text-[9px] flex items-center justify-center flex-shrink-0">
+                              {idx + 1}
+                            </span>
+                            <input
+                              type="text"
+                              value={dosa}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setEditableDosaFestival5(prev => ({
+                                  ...prev,
+                                  dosaVarieties: prev.dosaVarieties.map((d, i) => i === idx ? val : d),
+                                }));
+                              }}
+                              className="font-semibold text-xs text-gray-900 bg-white border border-gray-200 rounded px-1.5 py-0.5 flex-1 truncate"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditableDosaFestival5(prev => ({
+                                  ...prev,
+                                  dosaVarieties: prev.dosaVarieties.filter((_, i) => i !== idx),
+                                }));
+                              }}
+                              className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded cursor-pointer"
+                              title="Delete Dosa"
+                            >
+                              <Icon name="TrashIcon" size={12} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Add Festival Dosa */}
+                      <div className="pt-2 flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="New Dosa variety (e.g. Mysore Ghee Roast)..."
+                          value={newFestivalDosaName}
+                          onChange={(e) => setNewFestivalDosaName(e.target.value)}
+                          className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-xs bg-gray-50"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (newFestivalDosaName.trim()) {
+                              setEditableDosaFestival5(prev => ({
+                                ...prev,
+                                dosaVarieties: [...prev.dosaVarieties, newFestivalDosaName.trim()],
+                              }));
+                              setNewFestivalDosaName('');
+                            }
+                          }}
+                          className="px-4 py-2 rounded-lg text-xs font-bold text-white shadow-xs cursor-pointer flex items-center gap-1"
+                          style={{ background: '#EA580C' }}
+                        >
+                          <Icon name="PlusIcon" size={14} />
+                          Add Dosa Variety
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ─── TAB: CANAPÉ SERVICE (OPTION 6) EDITOR ─── */}
+              {adminMenuTab === 'canape' && (
+                <div className="space-y-5 animate-in fade-in duration-300">
+                  <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 shadow-2xs">
+                    <p className="text-xs font-bold text-rose-950 mb-2 flex items-center gap-1.5">
+                      <span>🍢</span>
+                      <span>Send Option 6: Canapé Service to a Customer via WhatsApp:</span>
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {enquiries.concat(activeBookings).slice(0, 6).map((b) => (
+                        <a
+                          key={b.id}
+                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'Canapé Service (Option 6)', b.guests)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white shadow-2xs hover:opacity-90"
+                          style={{ background: '#25D366' }}
+                        >
+                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
+                          Send to {b.name.split(' ')[0]}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
+                    <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                      <div>
+                        <h3 className="text-base font-bold text-gray-900">{editableCanape6.title}</h3>
+                        <p className="text-xs text-gray-500">{editableCanape6.subtitle}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs font-bold text-gray-700">Base Rate:</label>
+                        <div className="flex items-center">
+                          <span className="text-xs font-bold mr-1">£</span>
+                          <input
+                            type="number"
+                            step="0.5"
+                            value={editableCanape6.pricePerPerson}
+                            onChange={(e) => setEditableCanape6(prev => ({ ...prev, pricePerPerson: parseFloat(e.target.value) || 0 }))}
+                            className="w-20 font-bold text-xs bg-white border border-gray-200 rounded p-1"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-gray-700">Canapé Suggested Items ({editableCanape6.suggestedItems.length}):</label>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                        {editableCanape6.suggestedItems.map((item, idx) => (
+                          <div key={idx} className="flex items-center gap-1 bg-rose-50/50 border border-rose-200 rounded-lg p-1.5">
+                            <input
+                              type="text"
+                              value={item}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setEditableCanape6(prev => ({
+                                  ...prev,
+                                  suggestedItems: prev.suggestedItems.map((s, i) => i === idx ? val : s),
+                                }));
+                              }}
+                              className="text-xs font-semibold bg-white border border-gray-200 rounded p-1 text-gray-900 flex-1 truncate"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditableCanape6(prev => ({
+                                  ...prev,
+                                  suggestedItems: prev.suggestedItems.filter((_, i) => i !== idx),
+                                }));
+                              }}
+                              className="p-1 text-gray-400 hover:text-red-500 cursor-pointer"
+                              title="Delete Canapé"
+                            >
+                              <Icon name="TrashIcon" size={12} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Add Canapé */}
+                      <div className="pt-2 flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="New Canapé item (e.g. Avocado Chaat Crostini)..."
+                          value={newCanapeItemName}
+                          onChange={(e) => setNewCanapeItemName(e.target.value)}
+                          className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-xs bg-gray-50"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (newCanapeItemName.trim()) {
+                              setEditableCanape6(prev => ({
+                                ...prev,
+                                suggestedItems: [...prev.suggestedItems, newCanapeItemName.trim()],
+                              }));
+                              setNewCanapeItemName('');
+                            }
+                          }}
+                          className="px-4 py-2 rounded-lg text-xs font-bold text-white shadow-xs cursor-pointer flex items-center gap-1"
+                          style={{ background: '#BE123C' }}
+                        >
+                          <Icon name="PlusIcon" size={14} />
+                          Add Canapé
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ─── TAB: NORTH INDIAN STANDARD MENU (OPTION 7) EDITOR ─── */}
+              {adminMenuTab === 'north-indian' && (
+                <div className="space-y-5 animate-in fade-in duration-300">
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 shadow-2xs">
+                    <p className="text-xs font-bold text-indigo-950 mb-2 flex items-center gap-1.5">
+                      <span>🍛</span>
+                      <span>Send Option 7: North Indian Standard Menu to a Customer via WhatsApp:</span>
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {enquiries.concat(activeBookings).slice(0, 6).map((b) => (
+                        <a
+                          key={b.id}
+                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'North Indian Standard Menu (Option 7)', b.guests)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white shadow-2xs hover:opacity-90"
+                          style={{ background: '#25D366' }}
+                        >
+                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
+                          Send to {b.name.split(' ')[0]}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
+                    <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                      <div>
+                        <h3 className="text-base font-bold text-gray-900">{editableNorthIndian7.title}</h3>
+                        <p className="text-xs text-gray-500">Min 25 Guests • Complete Comfort Feast</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs font-bold text-gray-700">Price / Person:</label>
+                        <div className="flex items-center">
+                          <span className="text-xs font-bold mr-1">£</span>
+                          <input
+                            type="number"
+                            step="0.5"
+                            value={editableNorthIndian7.pricePerPerson}
+                            onChange={(e) => setEditableNorthIndian7(prev => ({ ...prev, pricePerPerson: parseFloat(e.target.value) || 0 }))}
+                            className="w-20 font-bold text-xs bg-white border border-gray-200 rounded p-1"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      {([
+                        { key: 'breadOptions', label: '1. Breads' },
+                        { key: 'subjiOptions', label: '2. Subjies & Curries' },
+                        { key: 'dalOptions', label: '3. Dal Options' },
+                        { key: 'riceOptions', label: '4. Rice Specialties' },
+                      ] as const).map(({ key, label }) => (
+                        <div key={key} className="space-y-2 p-3 bg-indigo-50/40 rounded-xl border border-indigo-100">
+                          <label className="block text-xs font-bold text-indigo-950">{label} ({(editableNorthIndian7[key] || []).length}):</label>
+                          <div className="flex flex-wrap gap-1.5">
+                            {editableNorthIndian7[key].map((item, idx) => (
+                              <span key={idx} className="inline-flex items-center gap-1 text-xs bg-white border border-indigo-200 text-indigo-950 px-2 py-1 rounded-lg font-medium shadow-2xs">
+                                <span>{item}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditableNorthIndian7(prev => ({ ...prev, [key]: prev[key].filter((_, i) => i !== idx) }))}
+                                  className="text-gray-400 hover:text-red-600 cursor-pointer text-xs font-bold px-0.5"
+                                  title="Delete Option"
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Add Item to North Indian Menu */}
+                      <div className="pt-2 border-t border-gray-100 flex flex-col sm:flex-row gap-2">
+                        <select
+                          value={newNorthIndianSection}
+                          onChange={(e) => setNewNorthIndianSection(e.target.value as any)}
+                          className="text-xs font-bold bg-white border border-gray-200 rounded-lg p-2 text-indigo-900"
+                        >
+                          <option value="breadOptions">Add to Breads</option>
+                          <option value="subjiOptions">Add to Subjies</option>
+                          <option value="dalOptions">Add to Dals</option>
+                          <option value="riceOptions">Add to Rice</option>
+                        </select>
+                        <input
+                          type="text"
+                          placeholder="Dish name (e.g. Shahi Paneer)..."
+                          value={newNorthIndianItemName}
+                          onChange={(e) => setNewNorthIndianItemName(e.target.value)}
+                          className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-xs bg-gray-50"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (newNorthIndianItemName.trim()) {
+                              setEditableNorthIndian7(prev => ({
+                                ...prev,
+                                [newNorthIndianSection]: [...prev[newNorthIndianSection], newNorthIndianItemName.trim()],
+                              }));
+                              setNewNorthIndianItemName('');
+                            }
+                          }}
+                          className="px-4 py-2 rounded-lg text-xs font-bold text-white shadow-xs cursor-pointer flex items-center gap-1"
+                          style={{ background: '#4F46E5' }}
+                        >
+                          <Icon name="PlusIcon" size={14} />
+                          Add Item
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ─── TAB: GUJARATI MENU (OPTION 8) EDITOR ─── */}
+              {adminMenuTab === 'gujarati' && (
+                <div className="space-y-5 animate-in fade-in duration-300">
+                  <div className="bg-teal-50 border border-teal-200 rounded-2xl p-4 shadow-2xs">
+                    <p className="text-xs font-bold text-teal-950 mb-2 flex items-center gap-1.5">
+                      <span>🪔</span>
+                      <span>Send Option 8: Gujarati Menu to a Customer via WhatsApp:</span>
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {enquiries.concat(activeBookings).slice(0, 6).map((b) => (
+                        <a
+                          key={b.id}
+                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'Gujarati Menu (Option 8)', b.guests)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white shadow-2xs hover:opacity-90"
+                          style={{ background: '#25D366' }}
+                        >
+                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
+                          Send to {b.name.split(' ')[0]}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
+                    <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                      <div>
+                        <h3 className="text-base font-bold text-gray-900">{editableGujarati8.title}</h3>
+                        <p className="text-xs text-gray-500">Mithai (40+), Farsan (20+), Shaak (30+), Dal, Breads &amp; Rice</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs font-bold text-gray-700">Price / Person:</label>
+                        <div className="flex items-center">
+                          <span className="text-xs font-bold mr-1">£</span>
+                          <input
+                            type="number"
+                            step="0.5"
+                            value={editableGujarati8.pricePerPerson}
+                            onChange={(e) => setEditableGujarati8(prev => ({ ...prev, pricePerPerson: parseFloat(e.target.value) || 0 }))}
+                            className="w-20 font-bold text-xs bg-white border border-gray-200 rounded p-1"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      {([
+                        { key: 'mithai', label: '1. Mithai Sweets' },
+                        { key: 'farsan', label: '2. Farsan Savouries' },
+                        { key: 'shaak', label: '3. Shaak & Curries' },
+                        { key: 'dal', label: '4. Dal & Kadhi' },
+                        { key: 'breads', label: '5. Breads' },
+                        { key: 'rice', label: '6. Rice' },
+                      ] as const).map(({ key, label }) => (
+                        <div key={key} className="space-y-2 p-3 bg-teal-50/40 rounded-xl border border-teal-100">
+                          <label className="block text-xs font-bold text-teal-950">{label} ({(editableGujarati8.categories[key] || []).length}):</label>
+                          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
+                            {editableGujarati8.categories[key].map((item, idx) => (
+                              <span key={idx} className="inline-flex items-center gap-1 text-xs bg-white border border-teal-200 text-teal-950 px-2 py-1 rounded-lg font-medium shadow-2xs">
+                                <span>{item}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditableGujarati8(prev => ({ ...prev, categories: { ...prev.categories, [key]: prev.categories[key].filter((_, i) => i !== idx) } }))}
+                                  className="text-gray-400 hover:text-red-600 cursor-pointer text-xs font-bold px-0.5"
+                                  title="Delete Option"
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Add Item to Gujarati Menu */}
+                      <div className="pt-2 border-t border-gray-100 flex flex-col sm:flex-row gap-2">
+                        <select
+                          value={newGujaratiSection}
+                          onChange={(e) => setNewGujaratiSection(e.target.value as any)}
+                          className="text-xs font-bold bg-white border border-gray-200 rounded-lg p-2 text-teal-900"
+                        >
+                          <option value="mithai">Add to Mithai</option>
+                          <option value="farsan">Add to Farsan</option>
+                          <option value="shaak">Add to Shaak</option>
+                          <option value="dal">Add to Dal/Kadhi</option>
+                          <option value="breads">Add to Breads</option>
+                          <option value="rice">Add to Rice</option>
+                        </select>
+                        <input
+                          type="text"
+                          placeholder="Item name (e.g. Kesar Peda)..."
+                          value={newGujaratiItemName}
+                          onChange={(e) => setNewGujaratiItemName(e.target.value)}
+                          className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-xs bg-gray-50"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (newGujaratiItemName.trim()) {
+                              setEditableGujarati8(prev => ({
+                                ...prev,
+                                categories: {
+                                  ...prev.categories,
+                                  [newGujaratiSection]: [...prev.categories[newGujaratiSection], newGujaratiItemName.trim()],
+                                },
+                              }));
+                              setNewGujaratiItemName('');
+                            }
+                          }}
+                          className="px-4 py-2 rounded-lg text-xs font-bold text-white shadow-xs cursor-pointer flex items-center gap-1"
+                          style={{ background: '#0D9488' }}
+                        >
+                          <Icon name="PlusIcon" size={14} />
+                          Add Item
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ─── TAB: PUNJABI MENU (OPTION 9) EDITOR ─── */}
+              {adminMenuTab === 'punjabi' && (
+                <div className="space-y-5 animate-in fade-in duration-300">
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-2xs">
+                    <p className="text-xs font-bold text-amber-950 mb-2 flex items-center gap-1.5">
+                      <span>👑</span>
+                      <span>Send Option 9: Punjabi Menu to a Customer via WhatsApp:</span>
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {enquiries.concat(activeBookings).slice(0, 6).map((b) => (
+                        <a
+                          key={b.id}
+                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'Punjabi Menu (Option 9)', b.guests)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white shadow-2xs hover:opacity-90"
+                          style={{ background: '#25D366' }}
+                        >
+                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
+                          Send to {b.name.split(' ')[0]}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
+                    <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                      <div>
+                        <h3 className="text-base font-bold text-gray-900">{editablePunjabi9.title}</h3>
+                        <p className="text-xs text-gray-500">Royal Punjabi Feast: Chaats, Subjies, Dal Makhani &amp; Breads</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs font-bold text-gray-700">Price / Person:</label>
+                        <div className="flex items-center">
+                          <span className="text-xs font-bold mr-1">£</span>
+                          <input
+                            type="number"
+                            step="0.5"
+                            value={editablePunjabi9.pricePerPerson}
+                            onChange={(e) => setEditablePunjabi9(prev => ({ ...prev, pricePerPerson: parseFloat(e.target.value) || 0 }))}
+                            className="w-20 font-bold text-xs bg-white border border-gray-200 rounded p-1"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      {([
+                        { key: 'starters', label: '1. Starters & Chaats' },
+                        { key: 'subjies', label: '2. Royal Subjies' },
+                        { key: 'dal', label: '3. Dal Specialties' },
+                        { key: 'mithai', label: '4. Mithai Sweets' },
+                        { key: 'breads', label: '5. Breads' },
+                        { key: 'rice', label: '6. Rice' },
+                      ] as const).map(({ key, label }) => (
+                        <div key={key} className="space-y-2 p-3 bg-amber-50/40 rounded-xl border border-amber-100">
+                          <label className="block text-xs font-bold text-amber-950">{label} ({(editablePunjabi9.categories[key] || []).length}):</label>
+                          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
+                            {editablePunjabi9.categories[key].map((item, idx) => (
+                              <span key={idx} className="inline-flex items-center gap-1 text-xs bg-white border border-amber-200 text-amber-950 px-2 py-1 rounded-lg font-medium shadow-2xs">
+                                <span>{item}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditablePunjabi9(prev => ({ ...prev, categories: { ...prev.categories, [key]: prev.categories[key].filter((_, i) => i !== idx) } }))}
+                                  className="text-gray-400 hover:text-red-600 cursor-pointer text-xs font-bold px-0.5"
+                                  title="Delete Option"
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Add Item to Punjabi Menu */}
+                      <div className="pt-2 border-t border-gray-100 flex flex-col sm:flex-row gap-2">
+                        <select
+                          value={newPunjabiSection}
+                          onChange={(e) => setNewPunjabiSection(e.target.value as any)}
+                          className="text-xs font-bold bg-white border border-gray-200 rounded-lg p-2 text-amber-900"
+                        >
+                          <option value="starters">Add to Starters</option>
+                          <option value="subjies">Add to Subjies</option>
+                          <option value="dal">Add to Dal</option>
+                          <option value="mithai">Add to Mithai</option>
+                          <option value="breads">Add to Breads</option>
+                          <option value="rice">Add to Rice</option>
+                        </select>
+                        <input
+                          type="text"
+                          placeholder="Item name (e.g. Paneer Lababdar)..."
+                          value={newPunjabiItemName}
+                          onChange={(e) => setNewPunjabiItemName(e.target.value)}
+                          className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-xs bg-gray-50"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (newPunjabiItemName.trim()) {
+                              setEditablePunjabi9(prev => ({
+                                ...prev,
+                                categories: {
+                                  ...prev.categories,
+                                  [newPunjabiSection]: [...prev.categories[newPunjabiSection], newPunjabiItemName.trim()],
+                                },
+                              }));
+                              setNewPunjabiItemName('');
+                            }
+                          }}
+                          className="px-4 py-2 rounded-lg text-xs font-bold text-white shadow-xs cursor-pointer flex items-center gap-1"
+                          style={{ background: '#D97706' }}
+                        >
+                          <Icon name="PlusIcon" size={14} />
+                          Add Item
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ─── TAB: DYNAMIC UPGRADES EDITOR ─── */}
+              {adminMenuTab === 'upgrades' && (
+                <div className="space-y-4 animate-in fade-in duration-300">
+                  {/* WhatsApp Broadcast for Upgrades */}
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-2xs">
+                    <p className="text-xs font-bold text-amber-900 mb-2 flex items-center gap-1.5">
+                      <span>✨</span>
+                      <span>Send Event Upgrades to a Customer:</span>
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {enquiries.concat(activeBookings).slice(0, 6).map((b) => (
+                        <a
+                          key={b.id}
+                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'Upgrades', b.guests)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white shadow-2xs hover:opacity-90"
+                          style={{ background: '#25D366' }}
+                        >
+                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
+                          Send to {b.name.split(' ')[0]}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
+                    <div className="border-b border-gray-100 pb-3 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-base font-bold text-gray-900">Event Upgrades &amp; Catering Additions</h3>
+                        <p className="text-xs text-gray-500">Configure prices and descriptions for Gazebo, Waiters, Crockery, Extra Hours, and More Dishes</p>
+                      </div>
+                      <span className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-900">
+                        {editableUpgrades.items.length} Active Upgrades
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {editableUpgrades.items.map((upgrade, idx) => (
+                        <div key={upgrade.id} className="p-4 rounded-2xl border border-amber-200 bg-amber-50/30 space-y-3 relative">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="text-2xl">{upgrade.icon}</span>
+                              <input
+                                type="text"
+                                value={upgrade.name}
+                                onChange={(e) => {
+                                  const name = e.target.value;
+                                  setEditableUpgrades(prev => ({
+                                    ...prev,
+                                    items: prev.items.map((u, i) => i === idx ? { ...u, name } : u),
+                                  }));
+                                }}
+                                className="font-bold text-xs text-gray-900 bg-white border border-gray-200 rounded px-2 py-1"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs font-bold text-gray-500">£</span>
+                              <input
+                                type="number"
+                                step="0.5"
+                                value={upgrade.price}
+                                onChange={(e) => {
+                                  const price = parseFloat(e.target.value) || 0;
+                                  setEditableUpgrades(prev => ({
+                                    ...prev,
+                                    items: prev.items.map((u, i) => i === idx ? { ...u, price } : u),
+                                  }));
+                                }}
+                                className="w-16 font-extrabold text-xs text-[#C8860A] bg-white border border-gray-200 rounded px-2 py-1"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditableUpgrades(prev => ({
+                                    ...prev,
+                                    items: prev.items.filter((_, i) => i !== idx),
+                                  }));
+                                }}
+                                className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded cursor-pointer"
+                                title="Delete Upgrade"
+                              >
+                                <Icon name="TrashIcon" size={13} />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Price Label</label>
+                            <input
+                              type="text"
+                              value={upgrade.priceLabel}
+                              onChange={(e) => {
+                                const priceLabel = e.target.value;
+                                setEditableUpgrades(prev => ({
+                                  ...prev,
+                                  items: prev.items.map((u, i) => i === idx ? { ...u, priceLabel } : u),
+                                }));
+                              }}
+                              className="text-xs text-gray-700 bg-white border border-gray-200 rounded px-2 py-1 w-full"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Upgrade Description</label>
+                            <textarea
+                              rows={2}
+                              value={upgrade.description}
+                              onChange={(e) => {
+                                const description = e.target.value;
+                                setEditableUpgrades(prev => ({
+                                  ...prev,
+                                  items: prev.items.map((u, i) => i === idx ? { ...u, description } : u),
+                                }));
+                              }}
+                              className="text-xs text-gray-600 bg-white border border-gray-200 rounded px-2 py-1 w-full resize-none"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Add Custom Upgrade */}
+                    <div className="pt-3 border-t border-gray-100 flex flex-col sm:flex-row gap-2 bg-amber-50/50 p-3 rounded-xl border border-amber-200">
+                      <input
+                        type="text"
+                        placeholder="Upgrade name (e.g. DJ Sound & Lights)..."
+                        value={newUpgradeName}
+                        onChange={(e) => setNewUpgradeName(e.target.value)}
+                        className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-xs bg-white"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Price label (e.g. £150 / setup)..."
+                        value={newUpgradePrice}
+                        onChange={(e) => setNewUpgradePrice(e.target.value)}
+                        className="sm:w-36 border border-gray-300 rounded-lg px-3 py-2 text-xs bg-white"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Short description..."
+                        value={newUpgradeDesc}
+                        onChange={(e) => setNewUpgradeDesc(e.target.value)}
+                        className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-xs bg-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (newUpgradeName.trim()) {
+                            const newId = `upgrade-${Date.now()}`;
+                            const priceNum = parseFloat(newUpgradePrice.replace(/[^0-9.]/g, '')) || 50;
+                            setEditableUpgrades(prev => ({
+                              ...prev,
+                              items: [
+                                ...prev.items,
+                                {
+                                  id: newId,
+                                  name: newUpgradeName.trim(),
+                                  price: priceNum,
+                                  priceLabel: newUpgradePrice.trim() || `£${priceNum}`,
+                                  description: newUpgradeDesc.trim() || 'Premium event enhancement',
+                                  icon: '✨',
+                                  unit: 'fixed',
+                                },
+                              ],
+                            }));
+                            setNewUpgradeName('');
+                            setNewUpgradePrice('');
+                            setNewUpgradeDesc('');
+                          }
+                        }}
+                        className="px-4 py-2 rounded-lg text-xs font-bold text-white shadow-xs cursor-pointer flex items-center gap-1"
+                        style={{ background: '#C8860A' }}
+                      >
+                        <Icon name="PlusIcon" size={14} />
+                        Add Upgrade
                       </button>
                     </div>
                   </div>
@@ -6625,13 +8551,27 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           let selectedPkgName = '';
                           let baseAmount = 0;
 
-                          const foundExtra = editableLiveCounter.extras.find(ex => ex.name === val);
+                          const foundUpgrade = (editableUpgrades?.items || []).find((ex: MenuUpgradeItem) => ex.name === val);
+                          const isLiveDosaPkg = val.toLowerCase().includes('live dosa');
 
                           if (val === 'custom') {
                             selectedPkgName = 'Custom Package';
-                          } else if (foundExtra) {
-                            selectedPkgName = foundExtra.name;
-                            baseAmount = foundExtra.price;
+                          } else if (foundUpgrade) {
+                            selectedPkgName = foundUpgrade.name;
+                            baseAmount = foundUpgrade.price;
+                          } else if (isLiveDosaPkg) {
+                            selectedPkgName = val;
+                            const adults = selectedBooking.adults ?? selectedBooking.guests;
+                            const isOption2 = val.toLowerCase().includes('option 2');
+                            const liveCalc = calculateLiveDosaPrice(
+                              selectedBooking.date,
+                              adults,
+                              0,
+                              isOption2 ? 'live-dosa-2' : 'live-dosa-1',
+                              isOption2 ? editableLiveDosa2.pricing : editableLiveDosa1.pricing
+                            );
+                            baseAmount = liveCalc.finalSubtotal;
+                            pricePerPerson = liveCalc.pricePerPerson;
                           } else {
                             const found = editableBanquetPackages.find(p => p.name === val);
                             if (found) {
@@ -6649,10 +8589,11 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
                           const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
 
-                          if (!foundExtra && val !== 'custom') {
+                          if (!foundUpgrade && !isLiveDosaPkg && val !== 'custom') {
                             baseAmount = (adults * pricePerPerson) + (kids4to10 * kidsPrice);
                           }
-                          const deposit = pricingDetails.depositPercentage;
+                          const depositPercent = pricingDetails.depositPercentage || 30;
+                          const deposit = Math.round((baseAmount * depositPercent) / 100);
 
                           // Update locally
                           setBookings(prev => prev.map(b => b.id === selectedBooking.id ? {
@@ -6660,14 +8601,16 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             selectedMenu: selectedPkgName,
                             package: selectedPkgName,
                             baseAmount,
-                            deposit
+                            deposit,
+                            isLive: isLiveDosaPkg
                           } : b));
                           setSelectedBooking(prev => prev?.id === selectedBooking.id ? {
                             ...prev,
                             selectedMenu: selectedPkgName,
                             package: selectedPkgName,
                             baseAmount,
-                            deposit
+                            deposit,
+                            isLive: isLiveDosaPkg
                           } : prev);
 
                           // Save to Firestore
@@ -6676,7 +8619,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               selectedMenu: selectedPkgName,
                               package: selectedPkgName,
                               baseAmount,
-                              deposit
+                              deposit,
+                              isLive: isLiveDosaPkg
                             };
                             await setDoc(doc(db, 'booking_requests', selectedBooking.id), updates, { merge: true });
                             await setDoc(doc(db, 'bookings', selectedBooking.id), {
@@ -6698,16 +8642,20 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             </option>
                           ))}
                         </optgroup>
-                        <optgroup label="Other Enquiries">
+                        <optgroup label="Live Dosa Stations">
+                          <option value="Live Dosa Option 1 (Weekday: Mon-Fri)">Live Dosa Option 1 (Weekday: Mon-Fri) — £11/pp (Min £385)</option>
+                          <option value="Live Dosa Option 1 (Weekend & Holidays)">Live Dosa Option 1 (Weekend &amp; Holidays) — £12/pp (Min £480)</option>
+                          <option value="Live Dosa Option 2 (Weekday: Mon-Fri)">Live Dosa Option 2 (Weekday: Mon-Fri) — £16.50/pp (Min £577.50)</option>
+                          <option value="Live Dosa Option 2 (Weekend & Holidays)">Live Dosa Option 2 (Weekend &amp; Holidays) — £17.50/pp (Min £700)</option>
                           <option value="Venue Hire">Venue Hire</option>
                           <option value="Dry Hire">Dry Hire</option>
                           <option value="Table Service">Table Service</option>
                           <option value="Kids Pricing">Kids Pricing</option>
                         </optgroup>
-                        <optgroup label="Extras">
-                          {(editableLiveCounter?.extras || []).map(extra => (
+                        <optgroup label="Upgrades">
+                          {(editableUpgrades?.items || []).map((extra: MenuUpgradeItem) => (
                             <option key={extra.name} value={extra.name}>
-                              {extra.name} (£{extra.price})
+                              {extra.name} ({extra.priceLabel})
                             </option>
                           ))}
                         </optgroup>
@@ -6719,9 +8667,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
                     {/* Select Extras Checkbox List */}
                     <div className="mt-3 border-t border-amber-200/50 pt-3">
-                      <label className="block text-xs font-semibold text-gray-500 mb-2">Select Extras (Optional)</label>
+                      <label className="block text-xs font-semibold text-gray-500 mb-2">Select Upgrades (Optional)</label>
                       <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2.5 bg-white shadow-inner">
-                        {(editableLiveCounter?.extras || []).map((extra) => {
+                        {(editableUpgrades?.items || []).map((extra: MenuUpgradeItem) => {
                           const isChecked = (selectedBooking.extraCharges || []).some(c => c.label === extra.name);
                           return (
                             <label key={extra.name} className="flex items-center gap-2 text-xs font-medium text-gray-700 cursor-pointer select-none hover:bg-gray-50 p-1.5 rounded transition-colors">
@@ -6963,7 +8911,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             <div className="text-sm font-medium text-gray-900">{pkg.name}</div>
                             <div className="text-xs text-gray-500">£{pkg.pricePerPerson}/person · Est. £{estTotal.toLocaleString()} for {totalGuests} guests</div>
                           </div>
-                          <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n🥗 Starters: ${pkg.starters.veg} Veg + ${pkg.starters.nonVeg} Non-Veg\n🍛 Mains: ${pkg.mains.veg} Veg + ${pkg.mains.nonVeg} Non-Veg\n🍮 Desserts: ${pkg.desserts.join(', ')}\n${pkg.drinks.length > 0 ? `🥤 Drinks: ${pkg.drinks.join(', ')}\n` : ''}${pkg.guestLabel ? `\n👥 ${pkg.guestLabel}` : ''}\n\nFor ${adults} Adults and ${kids4to10} Kids, estimated total: *£${estTotal.toLocaleString()}* (Excl. VAT)\n\n🧒 *Kids Pricing* (Over 50 Adults):\n${editableKidsPricing.map(kp => `${kp.ageRange}: ${kp.price}`).join('\\n')}\n\n🏢 *Venue Hire Charges:*\n${editableVenueCharges.map(vc => `• ${vc.day}: ${vc.charge}${vc.note ? ` (${vc.note})` : ''}`).join('\\n')}\n\n🎪 *Extras Available:*\n${(editableLiveCounter?.extras || []).map(e => `• ${e.name}: £${e.price}`).join('\\n')}\n\nPlease reply with your selection! 🙏`)}
+                          <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n🥗 Starters: ${pkg.starters.veg} Veg + ${pkg.starters.nonVeg} Non-Veg\n🍛 Mains: ${pkg.mains.veg} Veg + ${pkg.mains.nonVeg} Non-Veg\n🍮 Desserts: ${pkg.desserts.join(', ')}\n${pkg.drinks.length > 0 ? `🥤 Drinks: ${pkg.drinks.join(', ')}\n` : ''}${pkg.guestLabel ? `\n👥 ${pkg.guestLabel}` : ''}\n\nFor ${adults} Adults and ${kids4to10} Kids, estimated total: *£${estTotal.toLocaleString()}* (Excl. VAT)\n\n🧒 *Kids Pricing* (Over 50 Adults):\n${editableKidsPricing.map(kp => `${kp.ageRange}: ${kp.price}`).join('\\n')}\n\n🏢 *Venue Hire Charges:*\n${editableVenueCharges.map(vc => `• ${vc.day}: ${vc.charge}${vc.note ? ` (${vc.note})` : ''}`).join('\\n')}\n\n✨ *Upgrades Available:*\n${(editableUpgrades?.items || []).map((e: MenuUpgradeItem) => `• ${e.name}: ${e.priceLabel}`).join('\\n')}\n\nPlease reply with your selection! 🙏`)}
                             target="_blank" rel="noopener noreferrer"
                             className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg flex-shrink-0 ml-2"
                             style={{ background: '#25D366', color: 'white' }}>
@@ -7235,11 +9183,11 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {['event_scheduled', 'event_completed'].includes(selectedBooking.status) && (
                 <div className="border border-teal-200 rounded-xl p-4 bg-teal-50">
                   <div className="text-xs font-semibold text-teal-700 uppercase tracking-wide mb-3">Adjustments / Extra Charges</div>
-                  {selectedBooking.extraCharges.some(c => !c.isPreset && !(editableLiveCounter?.extras || []).some(preset => preset.name === c.label)) && (
+                  {selectedBooking.extraCharges.some(c => !c.isPreset && !(editableUpgrades?.items || []).some((preset: MenuUpgradeItem) => preset.name === c.label)) && (
                     <div className="space-y-2 mb-3">
                       {selectedBooking.extraCharges
                         .map((charge, idx) => ({ charge, idx }))
-                        .filter(({ charge }) => !charge.isPreset && !(editableLiveCounter?.extras || []).some(preset => preset.name === charge.label))
+                        .filter(({ charge }) => !charge.isPreset && !(editableUpgrades?.items || []).some((preset: MenuUpgradeItem) => preset.name === charge.label))
                         .map(({ charge, idx }) => (
                           <div key={idx} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-teal-100">
                             <span className="text-sm text-gray-700">{charge.label}</span>
@@ -7797,7 +9745,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 </div>
               )}
               {selectedBooking.status === 'event_completed' && (() => {
-                const nonPreset = (selectedBooking.extraCharges || []).filter(c => !c.isPreset && !(editableLiveCounter?.extras || []).some(preset => preset.name === c.label));
+                const nonPreset = (selectedBooking.extraCharges || []).filter(c => !c.isPreset && !(editableUpgrades?.items || []).some((preset: MenuUpgradeItem) => preset.name === c.label));
                 const extraChargesTotal = nonPreset.reduce((sum, c) => sum + c.amount, 0);
                 const isExtraPaymentNeeded = extraChargesTotal > 0 && selectedBooking.finalPaymentPaid;
                 
@@ -8182,6 +10130,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     {editableBanquetPackages.map(p => (
                       <option key={p.id} value={p.name}>{p.name} (£{p.pricePerPerson}/pp)</option>
                     ))}
+                    <option value="Live Dosa Option 1 (Weekday: Mon-Fri)">Live Dosa Option 1 (Weekday: Mon-Fri) — £11.00/pp (Min £385)</option>
+                    <option value="Live Dosa Option 1 (Weekend & Holidays)">Live Dosa Option 1 (Weekend &amp; Holidays) — £12.00/pp (Min £480)</option>
+                    <option value="Live Dosa Option 2 (Weekday: Mon-Fri)">Live Dosa Option 2 (Weekday: Mon-Fri) — £16.50/pp (Min £577.50)</option>
+                    <option value="Live Dosa Option 2 (Weekend & Holidays)">Live Dosa Option 2 (Weekend &amp; Holidays) — £17.50/pp (Min £700)</option>
                     <option value="Venue Hall Only">Venue Hall Only</option>
                     <option value="Dry Hire">Dry Hire</option>
                   </select>

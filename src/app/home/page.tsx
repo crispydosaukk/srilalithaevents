@@ -9,8 +9,20 @@ import { collection, addDoc, onSnapshot, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import {
   MENU_CATEGORIES,
+  LIVE_DOSA_OPTION_1,
+  LIVE_DOSA_OPTION_2,
   LIVE_DOSA_MENU,
+  MADRAS_THALI_OPTION_3,
+  TAILOR_MENU_OPTION_4,
+  DOSA_FESTIVAL_OPTION_5,
+  CANAPE_OPTION_6,
+  NORTH_INDIAN_OPTION_7,
+  GUJARATI_OPTION_8,
+  PUNJABI_OPTION_9,
   SOUTH_INDIAN_BUFFET,
+  MENU_UPGRADES,
+  calculateLiveDosaPrice,
+  isWeekendOrBankHoliday,
   INDIAN_MENU as DEFAULT_INDIAN_MENU,
   SRI_LANKAN_MENU as DEFAULT_SRI_LANKAN_MENU,
   LIVE_COUNTER_PACKAGE as DEFAULT_LIVE_COUNTER_PACKAGE,
@@ -23,6 +35,7 @@ import {
   DRY_HIRE_PRICES as DEFAULT_DRY_HIRE_PRICES,
   MenuCategory,
   MenuItem,
+  MenuUpgradeItem,
 } from '@/app/data/menuData';
 import {
   DEFAULT_FORM_CONFIG,
@@ -44,13 +57,24 @@ import {
 import GoogleLocationInput from '@/components/GoogleLocationInput';
 import InteractiveMenuOrderModal from '@/components/InteractiveMenuOrderModal';
 
-type MenuTab = 'full-menu' | 'live-dosa' | 'buffet';
+type MenuTab = 'full-menu' | 'live-dosa-1' | 'live-dosa-2' | 'madras-thali' | 'tailor-menu' | 'dosa-festival' | 'canape' | 'north-indian' | 'gujarati' | 'punjabi' | 'buffet' | 'live-dosa';
 
 export default function HomePage() {
   const [isMenuOrderModalOpen, setIsMenuOrderModalOpen] = useState(false);
   const [selectedPackageForModal, setSelectedPackageForModal] = useState<string>('Gold Package');
 
   const [menus, setMenus] = useState({
+    LIVE_DOSA_OPTION_1: LIVE_DOSA_OPTION_1,
+    LIVE_DOSA_OPTION_2: LIVE_DOSA_OPTION_2,
+    LIVE_DOSA_MENU: LIVE_DOSA_MENU,
+    MADRAS_THALI_OPTION_3: MADRAS_THALI_OPTION_3,
+    TAILOR_MENU_OPTION_4: TAILOR_MENU_OPTION_4,
+    DOSA_FESTIVAL_OPTION_5: DOSA_FESTIVAL_OPTION_5,
+    CANAPE_OPTION_6: CANAPE_OPTION_6,
+    NORTH_INDIAN_OPTION_7: NORTH_INDIAN_OPTION_7,
+    GUJARATI_OPTION_8: GUJARATI_OPTION_8,
+    PUNJABI_OPTION_9: PUNJABI_OPTION_9,
+    MENU_UPGRADES: MENU_UPGRADES,
     INDIAN_MENU: DEFAULT_INDIAN_MENU,
     SRI_LANKAN_MENU: DEFAULT_SRI_LANKAN_MENU,
     LIVE_COUNTER_PACKAGE: DEFAULT_LIVE_COUNTER_PACKAGE,
@@ -127,6 +151,17 @@ export default function HomePage() {
       if (docSnap.exists()) {
         const data = docSnap.data();
         setMenus({
+          LIVE_DOSA_OPTION_1: data.LIVE_DOSA_OPTION_1 || data.LIVE_DOSA_MENU || LIVE_DOSA_OPTION_1,
+          LIVE_DOSA_OPTION_2: data.LIVE_DOSA_OPTION_2 || LIVE_DOSA_OPTION_2,
+          LIVE_DOSA_MENU: data.LIVE_DOSA_OPTION_1 || data.LIVE_DOSA_MENU || LIVE_DOSA_MENU,
+          MADRAS_THALI_OPTION_3: data.MADRAS_THALI_OPTION_3 || MADRAS_THALI_OPTION_3,
+          TAILOR_MENU_OPTION_4: data.TAILOR_MENU_OPTION_4 || TAILOR_MENU_OPTION_4,
+          DOSA_FESTIVAL_OPTION_5: data.DOSA_FESTIVAL_OPTION_5 || DOSA_FESTIVAL_OPTION_5,
+          CANAPE_OPTION_6: data.CANAPE_OPTION_6 || CANAPE_OPTION_6,
+          NORTH_INDIAN_OPTION_7: data.NORTH_INDIAN_OPTION_7 || NORTH_INDIAN_OPTION_7,
+          GUJARATI_OPTION_8: data.GUJARATI_OPTION_8 || GUJARATI_OPTION_8,
+          PUNJABI_OPTION_9: data.PUNJABI_OPTION_9 || PUNJABI_OPTION_9,
+          MENU_UPGRADES: data.MENU_UPGRADES || MENU_UPGRADES,
           INDIAN_MENU: data.INDIAN_MENU || DEFAULT_INDIAN_MENU,
           SRI_LANKAN_MENU: data.SRI_LANKAN_MENU || DEFAULT_SRI_LANKAN_MENU,
           LIVE_COUNTER_PACKAGE: data.LIVE_COUNTER_PACKAGE || DEFAULT_LIVE_COUNTER_PACKAGE,
@@ -306,26 +341,44 @@ export default function HomePage() {
       let baseAmount = 0;
       const pkgLower = (bookingForm.selectedPackage || '').toLowerCase();
 
-      if (selectedPkg) {
+      if (pkgLower.includes('live dosa')) {
+        const isOption2 = pkgLower.includes('option 2');
+        const liveCalc = calculateLiveDosaPrice(
+          bookingForm.date,
+          guestCount,
+          0,
+          isOption2 ? 'live-dosa-2' : 'live-dosa-1',
+          isOption2 ? menus.LIVE_DOSA_OPTION_2?.pricing : menus.LIVE_DOSA_OPTION_1?.pricing
+        );
+        baseAmount = liveCalc.finalSubtotal;
+      } else if (pkgLower.includes('thali') || pkgLower.includes('meals') || pkgLower.includes('bhojanam') || pkgLower.includes('option 3')) {
+        baseAmount = (menus.MADRAS_THALI_OPTION_3?.pricePerPerson || 10.99) * guestCount;
+      } else if (pkgLower.includes('tailor') || pkgLower.includes('option 4')) {
+        baseAmount = 15.00 * guestCount;
+      } else if (pkgLower.includes('festival') || pkgLower.includes('option 5')) {
+        baseAmount = (menus.DOSA_FESTIVAL_OPTION_5?.pricePerPerson || 14.99) * guestCount;
+      } else if (pkgLower.includes('canape') || pkgLower.includes('option 6')) {
+        baseAmount = (menus.CANAPE_OPTION_6?.pricePerPerson || 8.99) * guestCount;
+      } else if (pkgLower.includes('north indian') || pkgLower.includes('option 7')) {
+        baseAmount = (menus.NORTH_INDIAN_OPTION_7?.pricePerPerson || 12.00) * Math.max(25, guestCount);
+      } else if (pkgLower.includes('gujarati') || pkgLower.includes('option 8')) {
+        baseAmount = (menus.GUJARATI_OPTION_8?.pricePerPerson || 14.99) * guestCount;
+      } else if (pkgLower.includes('punjabi') || pkgLower.includes('option 9')) {
+        baseAmount = (menus.PUNJABI_OPTION_9?.pricePerPerson || 13.99) * guestCount;
+      } else if (selectedPkg) {
         baseAmount = selectedPkg.pricePerPerson * guestCount;
       } else if (pkgLower.includes('buffet') && pkgLower.includes('weekday')) {
         baseAmount = 11.99 * guestCount;
       } else if (pkgLower.includes('buffet') && (pkgLower.includes('weekend') || pkgLower.includes('holiday'))) {
         baseAmount = 13.99 * guestCount;
-      } else if (pkgLower.includes('live dosa') || pkgLower.includes('dosa & uthappam')) {
-        baseAmount = 5.00 * guestCount;
-      } else if (pkgLower.includes('idly & meduvada') || pkgLower.includes('idly, meduvada')) {
-        baseAmount = 4.00 * guestCount;
-      } else if (pkgLower.includes('pani puri')) {
-        baseAmount = 3.50 * guestCount;
-      } else if (pkgLower.includes('poori bhaji') || pkgLower.includes('chole bhature')) {
-        baseAmount = 4.50 * guestCount;
-      } else if (pkgLower.includes('pav bhaji')) {
-        baseAmount = 4.00 * guestCount;
-      } else if (pkgLower.includes('coconut water')) {
-        baseAmount = 5.00 * guestCount;
-      } else if (pkgLower.includes('welcome drink')) {
-        baseAmount = 2.00 * guestCount;
+      } else if (pkgLower.includes('gazebo')) {
+        baseAmount = 70.00;
+      } else if (pkgLower.includes('waiter')) {
+        baseAmount = 70.00;
+      } else if (pkgLower.includes('crockery')) {
+        baseAmount = 3.00 * guestCount;
+      } else if (pkgLower.includes('extra hour')) {
+        baseAmount = 100.00;
       } else if (pkgLower.includes('paan counter')) {
         baseAmount = 350.00;
       } else if (pkgLower.includes('music setup')) {
@@ -661,20 +714,45 @@ export default function HomePage() {
           >
             <option value="">{field.placeholder || 'No specific package – help me choose'}</option>
             
-            <optgroup label="── 🎪 Live Cooking Stations ──">
-              <option value="Live Dosa & Uthappam Station">Live Dosa &amp; Uthappam Station — £5.00/person</option>
-              <option value="Live Idly & Meduvada Station">Live Idly &amp; Meduvada Station — £4.00/person</option>
-              <option value="Live Pani Puri & Chaat Counter">Live Pani Puri &amp; Chaat Counter — £3.50/person</option>
-              <option value="Live Poori Bhaji / Chole Bhature">Live Poori Bhaji / Chole Bhature — £4.50/person</option>
-              <option value="Live Pav Bhaji Counter">Live Pav Bhaji Counter — £4.00/person</option>
-              <option value="Live Fresh Coconut Water">Live Fresh Coconut Water — £5.00/person</option>
-              <option value="Live Paan Counter (100pcs)">Live Paan Counter (100pcs) — £350.00</option>
-              <option value="Welcome Drink">Welcome Drink — £2.00/person</option>
+            <optgroup label="── 🎪 Live Dosa Stations ──">
+              <option value="Live Dosa Option 1 (Weekday: Mon-Fri)">Live Dosa Option 1 (Weekday: Mon-Fri) — £11.00/person (Min 35 guests / £385 min)</option>
+              <option value="Live Dosa Option 1 (Weekend & Holidays)">Live Dosa Option 1 (Weekend &amp; Holidays) — £12.00/person (Min 40 guests / £480 min)</option>
+              <option value="Live Dosa Option 2 (Weekday: Mon-Fri)">Live Dosa Option 2 (Weekday: Mon-Fri) — £16.50/person (Min 35 guests / £577.50 min)</option>
+              <option value="Live Dosa Option 2 (Weekend & Holidays)">Live Dosa Option 2 (Weekend &amp; Holidays) — £17.50/person (Min 40 guests / £700 min)</option>
+            </optgroup>
+
+            <optgroup label="── 🍲 Traditional Meals &amp; Thali ──">
+              <option value="Madras Thali (Option 3) — £10.99/pp">Madras Thali / South Indian Meals / Andhra Bhojanam — £10.99/person</option>
+            </optgroup>
+
+            <optgroup label="── 🎨 Bespoke &amp; Festival Experiences ──">
+              <option value="Tailor Your Own Menu (Option 4)">Tailor Your Own Menu (Option 4) — 4 Live Stations (50% Deposit)</option>
+              <option value="Dosa Festival At Your Home (Option 5)">Dosa Festival At Your Home (Option 5) — 34+ Varieties (£14.99/person)</option>
+            </optgroup>
+
+            <optgroup label="── 🍢 Cocktail &amp; Regional Feasts ──">
+              <option value="Canapé Service (Option 6)">Canapé Service (Option 6) — Passed Finger Foods (From £8.99/pp)</option>
+              <option value="North Indian Standard Menu (Option 7)">North Indian Standard Menu (Option 7) — £12.00/person (Min 25)</option>
+              <option value="Gujarati Menu (Option 8)">Gujarati Menu (Option 8) — 40+ Mithai &amp; Farsan (£14.99/person)</option>
+              <option value="Punjabi Menu (Option 9)">Punjabi Menu (Option 9) — Royal Feast (£13.99/person)</option>
+            </optgroup>
+
+            <optgroup label="── ✨ Premium Upgrades ──">
+              <option value="Gazebo Setup — £70">Gazebo Setup — £70.00</option>
+              <option value="Waiter for Serving — £70">Waiter for Serving — £70.00</option>
+              <option value="Crockery (Plates/Bowls/Spoons) — £3/person">Crockery (Plates/Bowls/Spoons) — £3.00/person</option>
+              <option value="Extra Hour for Serving/Cooking — £100/hr">Extra Hour for Serving/Cooking — £100.00/hr</option>
             </optgroup>
 
             <optgroup label="── 🍛 Buffet Feasts ──">
               <option value="South Indian Special Buffet (Weekday)">South Indian Special Buffet (Weekday: Mon-Fri) — £11.99/person</option>
               <option value="South Indian Special Buffet (Weekend)">South Indian Special Buffet (Weekend &amp; Holidays) — £13.99/person</option>
+            </optgroup>
+
+            <optgroup label="── 🎁 Banquet Packages ──">
+              {BANQUET_PACKAGES.map(p => (
+                <option key={p.id} value={p.name}>{p.name} — £{p.pricePerPerson}/person</option>
+              ))}
             </optgroup>
           </select>
         )}
@@ -720,7 +798,7 @@ export default function HomePage() {
               <span style={{ color: '#9B1B30' }}>Unforgettable</span>
             </h1>
             <p className="text-base md:text-lg mb-6 max-w-xl lg:mx-0 mx-auto text-gray-600 leading-relaxed">
-              Authentic Indian &amp; Sri Lankan cuisine. Elegant banquet hall. Seamless outdoor catering for all occasions.
+              Authentic Pure Vegetarian Indian cuisine. Elegant banquet hall. Seamless outdoor catering for all occasions.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start mb-8">
               <a href="#menus" className="text-white font-semibold px-7 py-3 rounded-xl transition-all shadow-md hover:shadow-lg bg-maroon-primary hover:bg-maroon-dark text-sm sm:text-base">
@@ -744,7 +822,7 @@ export default function HomePage() {
                 <span className="text-lg">🍲</span>
                 <div>
                   <div className="text-xs font-bold text-gray-900">Authentic Taste</div>
-                  <div className="text-[11px] text-gray-500">Indian &amp; Sri Lankan</div>
+                  <div className="text-[11px] text-gray-500">Pure Indian Vegetarian</div>
                 </div>
               </div>
               <div className="flex items-center gap-2.5 bg-white/70 backdrop-blur-xs p-2.5 rounded-xl border border-gray-100 shadow-2xs">
@@ -914,26 +992,34 @@ export default function HomePage() {
           </div>
 
           {/* Top Main Navigation Tabs */}
-          <div className="flex flex-wrap gap-2.5 justify-center mb-8">
+          <div className="flex flex-wrap gap-2 justify-center mb-8">
             {([
-              { id: 'full-menu', label: '📋 Complete Restaurant Menu', count: `${MENU_CATEGORIES.reduce((acc, c) => acc + c.items.length, 0)}+ Dishes` },
-              { id: 'live-dosa', label: '🎪 Live Dosa Station', count: '12 Live Dishes' },
-              { id: 'buffet', label: '🍛 South Indian Buffet', count: 'From £11.99' },
+              { id: 'full-menu', label: '📋 Full Menu', count: `${MENU_CATEGORIES.reduce((acc, c) => acc + c.items.length, 0)}+` },
+              { id: 'live-dosa-1', label: '🎪 Live Dosa 1', count: '£11/pp' },
+              { id: 'live-dosa-2', label: '👑 Live Dosa 2', count: '£16.50/pp' },
+              { id: 'madras-thali', label: '🍲 Option 3: Thali', count: '£10.99/pp' },
+              { id: 'tailor-menu', label: '🎨 Option 4: Tailor', count: '4 Stations' },
+              { id: 'dosa-festival', label: '🥞 Option 5: Festival', count: '34+ Dosas' },
+              { id: 'canape', label: '🍢 Option 6: Canapés', count: 'From £8.99' },
+              { id: 'north-indian', label: '🍛 Option 7: North Indian', count: '£12.00/pp' },
+              { id: 'gujarati', label: '🪔 Option 8: Gujarati', count: '£14.99/pp' },
+              { id: 'punjabi', label: '👑 Option 9: Punjabi', count: '£13.99/pp' },
+              { id: 'buffet', label: '🍛 Buffet', count: 'From £11.99' },
             ] as { id: MenuTab; label: string; count: string }[]).map((tab) => {
-              const isActive = activeMenuTab === tab.id;
+              const isActive = activeMenuTab === tab.id || (activeMenuTab === 'live-dosa' && tab.id === 'live-dosa-1');
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveMenuTab(tab.id)}
-                  className={`px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                  className={`px-3 sm:px-3.5 py-2 rounded-2xl text-xs sm:text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                     isActive
-                      ? 'text-white shadow-lg scale-[1.02]'
+                      ? 'text-white shadow-md scale-[1.02]'
                       : 'bg-white border border-gray-200 text-gray-700 hover:border-amber-400 hover:bg-amber-50/40 shadow-xs'
                   }`}
                   style={isActive ? { background: 'linear-gradient(135deg, #C8860A, #F0A830)' } : {}}
                 >
                   <span>{tab.label}</span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${isActive ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'}`}>
                     {tab.count}
                   </span>
                 </button>
@@ -1048,7 +1134,7 @@ export default function HomePage() {
                     >
                       <span className="flex items-center gap-1.5">
                         <span>🎪</span>
-                        <span>Live Dosa Station</span>
+                        <span>Live Dosa Option 1</span>
                       </span>
                       <span className="text-[10px] font-semibold text-[#C8860A]">View 12 Live →</span>
                     </button>
@@ -1245,9 +1331,9 @@ export default function HomePage() {
           )}
 
           {/* ══════════════════════════════════════════════════════════════
-              TAB 2: LIVE DOSA STATION MENU (THEATRICAL ON-THE-SPOT COOKING)
+              TAB 2: LIVE DOSA OPTION 1 (THEATRICAL ON-THE-SPOT COOKING - 2 HOURS)
               ══════════════════════════════════════════════════════════════ */}
-          {activeMenuTab === 'live-dosa' && (
+          {(activeMenuTab === 'live-dosa-1' || activeMenuTab === 'live-dosa') && (
             <div className="space-y-8 animate-in fade-in duration-300">
               {/* Theatrical Hero Banner */}
               <div
@@ -1257,33 +1343,70 @@ export default function HomePage() {
                 <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none text-9xl">
                   🥞
                 </div>
-                <div className="relative z-10 max-w-2xl">
-                  <span className="inline-block text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30 mb-3">
-                    🔥 Theatrical Live Counter
-                  </span>
+                <div className="relative z-10 max-w-3xl">
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    <span className="inline-block text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                      🔥 2 Hours Live Station
+                    </span>
+                    <span className="inline-block text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-emerald-400/20 text-emerald-300 border border-emerald-400/30">
+                      12 Live Dishes
+                    </span>
+                  </div>
                   <h3 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white mb-2">
-                    {LIVE_DOSA_MENU.title}
+                    {LIVE_DOSA_OPTION_1.title}
                   </h3>
                   <p className="text-amber-200 font-medium text-sm sm:text-base mb-3">
-                    {LIVE_DOSA_MENU.tagline}
+                    {LIVE_DOSA_OPTION_1.tagline}
                   </p>
-                  <p className="text-xs sm:text-sm text-gray-300 leading-relaxed mb-6">
-                    Our master chefs prepare fresh, crispy, golden dosas and fluffy uthappams live in front of your guests. A centerpiece theatrical live experience for weddings, birthdays, and banquets.
+                  <p className="text-xs sm:text-sm text-gray-300 leading-relaxed mb-4">
+                    Our master chefs prepare fresh, crispy, golden dosas, live meduvada, and fluffy uthappams live in front of your guests for 2 continuous hours.
+                  </p>
+
+                  {/* Pricing Tiers Highlight */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 my-4">
+                    <div className="bg-white/10 backdrop-blur-xs border border-white/20 p-3.5 rounded-2xl text-left">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-bold text-amber-300">📅 Week days (Mon – Fri)</span>
+                        <span className="text-sm font-extrabold text-white">£11.00 <span className="text-[10px] font-normal text-gray-300">/ person</span></span>
+                      </div>
+                      <p className="text-[11px] text-gray-300 mb-1">35 people minimum guarantee</p>
+                      <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-400/20 text-amber-200 border border-amber-400/30">
+                        Min. call out: £385
+                      </span>
+                    </div>
+
+                    <div className="bg-white/10 backdrop-blur-xs border border-white/20 p-3.5 rounded-2xl text-left">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-bold text-amber-300">🌟 Week Ends &amp; Bank Holidays</span>
+                        <span className="text-sm font-extrabold text-white">£12.00 <span className="text-[10px] font-normal text-gray-300">/ person</span></span>
+                      </div>
+                      <p className="text-[11px] text-gray-300 mb-1">40 people minimum guarantee</p>
+                      <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-400/20 text-amber-200 border border-amber-400/30">
+                        Min. call out: £480
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-amber-200/90 italic mb-5">
+                    ℹ️ Minimum call out charge (£385 on Weekdays / £480 on Weekends) can be reached by the number of people or by the menu &amp; upgrades.
                   </p>
 
                   <div className="flex flex-wrap gap-3">
                     <button
-                      onClick={() => handleEnquireNow('Live Dosa & Uthappam Station')}
+                      onClick={() => {
+                        setSelectedPackageForModal('Live Dosa Option 1');
+                        setIsMenuOrderModalOpen(true);
+                      }}
                       className="px-6 py-3 rounded-xl font-bold text-gray-900 bg-amber-400 hover:bg-amber-300 transition-all text-xs sm:text-sm shadow-md cursor-pointer flex items-center gap-2"
                     >
-                      <span>Book Live Dosa Station</span>
+                      <span>Book Live Dosa Option 1</span>
                       <span>→</span>
                     </button>
                     <button
-                      onClick={() => setIsMenuOrderModalOpen(true)}
-                      className="px-5 py-3 rounded-xl font-bold text-white bg-white/10 hover:bg-white/20 border border-white/20 transition-all text-xs sm:text-sm cursor-pointer"
+                      onClick={() => setActiveMenuTab('live-dosa-2')}
+                      className="px-5 py-3 rounded-xl font-bold text-white bg-white/10 hover:bg-white/20 border border-white/20 transition-all text-xs sm:text-sm cursor-pointer flex items-center gap-1.5"
                     >
-                      Build Custom Live Package
+                      <span>👑 View Option 2 (3 Hours + Main + Dessert) →</span>
                     </button>
                   </div>
                 </div>
@@ -1293,16 +1416,16 @@ export default function HomePage() {
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h4 className="text-xl font-bold text-gray-900">Freshly Made On-The-Spot Items</h4>
+                    <h4 className="text-xl font-bold text-gray-900">12 Live Dishes Included (Option 1)</h4>
                     <p className="text-xs text-gray-500">Every item is prepared live to order with authentic chutneys and piping hot sambar</p>
                   </div>
                   <span className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
-                    12 Live Specialties
+                    2 Hours Live Service
                   </span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {LIVE_DOSA_MENU.items.map((item, idx) => (
+                  {LIVE_DOSA_OPTION_1.items.map((item, idx) => (
                     <div
                       key={item.name}
                       className="bg-white rounded-2xl border-2 border-amber-200/80 p-5 shadow-sm hover:shadow-md transition-all hover:border-amber-400 relative overflow-hidden flex flex-col justify-between"
@@ -1312,27 +1435,27 @@ export default function HomePage() {
                       </div>
 
                       <div>
-                        <div className="flex items-center gap-2 mb-1.5 pr-14">
-                          <span className="w-6 h-6 rounded-full bg-amber-100 text-[#C8860A] flex items-center justify-center text-xs font-bold flex-shrink-0">
+                        <div className="flex items-center gap-2.5 mb-2 pr-14">
+                          <span className="w-7 h-7 rounded-full bg-amber-100 text-[#C8860A] flex items-center justify-center text-xs font-bold flex-shrink-0">
                             {idx + 1}
                           </span>
-                          <h5 className="font-bold text-gray-900 text-sm">{item.name}</h5>
+                          <h5 className="font-bold text-gray-900 text-base">{item.name}</h5>
                         </div>
 
-                        <p className="text-xs text-gray-600 mb-3">
+                        <p className="text-sm font-medium text-gray-600 mb-3 leading-snug">
                           {item.description}
                         </p>
                       </div>
 
                       <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1.5">
                           {item.tags?.map((t) => (
-                            <span key={t} className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200">
+                            <span key={t} className="text-xs font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200">
                               {t}
                             </span>
                           ))}
                         </div>
-                        <span className="text-[11px] font-bold text-[#C8860A]">
+                        <span className="text-xs font-bold text-[#C8860A]">
                           Hot &amp; Crisp Live
                         </span>
                       </div>
@@ -1341,21 +1464,1322 @@ export default function HomePage() {
                 </div>
               </div>
 
-              {/* Live Counter Extras & Catering Add-ons */}
-              <div className="bg-amber-50/60 rounded-3xl border border-amber-200 p-6 sm:p-8">
-                <div className="text-center max-w-xl mx-auto mb-6">
-                  <h4 className="text-lg sm:text-xl font-bold text-gray-900 mb-1">Pair with More Live Counters</h4>
-                  <p className="text-xs text-gray-600">Elevate your banquet with additional interactive food stations</p>
+              {/* ─── DYNAMIC UPGRADES SECTION ─── */}
+              <div className="bg-gradient-to-br from-amber-50/80 via-white to-amber-50/40 rounded-3xl border-2 border-amber-200/80 p-6 sm:p-8 shadow-sm">
+                <div className="text-center max-w-2xl mx-auto mb-8">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 mb-2">
+                    ✨ Bespoke Event Enhancements
+                  </span>
+                  <h4 className="text-2xl sm:text-3xl font-extrabold text-gray-900 mb-2">Upgrades</h4>
+                  <p className="text-sm text-gray-600">
+                    Elevate your event with luxury gazebo setup, dedicated waitstaff, crockery, extra cooking hours, and additional dishes.
+                  </p>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                  {LIVE_COUNTER_PACKAGE.srilankanSouthIndian.slice(0, 4).map((extra) => (
-                    <div key={extra.name} className="bg-white p-3.5 rounded-xl border border-amber-200 text-center shadow-2xs">
-                      <span className="font-bold text-gray-900 block mb-0.5">{extra.name}</span>
-                      <span className="text-[11px] text-gray-500 block mb-2">{extra.note || 'Prepared live'}</span>
-                      <span className="font-extrabold text-[#C8860A]">£{extra.price.toFixed(2)} /person</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {(menus.MENU_UPGRADES?.items || MENU_UPGRADES.items).map((upgrade) => (
+                    <div
+                      key={upgrade.id}
+                      className="bg-white rounded-2xl border border-amber-200/80 p-5 shadow-xs hover:shadow-md transition-all hover:border-amber-400 flex flex-col justify-between group"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-2.5">
+                          <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
+                            {upgrade.icon}
+                          </div>
+                          <span className="text-xs font-extrabold px-2.5 py-1 rounded-lg bg-amber-100/70 text-amber-900 border border-amber-200">
+                            {upgrade.priceLabel}
+                          </span>
+                        </div>
+                        <h5 className="font-bold text-gray-900 text-base mb-1.5">{upgrade.name}</h5>
+                        <p className="text-sm text-gray-600 leading-relaxed mb-4">
+                          {upgrade.description}
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setSelectedPackageForModal('Live Dosa Option 1');
+                          setIsMenuOrderModalOpen(true);
+                        }}
+                        className="w-full py-2.5 rounded-xl font-bold text-xs bg-amber-50 group-hover:bg-[#C8860A] text-[#C8860A] group-hover:text-white border border-amber-200 group-hover:border-[#C8860A] transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+                      >
+                        <span>Add to Booking</span>
+                        <span>+</span>
+                      </button>
                     </div>
                   ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════
+              TAB 3: LIVE DOSA OPTION 2 (3 HOURS SERVICE + 1 MAIN + 1 DESSERT)
+              ══════════════════════════════════════════════════════════════ */}
+          {activeMenuTab === 'live-dosa-2' && (
+            <div className="space-y-8 animate-in fade-in duration-300">
+              {/* Option 2 Premium Hero Banner */}
+              <div
+                className="rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden"
+                style={{ background: 'linear-gradient(135deg, #3B1C32 0%, #5E2648 50%, #C8860A 100%)' }}
+              >
+                <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none text-9xl">
+                  👑
+                </div>
+                <div className="relative z-10 max-w-3xl">
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    <span className="inline-block text-xs font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-purple-400/20 text-purple-200 border border-purple-400/30">
+                      👑 Premium Live Dosa Package
+                    </span>
+                    <span className="inline-block text-xs font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-amber-400/20 text-amber-200 border border-amber-400/30">
+                      ⏱️ 3 Hours Service Duration
+                    </span>
+                    <span className="inline-block text-xs font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-emerald-400/20 text-emerald-200 border border-emerald-400/30">
+                      + 1 Main Course + 1 Dessert
+                    </span>
+                  </div>
+                  <h3 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white mb-2">
+                    {LIVE_DOSA_OPTION_2.title}
+                  </h3>
+                  <p className="text-amber-200 font-semibold text-base sm:text-lg mb-3">
+                    {LIVE_DOSA_OPTION_2.tagline}
+                  </p>
+                  <p className="text-sm sm:text-base text-gray-200 leading-relaxed mb-4">
+                    The ultimate live dining spectacle. Includes the full standard 12 live dishes (Idly Or Veg Biryani, Live Meduvada, Dosas, Uthappams, Chutneys and Sambar) plus <strong>One Main Course Dish</strong> and <strong>One Dessert</strong> with our master chefs staying for <strong>Three (3) Hours</strong> instead of Two Hours.
+                  </p>
+
+                  {/* Option 2 Pricing Tiers Highlight */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 my-4">
+                    <div className="bg-white/10 backdrop-blur-xs border border-white/20 p-4 rounded-2xl text-left">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-bold text-amber-300">📅 Week days (Mon – Fri)</span>
+                        <span className="text-base font-extrabold text-white">£16.50 <span className="text-xs font-normal text-gray-300">/ person</span></span>
+                      </div>
+                      <p className="text-xs text-gray-300 mb-1.5">35 people minimum guarantee</p>
+                      <span className="inline-block text-xs font-bold px-2.5 py-0.5 rounded-md bg-amber-400/20 text-amber-200 border border-amber-400/30">
+                        Min. call out: £577.50
+                      </span>
+                    </div>
+
+                    <div className="bg-white/10 backdrop-blur-xs border border-white/20 p-4 rounded-2xl text-left">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-bold text-amber-300">🌟 Week Ends &amp; Bank Holidays</span>
+                        <span className="text-base font-extrabold text-white">£17.50 <span className="text-xs font-normal text-gray-300">/ person</span></span>
+                      </div>
+                      <p className="text-xs text-gray-300 mb-1.5">40 people minimum guarantee</p>
+                      <span className="inline-block text-xs font-bold px-2.5 py-0.5 rounded-md bg-amber-400/20 text-amber-200 border border-amber-400/30">
+                        Min. call out: £700.00
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-amber-200/90 italic mb-5">
+                    ℹ️ Minimum call out charge (£577.50 on Weekdays / £700 on Weekends) can be reached by the number of people or by the menu &amp; upgrades.
+                  </p>
+
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={() => {
+                        setSelectedPackageForModal('Live Dosa Option 2');
+                        setIsMenuOrderModalOpen(true);
+                      }}
+                      className="px-6 py-3.5 rounded-xl font-bold text-gray-900 bg-amber-400 hover:bg-amber-300 transition-all text-sm shadow-md cursor-pointer flex items-center gap-2"
+                    >
+                      <span>Book Live Dosa Option 2</span>
+                      <span>→</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveMenuTab('live-dosa-1')}
+                      className="px-5 py-3.5 rounded-xl font-bold text-white bg-white/10 hover:bg-white/20 border border-white/20 transition-all text-sm cursor-pointer flex items-center gap-1.5"
+                    >
+                      <span>← Switch to Option 1 (£11 / £12)</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Option 2 Inclusions Breakdown */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div className="bg-white p-6 rounded-3xl border-2 border-amber-200 shadow-sm space-y-2.5">
+                  <div className="flex items-center gap-2 text-[#C8860A] font-bold text-base">
+                    <span className="text-2xl">🥞</span>
+                    <span>12 Live Dishes Included</span>
+                  </div>
+                  <p className="text-sm font-medium text-gray-600 leading-relaxed">
+                    Idly Or Veg Biryani, Live Meduvada, 5 Live Dosa Varieties, 5 Live Uthappam Varieties, Chutneys &amp; Sambar.
+                  </p>
+                </div>
+
+                <div className="bg-white p-6 rounded-3xl border-2 border-purple-200 shadow-sm space-y-2.5">
+                  <div className="flex items-center gap-2 text-purple-700 font-bold text-base">
+                    <span className="text-2xl">🍛</span>
+                    <span>1 Main Course Dish</span>
+                  </div>
+                  <p className="text-sm font-medium text-gray-600 leading-relaxed">
+                    Your choice of 1 authentic rich vegetarian curry / main course dish from our comprehensive restaurant menu.
+                  </p>
+                </div>
+
+                <div className="bg-white p-6 rounded-3xl border-2 border-purple-200 shadow-sm space-y-2.5">
+                  <div className="flex items-center gap-2 text-purple-700 font-bold text-base">
+                    <span className="text-2xl">🍮</span>
+                    <span>1 Dessert &amp; 3 Hours Service</span>
+                  </div>
+                  <p className="text-sm font-medium text-gray-600 leading-relaxed">
+                    1 mouth-watering traditional sweet plus full chef cooking and serving station for 3 continuous hours.
+                  </p>
+                </div>
+              </div>
+
+              {/* 12 Live Dosa Items Grid */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h4 className="text-xl sm:text-2xl font-bold text-gray-900">Standard 12 Live Dishes (Option 2)</h4>
+                    <p className="text-sm text-gray-500">Includes Idly Or Veg Biryani and on-the-spot live dosas and uthappams</p>
+                  </div>
+                  <span className="text-xs font-bold px-3.5 py-1.5 rounded-full bg-purple-100 text-purple-900 border border-purple-200">
+                    3 Hours Extended Cooking
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {LIVE_DOSA_OPTION_2.items.map((item, idx) => (
+                    <div
+                      key={item.name}
+                      className="bg-white rounded-2xl border-2 border-purple-200/80 p-5 shadow-sm hover:shadow-md transition-all hover:border-purple-400 relative overflow-hidden flex flex-col justify-between"
+                    >
+                      <div className="absolute top-0 right-0 bg-gradient-to-l from-purple-600 to-purple-400 text-white font-bold text-[10px] uppercase tracking-wider px-3 py-0.5 rounded-bl-xl shadow-xs">
+                        {item.isLive ? 'Live Prep' : 'Included Course'}
+                      </div>
+
+                      <div>
+                        <div className="flex items-center gap-2.5 mb-2 pr-14">
+                          <span className="w-7 h-7 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                            {idx + 1}
+                          </span>
+                          <h5 className="font-bold text-gray-900 text-base">{item.name}</h5>
+                        </div>
+
+                        <p className="text-sm font-medium text-gray-600 mb-3 leading-snug">
+                          {item.description}
+                        </p>
+                      </div>
+
+                      <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          {item.tags?.map((t) => (
+                            <span key={t} className="text-xs font-bold px-2 py-0.5 rounded-md bg-purple-50 text-purple-900 border border-purple-200">
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                        <span className="text-xs font-bold text-purple-700">
+                          {item.isLive ? 'Hot & Crisp Live' : 'Special Inclusions'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ─── DYNAMIC UPGRADES SECTION FOR OPTION 2 ─── */}
+              <div className="bg-gradient-to-br from-purple-50/80 via-white to-purple-50/40 rounded-3xl border-2 border-purple-200/80 p-6 sm:p-8 shadow-sm">
+                <div className="text-center max-w-2xl mx-auto mb-8">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-purple-100 text-purple-900 border border-purple-300 mb-2">
+                    ✨ Bespoke Event Enhancements
+                  </span>
+                  <h4 className="text-2xl sm:text-3xl font-extrabold text-gray-900 mb-2">Upgrades</h4>
+                  <p className="text-xs sm:text-sm text-gray-600">
+                    Combine your Live Dosa Option 2 booking with Gazebo, extra waitstaff, crockery, or extra cooking time.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {(menus.MENU_UPGRADES?.items || MENU_UPGRADES.items).map((upgrade) => (
+                    <div
+                      key={upgrade.id}
+                      className="bg-white rounded-2xl border border-purple-200/80 p-5 shadow-xs hover:shadow-md transition-all hover:border-purple-400 flex flex-col justify-between group"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-2.5">
+                          <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-200 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
+                            {upgrade.icon}
+                          </div>
+                          <span className="text-xs font-extrabold px-2.5 py-1 rounded-lg bg-purple-100/70 text-purple-900 border border-purple-200">
+                            {upgrade.priceLabel}
+                          </span>
+                        </div>
+                        <h5 className="font-bold text-gray-900 text-sm mb-1.5">{upgrade.name}</h5>
+                        <p className="text-xs text-gray-600 leading-relaxed mb-4">
+                          {upgrade.description}
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setSelectedPackageForModal('Live Dosa Option 2');
+                          setIsMenuOrderModalOpen(true);
+                        }}
+                        className="w-full py-2.5 rounded-xl font-bold text-xs bg-purple-50 group-hover:bg-[#C8860A] text-purple-900 group-hover:text-white border border-purple-200 group-hover:border-[#C8860A] transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+                      >
+                        <span>Add to Option 2 Booking</span>
+                        <span>+</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════
+              TAB 4: MADRAS THALI / SOUTH INDIAN MEALS / ANDHRA BHOJANAM (OPTION 3)
+              ══════════════════════════════════════════════════════════════ */}
+          {activeMenuTab === 'madras-thali' && (
+            <div className="space-y-8 animate-in fade-in duration-300">
+              {/* Thali Hero Banner */}
+              <div
+                className="rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden"
+                style={{ background: 'linear-gradient(135deg, #451A03 0%, #78350F 50%, #C8860A 100%)' }}
+              >
+                <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none text-9xl">
+                  🍲
+                </div>
+                <div className="relative z-10 max-w-3xl">
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    <span className="inline-block text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                      🍲 Option 3 Full Meals
+                    </span>
+                    <span className="inline-block text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-emerald-400/20 text-emerald-300 border border-emerald-400/30">
+                      12 Core Items Included
+                    </span>
+                  </div>
+                  <h3 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white mb-2">
+                    {MADRAS_THALI_OPTION_3.title}
+                  </h3>
+                  <p className="text-amber-200 font-medium text-sm sm:text-base mb-3">
+                    {MADRAS_THALI_OPTION_3.tagline}
+                  </p>
+                  <p className="text-xs sm:text-sm text-gray-200 leading-relaxed mb-5">
+                    An authentic South Indian royal feast. Includes Plain Rice, Sambar, Rasam, Koottu, Poriyal, Kaarakolambu, Sweet, Pappad, Yoghurt, Pickle, Veg Kurma, and 1 Poori, with full flexibility to customize your favourite vegetable styles and add extra dishes.
+                  </p>
+
+                  {/* Price Banner Card */}
+                  <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
+                    <div>
+                      <span className="text-xs text-amber-300 font-bold block uppercase tracking-wide">Per Person Rate</span>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-3xl sm:text-4xl font-black text-white">£10.99</span>
+                        <span className="text-xs text-gray-300">/ per person</span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-amber-100 max-w-xs leading-snug">
+                      *Price dynamically updates when additions or extra event upgrades are selected.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={() => {
+                        setSelectedPackageForModal('Madras Thali (Option 3)');
+                        setIsMenuOrderModalOpen(true);
+                      }}
+                      className="px-6 py-3 rounded-xl font-bold text-gray-900 bg-amber-400 hover:bg-amber-300 transition-all text-xs sm:text-sm shadow-md cursor-pointer flex items-center gap-2"
+                    >
+                      <span>Book Madras Thali (£10.99/pp)</span>
+                      <span>→</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedPackageForModal('Madras Thali (Option 3)');
+                        setIsMenuOrderModalOpen(true);
+                      }}
+                      className="px-5 py-3 rounded-xl font-bold text-white bg-white/10 hover:bg-white/20 border border-white/20 transition-all text-xs sm:text-sm cursor-pointer flex items-center gap-1.5"
+                    >
+                      <span>✨ Choose Custom Variants &amp; Upgrades</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 12 Core Included Dishes */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h4 className="text-xl font-bold text-gray-900">12 Core Traditional Items Included</h4>
+                    <p className="text-xs text-gray-500">Every plate comes standard with all 12 authentic South Indian elements</p>
+                  </div>
+                  <span className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
+                    Standard Inclusions
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {MADRAS_THALI_OPTION_3.coreDishes.map((dish, idx) => (
+                    <div
+                      key={dish.name}
+                      className="bg-white rounded-2xl border-2 border-amber-200/80 p-4 shadow-xs hover:shadow-sm transition-all flex items-start gap-3"
+                    >
+                      <span className="w-7 h-7 rounded-full bg-amber-100 text-[#C8860A] font-bold text-xs flex items-center justify-center flex-shrink-0 mt-0.5">
+                        {idx + 1}
+                      </span>
+                      <div>
+                        <h5 className="font-bold text-gray-900 text-sm sm:text-base">{dish.name}</h5>
+                        <p className="text-xs sm:text-sm text-gray-600 mt-0.5 leading-snug">{dish.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 6 Custom Flavour Options Showcase */}
+              <div className="bg-white rounded-3xl border-2 border-amber-200/80 p-6 sm:p-8 shadow-sm space-y-6">
+                <div className="border-b border-gray-100 pb-3 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded bg-amber-100 text-amber-900 mb-1 inline-block">
+                      Bespoke Flavour Varieties
+                    </span>
+                    <h4 className="text-xl sm:text-2xl font-bold text-gray-900">Customizable Dish Options</h4>
+                    <p className="text-sm text-gray-500">Choose your favorite vegetable styles and preparations when booking</p>
+                  </div>
+                  <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+                    Included in £10.99
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {/* Sambar Options */}
+                  <div className="p-5 rounded-2xl border-2 border-amber-200/80 bg-amber-50/40 space-y-3">
+                    <span className="text-base font-extrabold text-amber-950 flex items-center gap-2">
+                      <span className="text-lg">🥣</span>
+                      <span>Sambar Options:</span>
+                    </span>
+                    <ul className="text-sm font-medium text-gray-800 space-y-1.5">
+                      {MADRAS_THALI_OPTION_3.variantOptions.sambarOptions.map(opt => (
+                        <li key={opt} className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
+                          <span>{opt}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Rasam Options */}
+                  <div className="p-5 rounded-2xl border-2 border-amber-200/80 bg-amber-50/40 space-y-3">
+                    <span className="text-base font-extrabold text-amber-950 flex items-center gap-2">
+                      <span className="text-lg">🌶️</span>
+                      <span>Rasam Options:</span>
+                    </span>
+                    <ul className="text-sm font-medium text-gray-800 space-y-1.5">
+                      {MADRAS_THALI_OPTION_3.variantOptions.rasamOptions.map(opt => (
+                        <li key={opt} className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
+                          <span>{opt}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Koottu Options */}
+                  <div className="p-5 rounded-2xl border-2 border-amber-200/80 bg-amber-50/40 space-y-3">
+                    <span className="text-base font-extrabold text-amber-950 flex items-center gap-2">
+                      <span className="text-lg">🥗</span>
+                      <span>Koottu Options:</span>
+                    </span>
+                    <ul className="text-sm font-medium text-gray-800 space-y-1.5">
+                      {MADRAS_THALI_OPTION_3.variantOptions.koottuOptions.map(opt => (
+                        <li key={opt} className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
+                          <span>{opt}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Poriyal Options */}
+                  <div className="p-5 rounded-2xl border-2 border-amber-200/80 bg-amber-50/40 space-y-3">
+                    <span className="text-base font-extrabold text-amber-950 flex items-center gap-2">
+                      <span className="text-lg">🥥</span>
+                      <span>Poriyal Options:</span>
+                    </span>
+                    <ul className="text-sm font-medium text-gray-800 space-y-1.5">
+                      {MADRAS_THALI_OPTION_3.variantOptions.poriyalOptions.map(opt => (
+                        <li key={opt} className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
+                          <span>{opt}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Kaarakolambu Options */}
+                  <div className="p-5 rounded-2xl border-2 border-amber-200/80 bg-amber-50/40 space-y-3">
+                    <span className="text-base font-extrabold text-amber-950 flex items-center gap-2">
+                      <span className="text-lg">🍛</span>
+                      <span>Kaarakolambu Options:</span>
+                    </span>
+                    <ul className="text-sm font-medium text-gray-800 space-y-1.5">
+                      {MADRAS_THALI_OPTION_3.variantOptions.kaarakolambuOptions.map(opt => (
+                        <li key={opt} className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
+                          <span>{opt}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Sweet Options */}
+                  <div className="p-5 rounded-2xl border-2 border-amber-200/80 bg-amber-50/40 space-y-3">
+                    <span className="text-base font-extrabold text-amber-950 flex items-center gap-2">
+                      <span className="text-lg">🍮</span>
+                      <span>Sweet Options:</span>
+                    </span>
+                    <ul className="text-sm font-medium text-gray-800 space-y-1.5">
+                      {MADRAS_THALI_OPTION_3.variantOptions.sweetOptions.map(opt => (
+                        <li key={opt} className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
+                          <span>{opt}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* Additions List Showcase */}
+              <div className="bg-white rounded-3xl border-2 border-amber-200/80 p-6 sm:p-8 shadow-sm space-y-6">
+                <div className="border-b border-gray-100 pb-3 flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <h4 className="text-xl sm:text-2xl font-bold text-gray-900">Additions &amp; Extra Courses</h4>
+                    <p className="text-sm text-gray-500">Upgrade your Madras Thali with extra rice varieties, Indo-Chinese noodles, sweets, or specialty curries</p>
+                  </div>
+                  <span className="text-xs font-bold text-amber-900 bg-amber-100 px-3 py-1 rounded-full border border-amber-200">
+                    From £2.50 / dish
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                  {MADRAS_THALI_OPTION_3.additions.map((addition) => (
+                    <div
+                      key={addition.name}
+                      className="p-3.5 rounded-2xl border-2 border-amber-200/60 bg-amber-50/30 flex items-center justify-between gap-3 hover:border-amber-400 transition-colors"
+                    >
+                      <span className="text-sm font-semibold text-gray-900 truncate">{addition.name}</span>
+                      <span className="text-xs font-bold text-[#C8860A] whitespace-nowrap bg-white px-2 py-1 rounded-lg border border-amber-200">
+                        +£{addition.price.toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Dynamic Upgrades for Madras Thali */}
+              <div className="bg-gradient-to-br from-amber-50/80 via-white to-amber-50/40 rounded-3xl border-2 border-amber-200/80 p-6 sm:p-8 shadow-sm">
+                <div className="text-center max-w-2xl mx-auto mb-8">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 mb-2">
+                    ✨ Bespoke Event Enhancements
+                  </span>
+                  <h4 className="text-2xl sm:text-3xl font-extrabold text-gray-900 mb-2">Upgrades</h4>
+                  <p className="text-xs sm:text-sm text-gray-600">
+                    Elevate your Thali feast with luxury Gazebo setup, dedicated waitstaff, crockery, or extra serving time.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {(menus.MENU_UPGRADES?.items || MENU_UPGRADES.items).map((upgrade) => (
+                    <div
+                      key={upgrade.id}
+                      className="bg-white rounded-2xl border border-amber-200/80 p-5 shadow-xs hover:shadow-md transition-all hover:border-amber-400 flex flex-col justify-between group"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-2.5">
+                          <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
+                            {upgrade.icon}
+                          </div>
+                          <span className="text-xs font-extrabold px-2.5 py-1 rounded-lg bg-amber-100/70 text-amber-900 border border-amber-200">
+                            {upgrade.priceLabel}
+                          </span>
+                        </div>
+                        <h5 className="font-bold text-gray-900 text-sm mb-1.5">{upgrade.name}</h5>
+                        <p className="text-xs text-gray-600 leading-relaxed mb-4">
+                          {upgrade.description}
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setSelectedPackageForModal('Madras Thali (Option 3)');
+                          setIsMenuOrderModalOpen(true);
+                        }}
+                        className="w-full py-2.5 rounded-xl font-bold text-xs bg-amber-50 group-hover:bg-[#C8860A] text-[#C8860A] group-hover:text-white border border-amber-200 group-hover:border-[#C8860A] transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+                      >
+                        <span>Add to Thali Booking</span>
+                        <span>+</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════
+              TAB: TAILOR YOUR OWN MENU (OPTION 4)
+              ══════════════════════════════════════════════════════════════ */}
+          {activeMenuTab === 'tailor-menu' && (
+            <div className="space-y-8 animate-in fade-in duration-300">
+              {/* Option 4 Hero Banner */}
+              <div
+                className="rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden"
+                style={{ background: 'linear-gradient(135deg, #451A03 0%, #78350F 50%, #B45309 100%)' }}
+              >
+                <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none text-9xl">
+                  🎨
+                </div>
+                <div className="relative z-10 max-w-3xl">
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    <span className="inline-block text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                      🎨 Option 4 Bespoke Catering
+                    </span>
+                    <span className="inline-block text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-amber-300/20 text-amber-200 border border-amber-300/30">
+                      4 Live Stations Included
+                    </span>
+                  </div>
+                  <h3 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white mb-2">
+                    {TAILOR_MENU_OPTION_4.title}
+                  </h3>
+                  <p className="text-amber-200 font-medium text-sm sm:text-base mb-3">
+                    {TAILOR_MENU_OPTION_4.subtitle}
+                  </p>
+                  <p className="text-xs sm:text-sm text-gray-200 leading-relaxed mb-5">
+                    Create your dream personalized event menu with theatrical Live Jilebi, Live Sweet Paan, Live Dosa, and Live Vada stations. We provide full commercial cooking gear, Bain Marie food warmers, and high-quality 9-inch compartment plates.
+                  </p>
+
+                  {/* Pricing & Deposit Banner Card */}
+                  <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
+                    <div>
+                      <span className="text-xs text-amber-300 font-bold block uppercase tracking-wide">Pricing Policy</span>
+                      <div className="text-xl sm:text-2xl font-black text-white">
+                        {TAILOR_MENU_OPTION_4.priceLabel}
+                      </div>
+                    </div>
+                    <div className="bg-amber-400/20 border border-amber-300/40 px-3.5 py-2 rounded-xl text-xs text-amber-100 max-w-xs leading-snug">
+                      <strong>50% Deposit:</strong> Paid online at booking. Balance paid by cash after event completion.
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={() => {
+                        setSelectedPackageForModal('Tailor Your Own Menu (Option 4)');
+                        setIsMenuOrderModalOpen(true);
+                      }}
+                      className="px-6 py-3 rounded-xl font-bold text-gray-900 bg-amber-400 hover:bg-amber-300 transition-all text-xs sm:text-sm shadow-md cursor-pointer flex items-center gap-2"
+                    >
+                      <span>Tailor Your Menu Online</span>
+                      <span>→</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedPackageForModal('Tailor Your Own Menu (Option 4)');
+                        setIsMenuOrderModalOpen(true);
+                      }}
+                      className="px-5 py-3 rounded-xl font-bold text-white bg-white/10 hover:bg-white/20 border border-white/20 transition-all text-xs sm:text-sm cursor-pointer flex items-center gap-1.5"
+                    >
+                      <span>✨ Choose Live Stations &amp; Upgrades</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 4 Signature Live Stations Showcase */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h4 className="text-xl font-bold text-gray-900">4 Signature Live Stations</h4>
+                    <p className="text-xs text-gray-500">Live on-the-spot theatrical cooking stations for your event</p>
+                  </div>
+                  <span className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
+                    4 Live Counters
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {TAILOR_MENU_OPTION_4.liveStationsFeatured.map((stn) => (
+                    <div
+                      key={stn.name}
+                      className="bg-white rounded-2xl border-2 border-amber-200/80 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-2xl mb-3">
+                          {stn.icon}
+                        </div>
+                        <h5 className="font-bold text-gray-900 text-sm mb-1.5">{stn.name}</h5>
+                        <p className="text-xs text-gray-600 leading-relaxed">{stn.description}</p>
+                      </div>
+                      <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-[11px] font-bold text-[#C8860A]">
+                        <span>✓ Live Chef Cooking</span>
+                        <span>Included</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Logistics Grid: What We Bring & What We Need From You */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* What We Bring */}
+                <div className="bg-emerald-50/70 border-2 border-emerald-200/80 rounded-3xl p-6 sm:p-7 shadow-sm space-y-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl">🚚</span>
+                    <div>
+                      <h4 className="font-bold text-emerald-950 text-base sm:text-lg">WHAT WE BRING ?</h4>
+                      <p className="text-xs text-emerald-800">Complete professional catering equipment provided</p>
+                    </div>
+                  </div>
+                  <ul className="space-y-2.5 text-xs sm:text-sm text-gray-700">
+                    {TAILOR_MENU_OPTION_4.whatWeBring.map((item, idx) => (
+                      <li key={idx} className="flex items-start gap-2">
+                        <span className="text-emerald-600 font-bold text-base leading-none">✓</span>
+                        <span className="leading-snug">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* What We Need From You */}
+                <div className="bg-amber-50/70 border-2 border-amber-200/80 rounded-3xl p-6 sm:p-7 shadow-sm space-y-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl">🔌</span>
+                    <div>
+                      <h4 className="font-bold text-amber-950 text-base sm:text-lg">WHAT WE NEED FROM YOU ?</h4>
+                      <p className="text-xs text-amber-800">Venue requirements for smooth event setup</p>
+                    </div>
+                  </div>
+                  <ul className="space-y-2.5 text-xs sm:text-sm text-gray-700">
+                    {TAILOR_MENU_OPTION_4.whatWeNeedFromYou.map((item, idx) => (
+                      <li key={idx} className="flex items-start gap-2">
+                        <span className="text-[#C8860A] font-bold text-base leading-none">•</span>
+                        <span className="leading-snug">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              {/* Dynamic Upgrades for Option 4 */}
+              <div className="bg-gradient-to-br from-amber-50/80 via-white to-amber-50/40 rounded-3xl border-2 border-amber-200/80 p-6 sm:p-8 shadow-sm">
+                <div className="text-center max-w-2xl mx-auto mb-8">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 mb-2">
+                    ✨ Bespoke Event Enhancements
+                  </span>
+                  <h4 className="text-2xl sm:text-3xl font-extrabold text-gray-900 mb-2">Upgrades</h4>
+                  <p className="text-xs sm:text-sm text-gray-600">
+                    Enhance your tailored package with luxury Gazebo marquee, extra waiters, ceramic crockery, or extra cooking time.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {(menus.MENU_UPGRADES?.items || MENU_UPGRADES.items).map((upgrade) => (
+                    <div
+                      key={upgrade.id}
+                      className="bg-white rounded-2xl border border-amber-200/80 p-5 shadow-xs hover:shadow-md transition-all hover:border-amber-400 flex flex-col justify-between group"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-2.5">
+                          <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
+                            {upgrade.icon}
+                          </div>
+                          <span className="text-xs font-extrabold px-2.5 py-1 rounded-lg bg-amber-100/70 text-amber-900 border border-amber-200">
+                            {upgrade.priceLabel}
+                          </span>
+                        </div>
+                        <h5 className="font-bold text-gray-900 text-sm mb-1.5">{upgrade.name}</h5>
+                        <p className="text-xs text-gray-600 leading-relaxed mb-4">
+                          {upgrade.description}
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setSelectedPackageForModal('Tailor Your Own Menu (Option 4)');
+                          setIsMenuOrderModalOpen(true);
+                        }}
+                        className="w-full py-2.5 rounded-xl font-bold text-xs bg-amber-50 group-hover:bg-[#C8860A] text-[#C8860A] group-hover:text-white border border-amber-200 group-hover:border-[#C8860A] transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+                      >
+                        <span>Add to Tailor Booking</span>
+                        <span>+</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════
+              TAB: DOSA FESTIVAL AT YOUR HOME (OPTION 5)
+              ══════════════════════════════════════════════════════════════ */}
+          {activeMenuTab === 'dosa-festival' && (
+            <div className="space-y-8 animate-in fade-in duration-300">
+              {/* Option 5 Hero Banner */}
+              <div
+                className="rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden"
+                style={{ background: 'linear-gradient(135deg, #7C2D12 0%, #C2410C 50%, #EA580C 100%)' }}
+              >
+                <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none text-9xl">
+                  🥞
+                </div>
+                <div className="relative z-10 max-w-3xl">
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    <span className="inline-block text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-orange-300/20 text-orange-200 border border-orange-300/30">
+                      🥞 Option 5 London Dosa Festival
+                    </span>
+                    <span className="inline-block text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-amber-300/20 text-amber-200 border border-amber-300/30">
+                      🏆 16 Years Quality &amp; Trust
+                    </span>
+                  </div>
+                  <h3 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white mb-2">
+                    {DOSA_FESTIVAL_OPTION_5.title}
+                  </h3>
+                  <p className="text-orange-200 font-semibold text-sm sm:text-base mb-3 leading-snug">
+                    {DOSA_FESTIVAL_OPTION_5.tagline}
+                  </p>
+                  <p className="text-xs sm:text-sm text-gray-100 leading-relaxed mb-5">
+                    Experience London's ultimate Dosa celebration at your home. Over 34 signature artisan Dosa varieties fried golden and crispy on hot live tawas, served alongside fresh chutneys and boiling hot sambar.
+                  </p>
+
+                  {/* Price Banner Card */}
+                  <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
+                    <div>
+                      <span className="text-xs text-orange-200 font-bold block uppercase tracking-wide">Festival Package Rate</span>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-3xl sm:text-4xl font-black text-white">£14.99</span>
+                        <span className="text-xs text-gray-200">/ per person</span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-orange-100 max-w-xs leading-snug">
+                      Includes continuous live tawa cooking with Coconut, Tomato-Onion, and Mint chutneys + Sambar.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={() => {
+                        setSelectedPackageForModal('Dosa Festival At Your Home (Option 5)');
+                        setIsMenuOrderModalOpen(true);
+                      }}
+                      className="px-6 py-3 rounded-xl font-bold text-gray-950 bg-orange-300 hover:bg-orange-200 transition-all text-xs sm:text-sm shadow-md cursor-pointer flex items-center gap-2"
+                    >
+                      <span>Book Dosa Festival (£14.99/pp)</span>
+                      <span>→</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedPackageForModal('Dosa Festival At Your Home (Option 5)');
+                        setIsMenuOrderModalOpen(true);
+                      }}
+                      className="px-5 py-3 rounded-xl font-bold text-white bg-white/10 hover:bg-white/20 border border-white/20 transition-all text-xs sm:text-sm cursor-pointer flex items-center gap-1.5"
+                    >
+                      <span>✨ View 34+ Varieties &amp; Upgrades</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 34+ Signature Dosa Varieties Grid */}
+              <div className="bg-white rounded-3xl border-2 border-orange-200/80 p-6 sm:p-8 shadow-sm space-y-6">
+                <div className="border-b border-gray-100 pb-3 flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded bg-orange-100 text-orange-900 mb-1 inline-block">
+                      Artisan Varieties
+                    </span>
+                    <h4 className="text-xl sm:text-2xl font-bold text-gray-900">
+                      34+ Signature Festival Dosa Varieties
+                    </h4>
+                    <p className="text-xs text-gray-500">
+                      From traditional ferments to creative gourmet fillings, made live on hot tawas
+                    </p>
+                  </div>
+                  <span className="text-xs font-bold text-orange-900 bg-orange-100 px-3 py-1 rounded-full border border-orange-200">
+                    34 Varieties
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                  {DOSA_FESTIVAL_OPTION_5.dosaVarieties.map((dosa, idx) => (
+                    <div
+                      key={dosa}
+                      className="p-3 rounded-xl border border-orange-200/80 bg-orange-50/40 hover:bg-orange-50 hover:border-orange-400 transition-all flex items-center gap-2 group"
+                    >
+                      <span className="w-5 h-5 rounded-full bg-orange-200 text-orange-900 font-bold text-[10px] flex items-center justify-center flex-shrink-0 group-hover:bg-[#C8860A] group-hover:text-white transition-colors">
+                        {idx + 1}
+                      </span>
+                      <span className="text-xs font-bold text-gray-900 truncate">{dosa}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Dynamic Upgrades for Option 5 */}
+              <div className="bg-gradient-to-br from-orange-50/80 via-white to-orange-50/40 rounded-3xl border-2 border-orange-200/80 p-6 sm:p-8 shadow-sm">
+                <div className="text-center max-w-2xl mx-auto mb-8">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-orange-100 text-orange-900 border border-orange-300 mb-2">
+                    ✨ Bespoke Event Enhancements
+                  </span>
+                  <h4 className="text-2xl sm:text-3xl font-extrabold text-gray-900 mb-2">Upgrades</h4>
+                  <p className="text-xs sm:text-sm text-gray-600">
+                    Elevate your Dosa Festival with our all-weather Gazebo marquee, extra chefs, tableware, or extended hours.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {(menus.MENU_UPGRADES?.items || MENU_UPGRADES.items).map((upgrade) => (
+                    <div
+                      key={upgrade.id}
+                      className="bg-white rounded-2xl border border-orange-200/80 p-5 shadow-xs hover:shadow-md transition-all hover:border-orange-400 flex flex-col justify-between group"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-2.5">
+                          <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-200 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
+                            {upgrade.icon}
+                          </div>
+                          <span className="text-xs font-extrabold px-2.5 py-1 rounded-lg bg-orange-100/70 text-orange-900 border border-orange-200">
+                            {upgrade.priceLabel}
+                          </span>
+                        </div>
+                        <h5 className="font-bold text-gray-900 text-sm mb-1.5">{upgrade.name}</h5>
+                        <p className="text-xs text-gray-600 leading-relaxed mb-4">
+                          {upgrade.description}
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setSelectedPackageForModal('Dosa Festival At Your Home (Option 5)');
+                          setIsMenuOrderModalOpen(true);
+                        }}
+                        className="w-full py-2.5 rounded-xl font-bold text-xs bg-orange-50 group-hover:bg-[#C8860A] text-orange-900 group-hover:text-white border border-orange-200 group-hover:border-[#C8860A] transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+                      >
+                        <span>Add to Festival Booking</span>
+                        <span>+</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════
+              TAB: CANAPÉ SERVICE (OPTION 6)
+              ══════════════════════════════════════════════════════════════ */}
+          {activeMenuTab === 'canape' && (
+            <div className="space-y-8 animate-in fade-in duration-300">
+              <div
+                className="rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden"
+                style={{ background: 'linear-gradient(135deg, #4C0519 0%, #881337 50%, #BE123C 100%)' }}
+              >
+                <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none text-9xl">
+                  🍢
+                </div>
+                <div className="relative z-10 max-w-3xl">
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    <span className="inline-block text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-rose-400/20 text-rose-200 border border-rose-400/30">
+                      🍢 Option 6 Cocktail Catering
+                    </span>
+                  </div>
+                  <h3 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white mb-2">
+                    {CANAPE_OPTION_6.title}
+                  </h3>
+                  <p className="text-rose-200 font-semibold text-sm sm:text-base mb-3 leading-snug">
+                    {CANAPE_OPTION_6.tagline}
+                  </p>
+                  <p className="text-xs sm:text-sm text-gray-200 leading-relaxed mb-5">
+                    {CANAPE_OPTION_6.description}
+                  </p>
+
+                  <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
+                    <div>
+                      <span className="text-xs text-rose-200 font-bold block uppercase tracking-wide">Starting Price</span>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-3xl sm:text-4xl font-black text-white">£8.99</span>
+                        <span className="text-xs text-gray-200">/ per person</span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-rose-100 max-w-xs leading-snug">
+                      Passed canapés &amp; interactive cocktail table setups for weddings, receptions, and birthday bashes.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={() => {
+                        setSelectedPackageForModal('Canapé Service (Option 6)');
+                        setIsMenuOrderModalOpen(true);
+                      }}
+                      className="px-6 py-3 rounded-xl font-bold text-gray-950 bg-rose-200 hover:bg-rose-100 transition-all text-xs sm:text-sm shadow-md cursor-pointer flex items-center gap-2"
+                    >
+                      <span>Book Canapé Service</span>
+                      <span>→</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Canapé Suggestions Grid */}
+              <div className="bg-white rounded-3xl border-2 border-rose-200/80 p-6 sm:p-8 shadow-sm space-y-6">
+                <div className="border-b border-gray-100 pb-3 flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <h4 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
+                      <span>🍢</span>
+                      <span>Popular Canapé Suggestions</span>
+                    </h4>
+                    <p className="text-sm text-gray-500">Live passed hors d&apos;oeuvres and interactive cocktail table stations</p>
+                  </div>
+                  <span className="text-xs font-bold text-rose-900 bg-rose-100 px-3 py-1 rounded-full border border-rose-200">
+                    {CANAPE_OPTION_6.suggestedItems.length} Suggestions
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {CANAPE_OPTION_6.suggestedItems.map((item, idx) => (
+                    <div key={idx} className="p-3.5 rounded-2xl border-2 border-rose-200/70 bg-rose-50/40 font-semibold text-sm text-rose-950 flex items-center gap-2.5 hover:border-rose-400 hover:bg-rose-50/80 transition-all">
+                      <span className="w-6 h-6 rounded-full bg-rose-200 text-rose-900 font-bold text-xs flex items-center justify-center flex-shrink-0">✓</span>
+                      <span className="truncate">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════
+              TAB: NORTH INDIAN STANDARD MENU (OPTION 7)
+              ══════════════════════════════════════════════════════════════ */}
+          {activeMenuTab === 'north-indian' && (
+            <div className="space-y-8 animate-in fade-in duration-300">
+              <div
+                className="rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden"
+                style={{ background: 'linear-gradient(135deg, #1E1B4B 0%, #312E81 50%, #4338CA 100%)' }}
+              >
+                <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none text-9xl">
+                  🍛
+                </div>
+                <div className="relative z-10 max-w-3xl">
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    <span className="inline-block text-xs font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-indigo-400/20 text-indigo-200 border border-indigo-400/30">
+                      🍛 Option 7 North Indian Standard Menu
+                    </span>
+                    <span className="inline-block text-xs font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-amber-400/20 text-amber-200 border border-amber-400/30">
+                      Min 25 People
+                    </span>
+                  </div>
+                  <h3 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white mb-2">
+                    {NORTH_INDIAN_OPTION_7.title}
+                  </h3>
+                  <p className="text-indigo-200 font-semibold text-base sm:text-lg mb-3 leading-snug">
+                    {NORTH_INDIAN_OPTION_7.subtitle}
+                  </p>
+
+                  <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
+                    <div>
+                      <span className="text-xs sm:text-sm text-indigo-200 font-bold block uppercase tracking-wide">Fixed Package Price</span>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-3xl sm:text-4xl font-black text-white">£12.00</span>
+                        <span className="text-sm text-gray-200">/ per person</span>
+                      </div>
+                    </div>
+                    <p className="text-xs sm:text-sm text-indigo-100 max-w-sm leading-relaxed">
+                      Includes 1 Tava Roti or Nan, 2 North Indian/Punjabi Subjies, Dal, Veg Biryani/Pulao, Salad, Pappad and Pickle.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={() => {
+                        setSelectedPackageForModal('North Indian Standard Menu (Option 7)');
+                        setIsMenuOrderModalOpen(true);
+                      }}
+                      className="px-6 py-3.5 rounded-xl font-bold text-gray-950 bg-indigo-200 hover:bg-indigo-100 transition-all text-sm shadow-md cursor-pointer flex items-center gap-2"
+                    >
+                      <span>Book North Indian Menu (£12/pp)</span>
+                      <span>→</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Inclusions Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                <div className="bg-white p-6 rounded-3xl border-2 border-indigo-200/90 shadow-sm space-y-3 hover:shadow-md transition-shadow">
+                  <span className="text-xs font-extrabold text-indigo-900 uppercase tracking-wider bg-indigo-50 px-3 py-1 rounded-lg inline-block">1. Breads</span>
+                  <div className="text-lg font-bold text-gray-900">One Tava Roti or Nan</div>
+                  <p className="text-sm font-medium text-gray-600 leading-relaxed">Tava Roti, Plain Naan, Butter Naan, Garlic Naan</p>
+                </div>
+                <div className="bg-white p-6 rounded-3xl border-2 border-indigo-200/90 shadow-sm space-y-3 hover:shadow-md transition-shadow">
+                  <span className="text-xs font-extrabold text-indigo-900 uppercase tracking-wider bg-indigo-50 px-3 py-1 rounded-lg inline-block">2. Subjies</span>
+                  <div className="text-lg font-bold text-gray-900">Two Punjabi Subjies</div>
+                  <p className="text-sm font-medium text-gray-600 leading-relaxed">Paneer Butter Masala, Palak Paneer, Aloo Gobi, Chana Masala, etc.</p>
+                </div>
+                <div className="bg-white p-6 rounded-3xl border-2 border-indigo-200/90 shadow-sm space-y-3 hover:shadow-md transition-shadow">
+                  <span className="text-xs font-extrabold text-indigo-900 uppercase tracking-wider bg-indigo-50 px-3 py-1 rounded-lg inline-block">3. Dal &amp; Rice</span>
+                  <div className="text-lg font-bold text-gray-900">Dal &amp; Veg Biryani / Pulao</div>
+                  <p className="text-sm font-medium text-gray-600 leading-relaxed">Yellow Tadka Dal or Dal Makhani served with fragrant basmati</p>
+                </div>
+                <div className="bg-white p-6 rounded-3xl border-2 border-indigo-200/90 shadow-sm space-y-3 hover:shadow-md transition-shadow">
+                  <span className="text-xs font-extrabold text-indigo-900 uppercase tracking-wider bg-indigo-50 px-3 py-1 rounded-lg inline-block">4. Accompaniments</span>
+                  <div className="text-lg font-bold text-gray-900">Salad, Pappad &amp; Pickle</div>
+                  <p className="text-sm font-medium text-gray-600 leading-relaxed">Crisp poppadoms, fresh garden salad, traditional mango/lime pickle</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════
+              TAB: GUJARATI MENU (OPTION 8)
+              ══════════════════════════════════════════════════════════════ */}
+          {activeMenuTab === 'gujarati' && (
+            <div className="space-y-8 animate-in fade-in duration-300">
+              <div
+                className="rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden"
+                style={{ background: 'linear-gradient(135deg, #042F2E 0%, #115E59 50%, #0F766E 100%)' }}
+              >
+                <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none text-9xl">
+                  🪔
+                </div>
+                <div className="relative z-10 max-w-3xl">
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    <span className="inline-block text-xs font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-teal-400/20 text-teal-200 border border-teal-400/30">
+                      🪔 Option 8 Gujarati Menu
+                    </span>
+                  </div>
+                  <h3 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white mb-2">
+                    {GUJARATI_OPTION_8.title}
+                  </h3>
+                  <p className="text-teal-200 font-semibold text-base sm:text-lg mb-3 leading-snug">
+                    {GUJARATI_OPTION_8.subtitle}
+                  </p>
+
+                  <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
+                    <div>
+                      <span className="text-xs sm:text-sm text-teal-200 font-bold block uppercase tracking-wide">Package Price</span>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-3xl sm:text-4xl font-black text-white">£14.99</span>
+                        <span className="text-sm text-gray-200">/ per person</span>
+                      </div>
+                    </div>
+                    <p className="text-xs sm:text-sm text-teal-100 max-w-sm leading-relaxed">
+                      40+ Mithai, 20+ Farsan, 30+ Shaak including Undhiyu, Bharelu Ringan Bateta, Kadhi, Gujarati Dal &amp; Fresh Rotlis.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={() => {
+                        setSelectedPackageForModal('Gujarati Menu (Option 8)');
+                        setIsMenuOrderModalOpen(true);
+                      }}
+                      className="px-6 py-3.5 rounded-xl font-bold text-gray-950 bg-teal-200 hover:bg-teal-100 transition-all text-sm shadow-md cursor-pointer flex items-center gap-2"
+                    >
+                      <span>Book Gujarati Menu (£14.99/pp)</span>
+                      <span>→</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Gujarati Courses Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-white p-6 rounded-3xl border-2 border-teal-200/90 shadow-sm space-y-4 hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between border-b border-teal-100 pb-3">
+                    <h4 className="font-bold text-teal-950 text-lg flex items-center gap-2">
+                      <span className="text-xl">🍬</span>
+                      <span>Mithai (40+ Sweets)</span>
+                    </h4>
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-teal-100 text-teal-900 border border-teal-200">
+                      {GUJARATI_OPTION_8.categories.mithai.length} Items
+                    </span>
+                  </div>
+                  <ul className="space-y-2 text-sm text-gray-800 font-medium max-h-80 overflow-y-auto pr-1">
+                    {GUJARATI_OPTION_8.categories.mithai.map(m => (
+                      <li key={m} className="flex items-start gap-2.5 leading-snug">
+                        <span className="w-2 h-2 rounded-full bg-teal-600 flex-shrink-0 mt-1.5" />
+                        <span>{m}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="bg-white p-6 rounded-3xl border-2 border-teal-200/90 shadow-sm space-y-4 hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between border-b border-teal-100 pb-3">
+                    <h4 className="font-bold text-teal-950 text-lg flex items-center gap-2">
+                      <span className="text-xl">🥟</span>
+                      <span>Farsan (20+ Savouries)</span>
+                    </h4>
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-teal-100 text-teal-900 border border-teal-200">
+                      {GUJARATI_OPTION_8.categories.farsan.length} Items
+                    </span>
+                  </div>
+                  <ul className="space-y-2 text-sm text-gray-800 font-medium max-h-80 overflow-y-auto pr-1">
+                    {GUJARATI_OPTION_8.categories.farsan.map(f => (
+                      <li key={f} className="flex items-start gap-2.5 leading-snug">
+                        <span className="w-2 h-2 rounded-full bg-teal-600 flex-shrink-0 mt-1.5" />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="bg-white p-6 rounded-3xl border-2 border-teal-200/90 shadow-sm space-y-4 hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between border-b border-teal-100 pb-3">
+                    <h4 className="font-bold text-teal-950 text-lg flex items-center gap-2">
+                      <span className="text-xl">🥘</span>
+                      <span>Shaak &amp; Curries (30+)</span>
+                    </h4>
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-teal-100 text-teal-900 border border-teal-200">
+                      {GUJARATI_OPTION_8.categories.shaak.length} Items
+                    </span>
+                  </div>
+                  <ul className="space-y-2 text-sm text-gray-800 font-medium max-h-80 overflow-y-auto pr-1">
+                    {GUJARATI_OPTION_8.categories.shaak.map(s => (
+                      <li key={s} className="flex items-start gap-2.5 leading-snug">
+                        <span className="w-2 h-2 rounded-full bg-teal-600 flex-shrink-0 mt-1.5" />
+                        <span>{s}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════
+              TAB: PUNJABI MENU (OPTION 9)
+              ══════════════════════════════════════════════════════════════ */}
+          {activeMenuTab === 'punjabi' && (
+            <div className="space-y-8 animate-in fade-in duration-300">
+              <div
+                className="rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden"
+                style={{ background: 'linear-gradient(135deg, #451A03 0%, #78350F 50%, #B45309 100%)' }}
+              >
+                <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none text-9xl">
+                  👑
+                </div>
+                <div className="relative z-10 max-w-3xl">
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    <span className="inline-block text-xs font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-amber-400/20 text-amber-200 border border-amber-400/30">
+                      👑 Option 9 Punjabi Feast
+                    </span>
+                  </div>
+                  <h3 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white mb-2">
+                    {PUNJABI_OPTION_9.title}
+                  </h3>
+                  <p className="text-amber-200 font-semibold text-base sm:text-lg mb-3 leading-snug">
+                    {PUNJABI_OPTION_9.subtitle}
+                  </p>
+
+                  <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
+                    <div>
+                      <span className="text-xs sm:text-sm text-amber-200 font-bold block uppercase tracking-wide">Package Price</span>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-3xl sm:text-4xl font-black text-white">£13.99</span>
+                        <span className="text-sm text-gray-200">/ per person</span>
+                      </div>
+                    </div>
+                    <p className="text-xs sm:text-sm text-amber-100 max-w-sm leading-relaxed">
+                      Paneer Tikka Shashlik, Chaats, Paneer Butter Masala, Amritsari Chole, Dal Makhani, Tandoori Breads &amp; Sweets.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={() => {
+                        setSelectedPackageForModal('Punjabi Menu (Option 9)');
+                        setIsMenuOrderModalOpen(true);
+                      }}
+                      className="px-6 py-3.5 rounded-xl font-bold text-gray-950 bg-amber-300 hover:bg-amber-200 transition-all text-sm shadow-md cursor-pointer flex items-center gap-2"
+                    >
+                      <span>Book Punjabi Feast (£13.99/pp)</span>
+                      <span>→</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Punjabi Courses Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Starters & Chaats Card */}
+                <div className="bg-white p-6 rounded-3xl border-2 border-amber-200/90 shadow-sm space-y-4 hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between border-b border-amber-100 pb-3">
+                    <h4 className="font-bold text-amber-950 text-lg flex items-center gap-2">
+                      <span className="text-xl">🍢</span>
+                      <span>Starters &amp; Chaats</span>
+                    </h4>
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
+                      {PUNJABI_OPTION_9.categories.starters.length} Varieties
+                    </span>
+                  </div>
+                  <ul className="space-y-2 text-sm text-gray-800 font-medium">
+                    {PUNJABI_OPTION_9.categories.starters.map(s => (
+                      <li key={s} className="flex items-start gap-2.5 leading-snug">
+                        <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0 mt-1.5" />
+                        <span>{s}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* Royal Subjies Card */}
+                <div className="bg-white p-6 rounded-3xl border-2 border-amber-200/90 shadow-sm space-y-4 hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between border-b border-amber-100 pb-3">
+                    <h4 className="font-bold text-amber-950 text-lg flex items-center gap-2">
+                      <span className="text-xl">🥘</span>
+                      <span>Royal Subjies</span>
+                    </h4>
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
+                      {PUNJABI_OPTION_9.categories.subjies.length} Specialties
+                    </span>
+                  </div>
+                  <ul className="space-y-2 text-sm text-gray-800 font-medium">
+                    {PUNJABI_OPTION_9.categories.subjies.map(s => (
+                      <li key={s} className="flex items-start gap-2.5 leading-snug">
+                        <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0 mt-1.5" />
+                        <span>{s}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* Breads, Dal & Desserts Card */}
+                <div className="bg-white p-6 rounded-3xl border-2 border-amber-200/90 shadow-sm space-y-4 hover:shadow-md transition-shadow">
+                  <div className="border-b border-amber-100 pb-3">
+                    <h4 className="font-bold text-amber-950 text-lg flex items-center gap-2">
+                      <span className="text-xl">🍞</span>
+                      <span>Breads, Dal &amp; Desserts</span>
+                    </h4>
+                  </div>
+                  <div className="space-y-4 text-sm text-gray-800">
+                    <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200/70 space-y-1">
+                      <div className="text-xs font-extrabold uppercase tracking-wide text-amber-950">🥣 Dal Specialties</div>
+                      <p className="font-semibold text-gray-900 leading-relaxed text-sm">
+                        {PUNJABI_OPTION_9.categories.dal.join(', ')}
+                      </p>
+                    </div>
+                    <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200/70 space-y-1">
+                      <div className="text-xs font-extrabold uppercase tracking-wide text-amber-950">🍞 Tandoori &amp; Tawa Breads</div>
+                      <p className="font-semibold text-gray-900 leading-relaxed text-sm">
+                        {PUNJABI_OPTION_9.categories.breads.join(', ')}
+                      </p>
+                    </div>
+                    <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200/70 space-y-1">
+                      <div className="text-xs font-extrabold uppercase tracking-wide text-amber-950">🍮 Mithai &amp; Desserts</div>
+                      <p className="font-semibold text-gray-900 leading-relaxed text-sm">
+                        {PUNJABI_OPTION_9.categories.mithai.join(', ')}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

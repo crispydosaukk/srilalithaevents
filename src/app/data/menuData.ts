@@ -16,28 +16,696 @@ export interface MenuCategory {
   items: MenuItem[];
 }
 
-// ─── 1. LIVE DOSA STATION MENU ───────────────────────────────────────────────
-export const LIVE_DOSA_MENU = {
-  title: 'Live Dosa Station Menu',
+export interface MenuUpgradeItem {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  unit: 'fixed' | 'per_person' | 'per_hour' | 'per_dish';
+  priceLabel: string;
+  icon: string;
+}
+
+// ─── 1. LIVE DOSA STATION MENU & PRICING ──────────────────────────────────────
+// ─── 1. LIVE DOSA STATION MENUS & PRICING ─────────────────────────────────────
+export const LIVE_DOSA_OPTION_1 = {
+  id: 'live-dosa-1',
+  title: 'Live Dosa Option 1',
   tagline: 'Each item is prepared fresh on the spot with theatrical flair',
-  subtitle: 'Crisp & golden, the classic favourite',
+  subtitle: 'Crisp & golden, the classic live counter experience (2 Hours Service)',
+  durationHours: 2,
+  pricing: {
+    weekday: {
+      days: 'Week days (Monday to Friday)',
+      pricePerPerson: 11.00,
+      minGuests: 35,
+      minCallOutCharge: 385.00,
+      description: '£11.00 / per person, 35 people minimum (Minimum call out charge: £385)',
+    },
+    weekend: {
+      days: 'Week Ends & Bank Holidays',
+      pricePerPerson: 12.00,
+      minGuests: 40,
+      minCallOutCharge: 480.00,
+      description: '£12.00 / per person, 40 people minimum (Minimum call out charge: £480)',
+    },
+    disclaimer: 'Minimum call out charge (£385 on Weekdays / £480 on Weekends) can be reached by the number of people or by the menu/upgrades.',
+  },
   items: [
-    { name: 'Idly, Meduvada (Live)', description: 'Crisp & golden, the classic favourite prepared fresh on the spot', isLive: true, tags: ['V', 'M'] },
-    { name: 'Masala Dosa (Live)', description: 'Crisp & golden, the classic favourite prepared fresh on the spot', isLive: true, tags: ['M', 'O', 'J'] },
-    { name: 'Plain Dosa (Live)', description: 'Crisp & golden, the classic favourite prepared fresh on the spot', isLive: true, tags: ['M', 'O', 'J'] },
-    { name: 'Onion Dosa (Live)', description: 'Crisp & golden, the classic favourite prepared fresh on the spot', isLive: true, tags: ['M', 'O'] },
-    { name: 'PodiDosa (Live)', description: 'Crisp & golden, the classic favourite prepared fresh on the spot', isLive: true, tags: ['M', 'S', 'O', 'J'] },
-    { name: 'Onion Uthappam (Live)', description: 'Crisp & golden, the classic favourite prepared fresh on the spot', isLive: true, tags: ['M', 'O'] },
-    { name: 'Capsicum Uthappam (Live)', description: 'Crisp & golden, the classic favourite prepared fresh on the spot', isLive: true, tags: ['M', 'O', 'J'] },
-    { name: 'Chilli Uthappam (Live)', description: 'Crisp & golden, the classic favourite prepared fresh on the spot', isLive: true, tags: ['M'] },
-    { name: 'Plain Uthappam (Live)', description: 'Crisp & golden, the classic favourite prepared fresh on the spot', isLive: true, tags: ['M', 'O', 'J'] },
-    { name: 'PodiUthappam (Live)', description: 'Crisp & golden, the classic favourite prepared fresh on the spot', isLive: true, tags: ['M', 'S', 'O', 'J'] },
-    { name: 'One Dessert', description: 'Crisp & golden, the classic favourite prepared fresh on the spot', isLive: true, tags: ['M', 'N'] },
-    { name: 'One Main Course Dish', description: 'Crisp & golden, the classic favourite prepared fresh on the spot', isLive: true, tags: ['M', 'V'] },
+    { name: 'Idly Or Veg Biryani', description: 'Fresh steamed hot idlies or fragrant spiced vegetable biryani', isLive: true, tags: ['V', 'M'] },
+    { name: 'Meduvada (Live)', description: 'Crisp golden lentil fritters fried fresh on the spot', isLive: true, tags: ['V', 'M'] },
+    { name: 'Masala Dosa (Live)', description: 'Crisp crepe filled with traditional spiced potato masala', isLive: true, tags: ['M', 'O', 'J'] },
+    { name: 'Plain Dosa (Live)', description: 'Golden crispy South Indian rice & lentil crepe', isLive: true, tags: ['M', 'O', 'J'] },
+    { name: 'Onion Dosa (Live)', description: 'Crisp crepe sprinkled with finely chopped shallots', isLive: true, tags: ['M', 'O'] },
+    { name: 'PodiDosa (Live)', description: 'Spicy gun-powder roasted ghee dosa', isLive: true, tags: ['M', 'S', 'O', 'J'] },
+    { name: 'Onion Uthappam (Live)', description: 'Thick fluffy pancake topped with caramelized onions', isLive: true, tags: ['M', 'O'] },
+    { name: 'Capsicum Uthappam (Live)', description: 'Thick savory pancake loaded with crunchy bell peppers', isLive: true, tags: ['M', 'O', 'J'] },
+    { name: 'Chilli Uthappam (Live)', description: 'Zesty pancake topped with fresh green chillies', isLive: true, tags: ['M'] },
+    { name: 'Plain Uthappam (Live)', description: 'Soft & spongy traditional thick pancake', isLive: true, tags: ['M', 'O', 'J'] },
+    { name: 'PodiUthappam (Live)', description: 'Thick pancake generously dusted with podi spices', isLive: true, tags: ['M', 'S', 'O', 'J'] },
+    { name: 'Coconut Chutney, Tomato & Onion Chutney and Sambar', description: 'Fresh coconut chutney, tangy tomato chutney and hot aromatic sambar', isLive: true, tags: ['V'] },
   ],
 };
 
-// ─── 2. SOUTH INDIAN SPECIAL BUFFET ──────────────────────────────────────────
+export const LIVE_DOSA_OPTION_2 = {
+  id: 'live-dosa-2',
+  title: 'Live Dosa Option 2',
+  tagline: 'Standard Live Dosa Station + 1 Main Course + 1 Dessert (3 Hours Service)',
+  subtitle: 'Full theatrical live station with extra courses & 3 hours chef service',
+  durationHours: 3,
+  pricing: {
+    weekday: {
+      days: 'Week days (Monday to Friday)',
+      pricePerPerson: 16.50,
+      minGuests: 35,
+      minCallOutCharge: 577.50,
+      description: '£16.50 / per person, 35 people minimum (Minimum call out charge: £577.50)',
+    },
+    weekend: {
+      days: 'Week Ends & Bank Holidays',
+      pricePerPerson: 17.50,
+      minGuests: 40,
+      minCallOutCharge: 700.00,
+      description: '£17.50 / per person, 40 people minimum (Minimum call out charge: £700)',
+    },
+    disclaimer: 'Minimum call out charge (£577.50 on Weekdays / £700 on Weekends) can be reached by the number of people or by the menu/upgrades.',
+  },
+  inclusions: [
+    'Standard Menu (Idly Or Veg Biryani, Meduvada, Dosas, Uthappams, Chutneys and Sambar)',
+    'One Main Course Dish (from menu selection)',
+    'One Dessert (from menu selection)',
+    'Will Stay for Three (3) Hours instead of Two Hours',
+  ],
+  items: [
+    ...LIVE_DOSA_OPTION_1.items,
+    { name: 'One Main Course Dish', description: 'Select 1 delicious main curry/course from our rich banquet menu', isLive: false, tags: ['V', 'M'] },
+    { name: 'One Dessert', description: 'Select 1 authentic dessert (Gulab Jamun, Rasmalai, Payasam, etc.)', isLive: false, tags: ['V', 'N'] },
+  ],
+};
+
+// Aliases for backwards compatibility
+export const LIVE_DOSA_MENU = LIVE_DOSA_OPTION_1;
+
+// ─── DYNAMIC MENU UPGRADES ──────────────────────────────────────────────────
+export const MENU_UPGRADES: {
+  title: string;
+  subtitle: string;
+  items: MenuUpgradeItem[];
+} = {
+  title: 'Upgrades',
+  subtitle: 'Elevate your event with bespoke upgrades and dedicated service',
+  items: [
+    {
+      id: 'gazebo',
+      name: 'Gazebo Setup',
+      description: 'Upgrade Your Menu With A Gazebo at an extra cost of £70/.',
+      price: 70.00,
+      unit: 'fixed',
+      priceLabel: '£70.00 Fixed',
+      icon: '⛺',
+    },
+    {
+      id: 'waiter',
+      name: 'Waiter for Serving',
+      description: 'Upgrade Your Menu With A Waiter for Serving at an extra cost of £70/.',
+      price: 70.00,
+      unit: 'fixed',
+      priceLabel: '£70.00 / Waiter',
+      icon: '🤵',
+    },
+    {
+      id: 'crockery',
+      name: 'Crockery (Ceramic Plates / Bowls / Steel Spoons)',
+      description: 'Upgrade Your Menu With Crockery (Ceramic plates / Ceramic Bowls / Steel Spoons) at an extra cost of £3.00 / per person.',
+      price: 3.00,
+      unit: 'per_person',
+      priceLabel: '£3.00 / person',
+      icon: '🍽️',
+    },
+    {
+      id: 'extra_hour',
+      name: 'Extra Hour for Serving / Cooking',
+      description: 'Upgrade Your Menu With Extra Hour For Serving/Cooking At A Cost Of £100/ Per Hour.',
+      price: 100.00,
+      unit: 'per_hour',
+      priceLabel: '£100.00 / hour',
+      icon: '⏱️',
+    },
+    {
+      id: 'more_dishes',
+      name: 'More Dishes from the Menu',
+      description: 'Upgrade Your Menu With More Dishes From The Below List At An Extra Cost.',
+      price: 2.50,
+      unit: 'per_dish',
+      priceLabel: 'From £2.00 / dish',
+      icon: '🍲',
+    },
+  ],
+};
+
+export interface LiveDosaPricingBreakdown {
+  tier: 'weekday' | 'weekend';
+  tierLabel: string;
+  optionTitle: string;
+  durationHours: number;
+  pricePerPerson: number;
+  minGuests: number;
+  minCallOutCharge: number;
+  guests: number;
+  peopleTotal: number;
+  upgradesTotal: number;
+  subtotalBeforeFloor: number;
+  callOutAdjustment: number;
+  finalSubtotal: number;
+}
+
+export function isWeekendOrBankHoliday(dateStr?: string): boolean {
+  if (!dateStr) return false;
+  try {
+    const d = new Date(dateStr);
+    const day = d.getDay(); // 0 = Sunday, 6 = Saturday
+    return day === 0 || day === 6;
+  } catch {
+    return false;
+  }
+}
+
+export function calculateLiveDosaPrice(
+  dateOrType: string | 'weekday' | 'weekend',
+  guests: number,
+  upgradesTotal: number = 0,
+  optionChoice: 'option-1' | 'option-2' | 'live-dosa' | 'live-dosa-1' | 'live-dosa-2' | string = 'option-1',
+  customPricing?: typeof LIVE_DOSA_OPTION_1.pricing
+): LiveDosaPricingBreakdown {
+  const isWeekend = dateOrType === 'weekend' || isWeekendOrBankHoliday(dateOrType);
+  const isOption2 = optionChoice === 'option-2' || optionChoice === 'live-dosa-2' || (typeof optionChoice === 'string' && optionChoice.toLowerCase().includes('option 2'));
+  
+  const baseOption = isOption2 ? LIVE_DOSA_OPTION_2 : LIVE_DOSA_OPTION_1;
+  const pricing = customPricing || baseOption.pricing;
+  const tier: 'weekday' | 'weekend' = isWeekend ? 'weekend' : 'weekday';
+  const tierConfig = isWeekend ? pricing.weekend : pricing.weekday;
+
+  const pricePerPerson = tierConfig.pricePerPerson;
+  const minGuests = tierConfig.minGuests;
+  const minCallOutCharge = tierConfig.minCallOutCharge;
+  const tierLabel = isWeekend ? 'Week Ends & Bank Holidays' : 'Week days (Monday to Friday)';
+  const optionTitle = baseOption.title;
+  const durationHours = baseOption.durationHours;
+
+  const validGuests = Math.max(0, guests);
+  const peopleTotal = validGuests * pricePerPerson;
+  const subtotalBeforeFloor = peopleTotal + upgradesTotal;
+  const finalSubtotal = Math.max(minCallOutCharge, subtotalBeforeFloor);
+  const callOutAdjustment = Math.max(0, minCallOutCharge - subtotalBeforeFloor);
+
+  return {
+    tier,
+    tierLabel,
+    optionTitle,
+    durationHours,
+    pricePerPerson,
+    minGuests,
+    minCallOutCharge,
+    guests: validGuests,
+    peopleTotal,
+    upgradesTotal,
+    subtotalBeforeFloor,
+    callOutAdjustment,
+    finalSubtotal,
+  };
+}
+
+// ─── 2. MADRAS THALI / SOUTH INDIAN MEALS / ANDHRA BHOJANAM (OPTION 3) ────────
+export interface ThaliAdditionItem {
+  name: string;
+  price: number;
+  category: string;
+}
+
+export const MADRAS_THALI_OPTION_3 = {
+  id: 'madras-thali-3',
+  title: 'Madras Thali or South Indian Meals or Andhra Bhojanam',
+  shortTitle: 'Madras Thali (Option 3)',
+  tagline: 'Traditional South Indian full meals with authentic accompaniments and customizable flavours',
+  subtitle: 'Complete South Indian feast experience at £10.99 / per person',
+  pricePerPerson: 10.99,
+  coreDishes: [
+    { name: 'Plain Rice', description: 'Steamed premium aromatic ponni rice' },
+    { name: 'Sambar', description: 'Slow-simmered lentil curry with your choice of fresh vegetable' },
+    { name: 'Rasam', description: 'Traditional zesty tangy herbal broth' },
+    { name: 'Koottu', description: 'Nutritious lentil & vegetable stew' },
+    { name: 'Poriyal', description: 'Dry sautéed vegetable with freshly grated coconut & mustard seeds' },
+    { name: 'Kaarakolambu', description: 'Spicy, tangy tamarind gravy specialty' },
+    { name: 'Sweet', description: 'Traditional celebratory dessert' },
+    { name: 'Pappad', description: 'Crispy fried South Indian papadum' },
+    { name: 'Yoghurt', description: 'Fresh set natural curd' },
+    { name: 'Pickle', description: 'Authentic spiced South Indian pickle' },
+    { name: 'Veg Kurma', description: 'Rich coconut and spiced vegetable curry' },
+    { name: 'Poori (1)', description: 'Puffed golden wholewheat fried bread (1 piece)' },
+  ],
+  variantOptions: {
+    sambarOptions: [
+      'Aubergine Sambar',
+      'Lady Finger Sambar',
+      'Tinde Sambar',
+      'Capsicum / Potato / Carrot Sambar',
+    ],
+    rasamOptions: [
+      'Garlic Rasam',
+      'Pepper Rasam',
+      'Lemon Rasam',
+      'Pineapple Rasam',
+    ],
+    koottuOptions: [
+      'Cabbage Koottu',
+      'Tomato Koottu',
+      'Nine Dhalls Koottu',
+      'Pappali Koottu (Papaya)',
+      'Sorakka Koottu (Bottle Gourd)',
+    ],
+    poriyalOptions: [
+      'Cabbage Poriyal',
+      'Mix Veg Poriyal',
+      'Potato Poriyal',
+      'Raddish Poriyal',
+    ],
+    kaarakolambuOptions: [
+      'Ennakathirikka (Guthivankaya)',
+      'Lady Finger Kaarakolambu',
+      'Paruppu Urundai (Lentil Dumplings)',
+      'Pakoda Kaarakolambu',
+      'Potato Kaarakolambu',
+    ],
+    sweetOptions: [
+      'Pineapple Kesari',
+      'Apple Kesari',
+      'Banana Kesari',
+      'Semiya Kheer',
+      'Sabhudhana Kheer',
+      'Rice Kheer',
+    ],
+  },
+  additions: [
+    { name: 'Bisibela Bath', price: 2.50, category: 'Rice Specialty' },
+    { name: 'Bagala Bath', price: 2.50, category: 'Rice Specialty' },
+    { name: 'Lemon Rice', price: 2.50, category: 'Rice Specialty' },
+    { name: 'Sambar Rice', price: 2.50, category: 'Rice Specialty' },
+    { name: 'Puliyodarai (Tamarind Rice)', price: 2.50, category: 'Rice Specialty' },
+    { name: 'Curd Rice', price: 2.50, category: 'Rice Specialty' },
+    { name: 'Veg Biriyani', price: 3.00, category: 'Rice Specialty' },
+    { name: 'Veg Pulao', price: 2.50, category: 'Rice Specialty' },
+    { name: 'Paneer Fried Rice', price: 3.00, category: 'Indo-Chinese' },
+    { name: 'Jeera Rice', price: 2.50, category: 'Rice Specialty' },
+    { name: 'Veg Fried Rice', price: 2.50, category: 'Indo-Chinese' },
+    { name: 'Veg Noodles', price: 2.50, category: 'Indo-Chinese' },
+    { name: 'Hakka Noodles', price: 2.50, category: 'Indo-Chinese' },
+    { name: 'Szechuan Noodles', price: 3.00, category: 'Indo-Chinese' },
+    { name: 'Gulab Jamun', price: 2.50, category: 'Dessert' },
+    { name: 'Rasa Malai', price: 3.00, category: 'Dessert' },
+    { name: 'Rasa Gulla', price: 2.50, category: 'Dessert' },
+    { name: 'Pineapple / Apple / Banana / Plain Kesari', price: 2.50, category: 'Dessert' },
+    { name: 'Semiya / Sabudhana / Rice Kheer', price: 2.50, category: 'Dessert' },
+    { name: 'Badam Halwa', price: 3.50, category: 'Dessert' },
+    { name: 'Chennai Srilalithas Special Moar Kolambu with fried lady finger & raw banana (matoki)', price: 3.00, category: 'Special Curry' },
+    { name: 'Traditional Avial', price: 3.00, category: 'Special Curry' },
+  ],
+};
+
+// ─── 4. TAILOR YOUR OWN MENU (OPTION 4) ──────────────────────────────────────
+export const TAILOR_MENU_OPTION_4 = {
+  id: 'tailor-menu-4',
+  title: 'Tailor Your Own Menu',
+  shortTitle: 'Tailor Your Menu (Option 4)',
+  tagline: 'Tailor Your Own Menu from the List Mentioned Below with Signature Live Stations',
+  subtitle: 'Live Stations for Jilebi & Paan Along with Live Station for Dosa & Vada',
+  priceLabel: 'Depends on the menu you tailor',
+  liveStationsFeatured: [
+    { name: 'Live Station for Jilebi', icon: '🍯', description: 'Hot, crisp, spiral jilebis fried and dipped in fragrant saffron syrup on the spot' },
+    { name: 'Live Station for Paan', icon: '🍃', description: 'Authentic royal sweet paan made fresh with aromatic mukhwas and gulkand' },
+    { name: 'Live Station for Dosa', icon: '🥞', description: 'Golden, crispy Dosas tossed fresh with customized spiced fillings' },
+    { name: 'Live Station for Vada', icon: '🍩', description: 'Piping hot Meduvadas fried golden and served crunchy with chutneys' },
+  ],
+  whatWeBring: [
+    'All equipment necessary for live on-site cooking',
+    'Bain Marie food warmers to keep all dishes piping hot',
+    'Disposable compartment plastic plates (9 inches)',
+    'Disposable spoons and serviettes',
+    'Note: We do not bring drinking water or water glasses',
+  ],
+  whatWeNeedFromYou: [
+    'One Serving table of any size',
+    'One power plug point (standard 240V socket)',
+    '50 to 60 square feet or 3×3 meters empty space for cooking with shade or cover on top and lighting',
+    'Empty space can be at any part of your Home (Kitchen, Garage, Dining room, Garden with shelter, etc.)',
+  ],
+  depositPolicy: {
+    depositPercentage: 50,
+    terms: 'At the time of booking 50% deposit need to be paid and the balance by cash after the event is over.',
+  },
+};
+
+// ─── 5. DOSA FESTIVAL AT YOUR HOME (OPTION 5) ────────────────────────────────
+export const DOSA_FESTIVAL_OPTION_5 = {
+  id: 'dosa-festival-5',
+  title: 'Dosa Festival At Your Home',
+  shortTitle: 'Dosa Festival (Option 5)',
+  tagline: 'First Time in London Dosa Festival At Your Home Brought To You Only By Veg Chennai Sri Lalitha Restaurant',
+  subtitle: 'Quality And Trust For Sixteen (16) Years • 34+ Signature Dosa Varieties',
+  pricePerPerson: 14.99,
+  heritageBadge: '16 Years of Quality & Trust',
+  inclusions: 'All dosas prepared live on hot tawas with fresh Coconut Chutney, Tomato & Onion Chutney, Mint Chutney, and Hot Sambar',
+  dosaVarieties: [
+    'Banana Dosa',
+    'Masala Dosa',
+    'Besan Dosa',
+    'Bread Dosa',
+    'Cabbage Dosa',
+    'Carrot Dosa',
+    'Chinese Dosa',
+    'Coconut Dosa',
+    'Corn Dosa',
+    'Cucumber Dosa',
+    'Kal Dosa',
+    'Soft Dosa',
+    'Soya Dosa',
+    'Adai Dosa',
+    'Sponge Dosa',
+    'Spring Dosa',
+    'Steamed Dosa',
+    'Sweet Dosa',
+    'Maida Dosa',
+    'Methi Dosa',
+    'Mixed Dal Dosa',
+    'Moong Dal Dosa',
+    'Neer Dosa',
+    'Oats Dosa',
+    'Onion Dosa',
+    'Palak Dosa',
+    'Pesarattu Dosa',
+    'Poha Dosa',
+    'Ragi Dosa',
+    'Set Dosa Batter',
+    'Set Dosa',
+    'Tomato Dal Dosa',
+    'Vegetable Dosa',
+    'Wheat Dosa',
+    'Rava Dosa',
+  ],
+};
+
+// ─── 6. CANAPÉ SERVICE (OPTION 6) ────────────────────────────────────────────
+export const CANAPE_OPTION_6 = {
+  id: 'canape-6',
+  title: 'Canapé Service',
+  shortTitle: 'Canapé Service (Option 6)',
+  tagline: 'CANAPE – We can provide canape service for a variety of our menu',
+  subtitle: 'Cocktail & Event Canapés with Finger Food Service',
+  description: 'We can provide canape service for a variety of our menu. A few suggestions are like Chilli Paneer, Mogo, Masala Mogo, Paneer 65, Gobi 65 and lots more. Please check our extensive menu and contact us for further information.',
+  pricePerPerson: 8.99,
+  suggestedItems: [
+    'Chilli Paneer',
+    'Mogo',
+    'Masala Mogo',
+    'Paneer 65',
+    'Gobi 65',
+    'Cocktail Vegetable Samosas',
+    'Crispy Spring Rolls',
+    'Aloo Tikki Bites with Mint Chutney',
+    'Hara Bhara Kebab',
+    'Medu Vada Canapé with Chutney',
+    'Cocktail Idli Skewers',
+    'Mini Uttappam Bites',
+  ],
+};
+
+// ─── 7. NORTH INDIAN STANDARD MENU (OPTION 7) ────────────────────────────────
+export const NORTH_INDIAN_OPTION_7 = {
+  id: 'north-indian-7',
+  title: 'North Indian Standard Menu',
+  shortTitle: 'North Indian Menu (Option 7)',
+  tagline: 'Authentic North Indian & Punjabi Comfort Feasts',
+  subtitle: 'One Tava Roti or Nan, Two Subjies, Dal, Veg Biryani or Pulao, Salad, Pappad and Pickle',
+  pricePerPerson: 12.00,
+  minGuests: 25,
+  inclusions: [
+    'One Tava Roti or Nan (1)',
+    'Two North Indian or Punjabi Subjies (2)',
+    'Dal',
+    'Veg Biryani or Veg Pulao',
+    'Fresh Salad',
+    'Pappad',
+    'Pickle',
+  ],
+  breadOptions: ['Tava Roti', 'Tandoori Naan', 'Butter Naan', 'Garlic Naan', 'Bhatura'],
+  subjiOptions: [
+    'Paneer Butter Masala',
+    'Palak Paneer',
+    'Kadai Paneer',
+    'Shahi Paneer',
+    'Mutter Paneer',
+    'Chana Masala / Amritsari Chole',
+    'Aloo Gobi',
+    'Baingan Bharta',
+    'Mixed Vegetable Curry',
+    'Navratan Korma',
+    'Bhindi Do Pyaza',
+  ],
+  dalOptions: ['Tadka Dal', 'Dal Makhani', 'Panchmel Dal', 'Yellow Moong Dal', 'Palak Dal'],
+  riceOptions: ['Veg Biryani', 'Veg Pulao', 'Jeera Rice', 'Peas Pulao', 'Plain Basmati Rice'],
+};
+
+// ─── 8. GUJARATI MENU (OPTION 8) ─────────────────────────────────────────────
+export const GUJARATI_OPTION_8 = {
+  id: 'gujarati-8',
+  title: 'Gujarati Menu',
+  shortTitle: 'Gujarati Menu (Option 8)',
+  tagline: 'Authentic Gujarati Thaal & Festive Catering',
+  subtitle: 'Traditional Mithai, Crispy Farsan, Classic Shaak, Dal, Breads, Rice & Condiments',
+  pricePerPerson: 14.99,
+  categories: {
+    mithai: [
+      'Amrat Paak',
+      'Amrat Paak (loose)',
+      'Anjir Barfi',
+      'Aradia',
+      'Badam Paak',
+      'Badshahi Seero',
+      'Barfi Churmu',
+      'Boondi & Mini Jambu Mix',
+      'Boondi (loose)',
+      'Boondi Ladoo',
+      'Cassata Barfi',
+      'Chocolate Barfi',
+      'Churma Na Ladoo',
+      'Coconut Barfi',
+      'Cutlet Jamun',
+      'Dosa Na Ladoo',
+      'Dudhi Halwa',
+      'Gajar Halwa',
+      'Ganga Jamna Halwa',
+      'Gulab Jamun',
+      'Kaju Barfi',
+      'Kaju Rolls',
+      'Keri No Ras',
+      'Kesar Jalebi',
+      'Kesar Mani',
+      'Kheer',
+      'Kit Kat Barfi',
+      'Madras Paak',
+      'Marble Ladoo',
+      'Mithi Sev',
+      'Mohanthal (loose)',
+      'Mohanthal (square)',
+      'Motichur Ladoo',
+      'Motiya Ladoo',
+      'Penda (kesar)',
+      'Penda (mawa)',
+      'Ras Gulla',
+      'Ras Malai',
+      'Shrikhand (kesar)',
+      'Shrikhand (mango)',
+      'Tutti Frutti Barfi',
+    ],
+    farsan: [
+      'Bateta Pava',
+      'Bateta Pava Makai',
+      'Bateta Vada',
+      'Chilli Paneer',
+      'Chilli Paneer & Mogo Mix',
+      'Crispy Bhajia',
+      'Daal Bhajia',
+      'Dahi Vada',
+      'Dhokla & Patra Mix',
+      'Dhokla (yellow)',
+      'Kachori (daal)',
+      'Kachori (peas)',
+      'Mix Bhajia',
+      'Peas Pettis',
+      'Samosa (paneer)',
+      'Samosa (vegetables)',
+      'Sev Boondi Kaju',
+      'Sev Khaman',
+      'Spring Rolls (vegetable)',
+      'Stuffed Chilli Bhajia',
+      'Vegetable Pottli',
+    ],
+    shaak: [
+      'Baby Potato & Cashewnuts',
+      'Bharelu Ringan Bateta',
+      'Bhindi & Capsicums',
+      'Black Eye Beans',
+      'Cauliflower & Peas',
+      'Channa Bateta',
+      'Corn on the Cob',
+      'Dudhi Channa Daal',
+      'Kabuli Channa',
+      'Kala Channa',
+      'Potato Curry',
+      'Makai Patra',
+      'Mixed Green Beans',
+      'Mutter Bateta',
+      'Mutter Methi Malai',
+      'Oro',
+      'Palak Paneer',
+      'Panch Ratna Kathor',
+      'Paneer & Makai',
+      'Posho & Mutter',
+      'Rajma',
+      'Rajma & Makai',
+      'Ringan Bateta',
+      'Ringan, Methi & Tomatoes',
+      'Tindora, Makai Kaju',
+      'Turia Patra',
+      'Tuver Valor',
+      'Tuver, Ringan & Valor',
+      'Undhiyu (original)',
+    ],
+    dal: [
+      'Daal Makhani',
+      'Kadhi Pakora',
+      'Mix Daal',
+      'Palak Daal',
+      'Tadka Daal',
+      'Gujarati Sweet & Sour Daal',
+      'Gujarati Kadhi',
+    ],
+    breads: [
+      'Paratha',
+      'Methi Bhatura',
+      'Tandoori Naan',
+      'Rotli (Phulka)',
+      'Puri',
+    ],
+    rice: [
+      'Corn Rice',
+      'Vegetable Biryani',
+      'Jeera Rice',
+      'Lemon Rice',
+      'Plain Rice',
+      'Vegetable Pilau',
+    ],
+    condiments: [
+      'Boondi Raita',
+      'Cucumber Raita',
+      'Pineapple Raita',
+      'Garlic Chutney',
+      'Green Chutney',
+      'Khajur Amli Chutney',
+      'Lime Pickle',
+      'Mango Pickle',
+      'Mixed Green Salad',
+      'Red Chutney',
+      'Tomato Chutney',
+      'Tomato, Onion & Chilli Salad',
+    ],
+  },
+};
+
+// ─── 9. PUNJABI MENU (OPTION 9) ──────────────────────────────────────────────
+export const PUNJABI_OPTION_9 = {
+  id: 'punjabi-9',
+  title: 'Punjabi Menu',
+  shortTitle: 'Punjabi Menu (Option 9)',
+  tagline: 'Hearty, Rich & Authentic Punjabi Celebration Feast',
+  subtitle: 'Signature Chaats, Tandoori Starters, Royal Subjies, Dal Makhani, Breads & Desserts',
+  pricePerPerson: 13.99,
+  categories: {
+    starters: [
+      'Aloo Papri Chaat',
+      'Aloo Tikki with Chole',
+      'Bombay Bhel',
+      'Paneer Tikka Shashlik',
+      'Hara Bhara Kebab',
+      'Samosa Chaat',
+      'Chilli Paneer',
+      'Veg Seekh Kebab',
+      'Crispy Mix Bhajia',
+      'Dahi Bhalla',
+      'Spring Rolls',
+    ],
+    subjies: [
+      'Paneer Butter Masala',
+      'Palak Paneer',
+      'Kadai Paneer',
+      'Shahi Paneer',
+      'Amritsari Chole / Chana Masala',
+      'Mutter Paneer',
+      'Baingan Ka Bharta',
+      'Aloo Gobi Adraki',
+      'Methi Malai Mutter',
+      'Navratan Korma',
+      'Sarson Ka Saag',
+      'Mushroom Do Pyaza',
+    ],
+    dal: [
+      'Dal Makhani (Slow-cooked black lentils)',
+      'Dal Tadka (Yellow lentils with ghee & cumin)',
+      'Panchmel Dal',
+      'Dhabha Style Chana Dal',
+      'Kadhi Pakora',
+    ],
+    mithai: [
+      'Gulab Jamun',
+      'Ras Malai',
+      'Gajar Ka Halwa',
+      'Rice Kheer',
+      'Badam Halwa',
+      'Kesar Jalebi',
+      'Moong Dal Halwa',
+      'Kaju Barfi',
+      'Rasgulla',
+    ],
+    breads: [
+      'Tandoori Roti',
+      'Butter Naan',
+      'Garlic Naan',
+      'Stuffed Aloo Kulcha',
+      'Lachha Paratha',
+      'Amritsari Bhatura',
+      'Puri',
+    ],
+    rice: [
+      'Vegetable Dum Biryani',
+      'Vegetable Pulao',
+      'Jeera Rice',
+      'Peas Pulao',
+      'Steamed Basmati Rice',
+    ],
+    condiments: [
+      'Boondi Raita',
+      'Cucumber Mint Raita',
+      'Mixed Green Salad',
+      'Mango Pickle',
+      'Mixed Spicy Pickle',
+      'Roasted Punjabi Papad',
+      'Fresh Mint & Coriander Chutney',
+      'Tamarind Saunth Chutney',
+      'Spicy Onion & Green Chilli Salad',
+    ],
+  },
+};
+
+// ─── 10. SOUTH INDIAN SPECIAL BUFFET ─────────────────────────────────────────
 export const SOUTH_INDIAN_BUFFET = {
   title: 'South Indian Special Buffet',
   weekday: {
