@@ -12,35 +12,48 @@ const Header: React.FC<HeaderProps> = () => {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-surface border-b border-surface-border">
-      <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+    <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-b border-amber-950/10 shadow-xs transition-all">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between">
         {/* Logo */}
         <a href="/home" className="flex items-center gap-2.5 transition-transform hover:scale-[1.02]">
           <div className="flex items-center justify-center py-0.5">
             <Image
               src="/assets/images/srilalitha.png"
               alt="SriLalitha logo"
-              width={180}
-              height={60}
-              className="object-contain h-12 md:h-14 w-auto drop-shadow-xs"
+              width={190}
+              height={64}
+              className="object-contain h-11 sm:h-13 w-auto drop-shadow-xs"
               priority
             />
           </div>
         </a>
 
         {/* Desktop Nav */}
-        <div className="hidden md:flex items-center gap-6 text-sm text-surface-text">
-          <a href="#services" className="hover:text-maroon-primary transition-colors">Services</a>
-          <a href="#book" className="hover:text-maroon-primary transition-colors">Book Now</a>
-          <a href="/admin" className="text-surface-text hover:text-maroon-primary transition-colors">Admin</a>
-          <a href="#book" className="bg-maroon-primary hover:bg-maroon-dark text-white font-semibold px-5 py-2 rounded-lg transition-colors">
-            Get a Quote
+        <div className="hidden md:flex items-center gap-7 text-sm font-semibold text-gray-700">
+          <a href="#menus" className="hover:text-amber-600 transition-colors flex items-center gap-1.5">
+            <span>📋</span>
+            <span>Live Menus</span>
+          </a>
+          <a href="#book" className="hover:text-amber-600 transition-colors flex items-center gap-1.5">
+            <span>📅</span>
+            <span>Book Event</span>
+          </a>
+          <a href="/admin" className="text-gray-500 hover:text-amber-600 transition-colors flex items-center gap-1">
+            <Icon name="LockClosedIcon" size={14} />
+            <span>Admin</span>
+          </a>
+          <a
+            href="#book"
+            className="text-white font-bold px-5 py-2.5 rounded-xl transition-all shadow-md hover:shadow-lg hover:scale-105 active:scale-95 text-xs uppercase tracking-wider"
+            style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+          >
+            Get Free Quote
           </a>
         </div>
 
         {/* Mobile toggle */}
         <button
-          className="md:hidden text-surface-text"
+          className="md:hidden p-2 rounded-xl text-gray-700 hover:bg-gray-100 transition-colors"
           onClick={() => setMenuOpen(!menuOpen)}
           aria-label="Toggle menu"
         >
@@ -50,12 +63,26 @@ const Header: React.FC<HeaderProps> = () => {
 
       {/* Mobile Menu */}
       {menuOpen && (
-        <div className="md:hidden bg-surface border-t border-surface-border px-6 py-4 flex flex-col gap-4">
-          <a href="#services" className="text-surface-text hover:text-maroon-primary text-sm" onClick={() => setMenuOpen(false)}>Services</a>
-          <a href="#book" className="text-surface-text hover:text-maroon-primary text-sm" onClick={() => setMenuOpen(false)}>Book Now</a>
-          <a href="/admin" className="text-surface-text hover:text-maroon-primary text-sm" onClick={() => setMenuOpen(false)}>Admin</a>
-          <a href="#book" className="bg-maroon-primary text-white font-semibold px-5 py-2.5 rounded-lg text-sm text-center" onClick={() => setMenuOpen(false)}>
-            Get a Quote
+        <div className="md:hidden bg-white/98 backdrop-blur-xl border-t border-gray-100 px-6 py-5 flex flex-col gap-4 shadow-xl animate-in slide-in-from-top-2 duration-200">
+          <a href="#menus" className="text-gray-800 font-semibold hover:text-amber-600 text-sm flex items-center gap-2" onClick={() => setMenuOpen(false)}>
+            <span>📋</span>
+            <span>Live Menus &amp; Packages</span>
+          </a>
+          <a href="#book" className="text-gray-800 font-semibold hover:text-amber-600 text-sm flex items-center gap-2" onClick={() => setMenuOpen(false)}>
+            <span>📅</span>
+            <span>Book Catering Event</span>
+          </a>
+          <a href="/admin" className="text-gray-500 font-semibold hover:text-amber-600 text-sm flex items-center gap-2" onClick={() => setMenuOpen(false)}>
+            <Icon name="LockClosedIcon" size={16} />
+            <span>Staff Admin</span>
+          </a>
+          <a
+            href="#book"
+            className="text-white font-bold py-3 rounded-xl text-sm text-center shadow-md"
+            style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+            onClick={() => setMenuOpen(false)}
+          >
+            Get Free Quote
           </a>
         </div>
       )}

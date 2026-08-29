@@ -61,10 +61,8 @@ export default function InteractiveMenuOrderModal({
       if (lower.includes('option 2')) return 'live-dosa-2';
       if (lower.includes('option 3') || lower.includes('thali') || lower.includes('meals') || lower.includes('bhojanam')) return 'madras-thali-3';
       if (lower.includes('option 1') || lower.includes('live dosa')) return 'live-dosa-1';
-      const matched = BANQUET_PACKAGES.find(p => p.name.toLowerCase().includes(lower));
-      if (matched) return matched.id;
     }
-    return 'gold';
+    return 'live-dosa-1';
   });
 
   const [cuisineType, setCuisineType] = useState<'indian' | 'srilankan'>('indian');
@@ -339,24 +337,21 @@ export default function InteractiveMenuOrderModal({
         extras: [],
       };
     }
-    if (isLiveDosa1) {
-      return {
-        id: 'live-dosa-1',
-        name: 'Live Dosa Option 1',
-        pricePerPerson: 11,
-        color: '#C8860A',
-        tag: 'Theatrical Live Cooking (2 Hours)',
-        guestLabel: 'Weekdays min 35 · Weekends min 40',
-        durationHours: 2,
-        starters: { veg: 0, nonVeg: 0 },
-        mains: { veg: 0, nonVeg: 0 },
-        desserts: [],
-        drinks: [],
-        extras: [],
-      };
-    }
-    return BANQUET_PACKAGES.find(p => p.id === selectedPackageId) || BANQUET_PACKAGES[3]; // default Gold
-  }, [selectedPackageId, isLiveDosa1, isLiveDosa2, isThali]);
+    return {
+      id: 'live-dosa-1',
+      name: 'Live Dosa Option 1',
+      pricePerPerson: 11,
+      color: '#C8860A',
+      tag: 'Theatrical Live Cooking (2 Hours)',
+      guestLabel: 'Weekdays min 35 · Weekends min 40',
+      durationHours: 2,
+      starters: { veg: 0, nonVeg: 0 },
+      mains: { veg: 0, nonVeg: 0 },
+      desserts: [],
+      drinks: [],
+      extras: [],
+    };
+  }, [selectedPackageId, isLiveDosa1, isLiveDosa2, isThali, isTailorMenu, isDosaFestival, isCanape, isNorthIndian, isGujarati, isPunjabi]);
 
   const activeMenu = cuisineType === 'indian' ? INDIAN_MENU : SRI_LANKAN_MENU;
 
@@ -803,7 +798,7 @@ export default function InteractiveMenuOrderModal({
             <div className="space-y-6">
               <div>
                 <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2.5">
-                  1. Select Experience or Banquet Package
+                  1. Select Menu Package / Experience
                 </label>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1072,36 +1067,6 @@ export default function InteractiveMenuOrderModal({
                       Chaats, Paneer Tikkas, Subjies, Dal Makhani, Stuffed Kulchas, Tandoori Breads &amp; Mithai.
                     </div>
                   </div>
-
-                  {/* Banquet Packages */}
-                  {BANQUET_PACKAGES.map(pkg => {
-                    const isSelected = pkg.id === selectedPackageId;
-                    return (
-                      <div
-                        key={pkg.id}
-                        onClick={() => setSelectedPackageId(pkg.id)}
-                        className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${
-                          isSelected
-                            ? 'border-[#C8860A] bg-amber-50/40 shadow-md ring-2 ring-[#C8860A]/20'
-                            : 'border-gray-200 hover:border-gray-300 bg-white'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <h3 className="font-bold text-gray-900 text-sm">{pkg.name}</h3>
-                          <span className="text-base font-extrabold" style={{ color: pkg.color }}>
-                            £{pkg.pricePerPerson}
-                            <span className="text-[10px] font-normal text-gray-500">/pp</span>
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-gray-500 mb-2">{pkg.guestLabel || 'Authentic Catering'}</p>
-                        <div className="text-[10px] text-gray-600 space-y-0.5 border-t border-gray-100 pt-2">
-                          <div>• {pkg.starters.veg} Veg &amp; {pkg.starters.nonVeg} Non-Veg Starters</div>
-                          <div>• {pkg.mains.veg} Veg &amp; {pkg.mains.nonVeg} Non-Veg Mains</div>
-                          <div>• {pkg.desserts.length} Dessert + Sundries &amp; Breads</div>
-                        </div>
-                      </div>
-                    );
-                  })}
                 </div>
               </div>
 

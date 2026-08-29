@@ -8,8 +8,8 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'SriLalitha — Banquet & Catering Management',
-  description: 'SriLalitha helps you plan and manage unforgettable banquet events and catering services with ease.',
+  title: 'SriLalitha — Authentic Pure Vegetarian Live Catering & Events',
+  description: 'SriLalitha brings authentic 100% pure vegetarian South & North Indian live dosa stations, regional feasts, and bespoke catering across London and the UK.',
   icons: {
     icon: [
       { url: '/assets/images/srilalitha.png', type: 'image/png' }

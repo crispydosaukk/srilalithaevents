@@ -19,7 +19,6 @@ import {
   NORTH_INDIAN_OPTION_7,
   GUJARATI_OPTION_8,
   PUNJABI_OPTION_9,
-  SOUTH_INDIAN_BUFFET,
   MENU_UPGRADES,
   calculateLiveDosaPrice,
   isWeekendOrBankHoliday,
@@ -57,11 +56,11 @@ import {
 import GoogleLocationInput from '@/components/GoogleLocationInput';
 import InteractiveMenuOrderModal from '@/components/InteractiveMenuOrderModal';
 
-type MenuTab = 'full-menu' | 'live-dosa-1' | 'live-dosa-2' | 'madras-thali' | 'tailor-menu' | 'dosa-festival' | 'canape' | 'north-indian' | 'gujarati' | 'punjabi' | 'buffet' | 'live-dosa';
+type MenuTab = 'full-menu' | 'live-dosa-1' | 'live-dosa-2' | 'madras-thali' | 'tailor-menu' | 'dosa-festival' | 'canape' | 'north-indian' | 'gujarati' | 'punjabi' | 'live-dosa';
 
 export default function HomePage() {
   const [isMenuOrderModalOpen, setIsMenuOrderModalOpen] = useState(false);
-  const [selectedPackageForModal, setSelectedPackageForModal] = useState<string>('Gold Package');
+  const [selectedPackageForModal, setSelectedPackageForModal] = useState<string>('Live Dosa Option 1');
 
   const [menus, setMenus] = useState({
     LIVE_DOSA_OPTION_1: LIVE_DOSA_OPTION_1,
@@ -743,17 +742,6 @@ export default function HomePage() {
               <option value="Crockery (Plates/Bowls/Spoons) — £3/person">Crockery (Plates/Bowls/Spoons) — £3.00/person</option>
               <option value="Extra Hour for Serving/Cooking — £100/hr">Extra Hour for Serving/Cooking — £100.00/hr</option>
             </optgroup>
-
-            <optgroup label="── 🍛 Buffet Feasts ──">
-              <option value="South Indian Special Buffet (Weekday)">South Indian Special Buffet (Weekday: Mon-Fri) — £11.99/person</option>
-              <option value="South Indian Special Buffet (Weekend)">South Indian Special Buffet (Weekend &amp; Holidays) — £13.99/person</option>
-            </optgroup>
-
-            <optgroup label="── 🎁 Banquet Packages ──">
-              {BANQUET_PACKAGES.map(p => (
-                <option key={p.id} value={p.name}>{p.name} — £{p.pricePerPerson}/person</option>
-              ))}
-            </optgroup>
           </select>
         )}
 
@@ -783,61 +771,66 @@ export default function HomePage() {
     <div className="min-h-screen bg-white overflow-x-hidden">
       <Header onOpenModal={() => {}} />
 
-      {/* Hero — two-column layout */}
-      <section className="pt-24 pb-4 px-6 relative overflow-hidden bg-surface">
-        <div className="absolute inset-0 opacity-5 pointer-events-none" style={{ background: 'radial-gradient(circle at top right, #9B1B30 0%, transparent 40%), radial-gradient(circle at bottom left, #C8860A 0%, transparent 40%)' }}></div>
-        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-start justify-between gap-8 lg:gap-12 py-6 lg:py-10 relative z-10">
+      {/* Hero — Modern Luxury Live Catering Showcase with Image Background */}
+      <section className="pt-16 sm:pt-20 pb-6 sm:pb-8 px-4 sm:px-6 relative overflow-hidden bg-neutral-900 text-white">
+        {/* Cinematic Background Image */}
+        <div 
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{ backgroundImage: "url('/assets/images/hero_live_catering_bg.jpg')" }}
+        />
+        {/* Light & Transparent Overlay to keep the image clearly visible */}
+        <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/30 to-black/10" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/20" />
 
-          {/* ── Left: Text content ── */}
+        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-start justify-between gap-6 lg:gap-10 py-2 sm:py-4 relative z-10">
+
+          {/* ── Left: Original Text Content & Trust Badges ── */}
           <div className="flex-1 text-center lg:text-left pt-2 lg:pt-4">
-            <span className="inline-block text-xs font-semibold uppercase tracking-widest px-4 py-1.5 rounded-full mb-4" style={{ background: 'rgba(155, 27, 48, 0.1)', color: '#9B1B30' }}>
-              Banquet &amp; Catering
-            </span>
-            <h1 className="text-4xl md:text-5xl lg:text-[3.25rem] font-bold text-gray-900 leading-tight mb-4 tracking-tight">
+            <h1 className="text-4xl md:text-5xl lg:text-[3.25rem] font-extrabold text-white leading-tight mb-4 tracking-tight drop-shadow-[0_3px_12px_rgba(0,0,0,0.9)]">
               Make Your Event<br />
-              <span style={{ color: '#9B1B30' }}>Unforgettable</span>
+              <span style={{ color: '#FF334B' }} className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]">Unforgettable</span>
             </h1>
-            <p className="text-base md:text-lg mb-6 max-w-xl lg:mx-0 mx-auto text-gray-600 leading-relaxed">
-              Authentic Pure Vegetarian Indian cuisine. Elegant banquet hall. Seamless outdoor catering for all occasions.
+            <p className="text-base md:text-lg mb-6 max-w-xl lg:mx-0 mx-auto text-white leading-relaxed font-medium drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]">
+              Authentic Pure Vegetarian Indian cuisine. Seamless outdoor catering for all occasions.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start mb-8">
-              <a href="#menus" className="text-white font-semibold px-7 py-3 rounded-xl transition-all shadow-md hover:shadow-lg bg-maroon-primary hover:bg-maroon-dark text-sm sm:text-base">
+              <a href="#menus" className="text-white font-semibold px-7 py-3 rounded-xl transition-all shadow-lg hover:shadow-xl bg-maroon-primary hover:bg-maroon-dark text-sm sm:text-base cursor-pointer">
                 View Menus &amp; Packages
               </a>
-              <a href="#book" className="border border-gray-300 font-semibold px-7 py-3 rounded-xl transition-colors text-gray-700 hover:text-maroon-primary hover:border-maroon-primary text-sm sm:text-base">
+              <a href="#book" className="bg-black/40 backdrop-blur-md border border-white/60 font-semibold px-7 py-3 rounded-xl transition-all text-white hover:bg-white/20 text-sm sm:text-base shadow-md">
                 Book Now
               </a>
             </div>
 
-            {/* Key Trust Badges to balance vertical space */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-xl mx-auto lg:mx-0 pt-4 border-t border-gray-200/70 text-left">
-              <div className="flex items-center gap-2.5 bg-white/70 backdrop-blur-xs p-2.5 rounded-xl border border-gray-100 shadow-2xs">
+            {/* Key Trust Badges */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-xl mx-auto lg:mx-0 pt-4 border-t border-white/30 text-left">
+              <div className="flex items-center gap-2.5 bg-black/50 backdrop-blur-md p-2.5 rounded-xl border border-white/20 shadow-md">
                 <span className="text-lg">⭐</span>
                 <div>
-                  <div className="text-xs font-bold text-gray-900">4.9★ Rated</div>
-                  <div className="text-[11px] text-gray-500">500+ Happy Events</div>
+                  <div className="text-xs font-bold text-white">4.9★ Rated</div>
+                  <div className="text-[11px] text-gray-200">500+ Happy Events</div>
                 </div>
               </div>
-              <div className="flex items-center gap-2.5 bg-white/70 backdrop-blur-xs p-2.5 rounded-xl border border-gray-100 shadow-2xs">
+              <div className="flex items-center gap-2.5 bg-black/50 backdrop-blur-md p-2.5 rounded-xl border border-white/20 shadow-md">
                 <span className="text-lg">🍲</span>
                 <div>
-                  <div className="text-xs font-bold text-gray-900">Authentic Taste</div>
-                  <div className="text-[11px] text-gray-500">Pure Indian Vegetarian</div>
+                  <div className="text-xs font-bold text-white">Authentic Taste</div>
+                  <div className="text-[11px] text-gray-200">Pure Indian Vegetarian</div>
                 </div>
               </div>
-              <div className="flex items-center gap-2.5 bg-white/70 backdrop-blur-xs p-2.5 rounded-xl border border-gray-100 shadow-2xs">
+              <div className="flex items-center gap-2.5 bg-black/50 backdrop-blur-md p-2.5 rounded-xl border border-white/20 shadow-md">
                 <span className="text-lg">🏛️</span>
                 <div>
-                  <div className="text-xs font-bold text-gray-900">500 Capacity</div>
-                  <div className="text-[11px] text-gray-500">Hall &amp; Outdoor</div>
+                  <div className="text-xs font-bold text-white">500 Capacity</div>
+                  <div className="text-[11px] text-gray-200">Hall &amp; Outdoor</div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* ── Right: Booking form card ── */}
+          {/* ── Right: Booking form card (Ultra-Premium Glass Finish) ── */}
           <div id="book" className="w-full lg:w-[490px] flex-shrink-0">
-            <div className="bg-white rounded-2xl shadow-xl p-5 sm:p-6 border border-gray-100">
+            <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl p-5 sm:p-6 border border-white/80 ring-1 ring-black/10 text-gray-900">
               <h2 className="text-lg sm:text-xl font-bold text-gray-900 text-center mb-1">
                 {formConfig.formTitle || 'Request a Booking'}
               </h2>
@@ -962,17 +955,19 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Quick Stats */}
-      <div className="py-6 px-6" style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
-        <div className="max-w-4xl mx-auto grid grid-cols-3 gap-4 text-center">
+      {/* Quick Stats Ribbon */}
+      <div className="py-7 px-4 sm:px-6 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #A86208 0%, #C8860A 50%, #E69D24 100%)' }}>
+        <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6 text-center text-white">
           {[
-            { value: '500+', label: 'Events Hosted' },
-            { value: '500', label: 'Guest Capacity' },
-            { value: '4.9★', label: 'Customer Rating' },
+            { value: '500+', label: 'Events Catered', icon: '🎪' },
+            { value: '34+', label: 'Dosa Varieties', icon: '🥞' },
+            { value: '16+ Yrs', label: 'Culinary Heritage', icon: '👑' },
+            { value: '4.9★', label: 'Customer Rating', icon: '⭐' },
           ].map((stat) => (
-            <div key={stat.label}>
-              <div className="text-2xl font-bold text-white">{stat.value}</div>
-              <div className="text-xs text-white/70 mt-0.5">{stat.label}</div>
+            <div key={stat.label} className="flex flex-col items-center">
+              <div className="text-xl mb-1">{stat.icon}</div>
+              <div className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white drop-shadow-xs">{stat.value}</div>
+              <div className="text-xs text-amber-100/90 font-medium mt-0.5">{stat.label}</div>
             </div>
           ))}
         </div>
@@ -987,7 +982,7 @@ export default function HomePage() {
             </span>
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">Our Menus &amp; Specials</h2>
             <p className="text-gray-500 max-w-2xl mx-auto text-sm sm:text-base">
-              Explore our freshly prepared vegetarian delicacies, live dosa stations, and special buffet.
+              Explore our freshly prepared vegetarian delicacies and live dosa stations.
             </p>
           </div>
 
@@ -1004,7 +999,6 @@ export default function HomePage() {
               { id: 'north-indian', label: '🍛 Option 7: North Indian', count: '£12.00/pp' },
               { id: 'gujarati', label: '🪔 Option 8: Gujarati', count: '£14.99/pp' },
               { id: 'punjabi', label: '👑 Option 9: Punjabi', count: '£13.99/pp' },
-              { id: 'buffet', label: '🍛 Buffet', count: 'From £11.99' },
             ] as { id: MenuTab; label: string; count: string }[]).map((tab) => {
               const isActive = activeMenuTab === tab.id || (activeMenuTab === 'live-dosa' && tab.id === 'live-dosa-1');
               return (
@@ -1126,7 +1120,7 @@ export default function HomePage() {
                     })}
                   </div>
 
-                  {/* Quick Shortcut to Live Dosa & Buffet */}
+                  {/* Quick Shortcut to Live Dosa */}
                   <div className="pt-2 border-t border-gray-100 space-y-1.5 hidden lg:block">
                     <button
                       onClick={() => setActiveMenuTab('live-dosa')}
@@ -1137,16 +1131,6 @@ export default function HomePage() {
                         <span>Live Dosa Option 1</span>
                       </span>
                       <span className="text-[10px] font-semibold text-[#C8860A]">View 12 Live →</span>
-                    </button>
-                    <button
-                      onClick={() => setActiveMenuTab('buffet')}
-                      className="w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100/70 transition-colors flex items-center justify-between border border-emerald-200 cursor-pointer"
-                    >
-                      <span className="flex items-center gap-1.5">
-                        <span>🍛</span>
-                        <span>South Indian Buffet</span>
-                      </span>
-                      <span className="text-[10px] font-semibold text-emerald-700">£11.99+ →</span>
                     </button>
                   </div>
                 </div>
@@ -2780,126 +2764,6 @@ export default function HomePage() {
                       </p>
                     </div>
                   </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════════════════════════════
-              TAB 3: SOUTH INDIAN SPECIAL BUFFET
-              ══════════════════════════════════════════════════════════════ */}
-          {activeMenuTab === 'buffet' && (
-            <div className="space-y-8 animate-in fade-in duration-300">
-              {/* Buffet Header & Schedule Cards */}
-              <div className="bg-gradient-to-r from-emerald-900 via-emerald-800 to-teal-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
-                <div className="relative z-10">
-                  <div className="inline-block text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-emerald-400/20 text-emerald-300 border border-emerald-400/30 mb-3">
-                    🍲 All-You-Can-Eat Buffet Feast
-                  </div>
-                  <h3 className="text-2xl sm:text-3xl font-extrabold mb-2">
-                    {SOUTH_INDIAN_BUFFET.title}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-emerald-100 max-w-2xl mb-6 leading-relaxed">
-                    Indulge in an authentic unlimited spread of steaming idlis, crispy dosas made to order, vadas, rich pongal, savory rice varieties, daily sweet specialties, and unlimited sides.
-                  </p>
-
-                  {/* Timing & Pricing Cards Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
-                    {/* Weekday Card */}
-                    <div className="bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/20">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">
-                          {SOUTH_INDIAN_BUFFET.weekday.days}
-                        </span>
-                        <span className="text-2xl font-extrabold text-white">
-                          {SOUTH_INDIAN_BUFFET.weekday.price}
-                        </span>
-                      </div>
-                      <div className="space-y-1 text-xs text-white/90 mb-3">
-                        {SOUTH_INDIAN_BUFFET.weekday.slots.map((s) => (
-                          <div key={s} className="flex items-center gap-1.5">
-                            <span className="text-emerald-300">🕒</span>
-                            <span>{s}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <span className="text-[10px] text-emerald-200 font-semibold block">
-                        ({SOUTH_INDIAN_BUFFET.weekday.chargeNote})
-                      </span>
-                    </div>
-
-                    {/* Weekend Card */}
-                    <div className="bg-gradient-to-br from-amber-500/30 to-amber-600/30 backdrop-blur-md rounded-2xl p-5 border border-amber-300/40">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold uppercase tracking-wider text-amber-200">
-                          {SOUTH_INDIAN_BUFFET.weekend.days}
-                        </span>
-                        <span className="text-2xl font-extrabold text-white">
-                          {SOUTH_INDIAN_BUFFET.weekend.price}
-                        </span>
-                      </div>
-                      <div className="space-y-1 text-xs text-white/90 mb-3">
-                        {SOUTH_INDIAN_BUFFET.weekend.slots.map((s) => (
-                          <div key={s} className="flex items-center gap-1.5">
-                            <span className="text-amber-300">🕒</span>
-                            <span>{s} (All Day Feast)</span>
-                          </div>
-                        ))}
-                      </div>
-                      <span className="text-[10px] text-amber-200 font-semibold block">
-                        ({SOUTH_INDIAN_BUFFET.weekend.chargeNote})
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Buffet Inclusions Grid */}
-              <div className="bg-white rounded-3xl border border-gray-200 p-6 sm:p-8 shadow-sm">
-                <div className="flex items-center justify-between mb-6 pb-3 border-b border-gray-100">
-                  <div>
-                    <h4 className="text-xl font-bold text-gray-900">Buffet Spread Dishes</h4>
-                    <p className="text-xs text-gray-500">Unlimited servings of all listed dishes with fresh chutneys and sambar</p>
-                  </div>
-                  <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-900">
-                    14 Delicious Inclusions
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
-                  {SOUTH_INDIAN_BUFFET.items.map((bItem, idx) => (
-                    <div key={bItem.name} className="p-4 rounded-2xl bg-gray-50 border border-gray-200 hover:border-emerald-300 hover:bg-emerald-50/30 transition-all">
-                      <div className="flex items-start justify-between gap-1 mb-1">
-                        <span className="font-bold text-gray-900 text-sm">{bItem.name}</span>
-                        <div className="flex items-center gap-0.5">
-                          {bItem.tags.map((t) => (
-                            <span key={t} className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-white border border-gray-200 text-gray-700">
-                              {t}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                      <p className="text-xs text-gray-500 leading-relaxed">
-                        {bItem.description}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-8 text-center pt-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-center gap-3">
-                  <button
-                    onClick={() => handleEnquireNow('South Indian Special Buffet (Weekday)')}
-                    className="px-7 py-3 rounded-xl font-bold text-white shadow-md hover:shadow-lg transition-all text-xs sm:text-sm cursor-pointer"
-                    style={{ background: 'linear-gradient(135deg, #2E7D32, #4CAF50)' }}
-                  >
-                    Reserve Table / Group Booking
-                  </button>
-                  <a
-                    href="#book"
-                    className="px-6 py-3 rounded-xl font-bold text-gray-700 border border-gray-300 hover:bg-gray-50 transition-all text-xs sm:text-sm"
-                  >
-                    Enquire for Private Catering
-                  </a>
                 </div>
               </div>
             </div>
