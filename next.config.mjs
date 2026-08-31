@@ -5,7 +5,6 @@ const nextConfig = {
   devIndicators: {
     appIsrStatus: false,
   },
-  output: 'standalone',
   productionBrowserSourceMaps: false,
   distDir: process.env.DIST_DIR || '.next',
   typescript: {
