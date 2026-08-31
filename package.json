@@ -44,7 +44,7 @@
     "build:cpanel": "next build && node scripts/prepare-cpanel.js",
     "prepare:cpanel": "node scripts/prepare-cpanel.js",
     "export": "next build",
-    "start": "next start",
+    "start": "next start -H 0.0.0.0",
     "lint": "next lint",
     "lint:fix": "next lint --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,md,json}\"",
