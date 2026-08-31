@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
         dishesSummary,
       },
       success_url: `${siteOrigin}/order-success?session_id={CHECKOUT_SESSION_ID}&order_id=${encodeURIComponent(orderId || '')}`,
-      cancel_url: `${siteOrigin}/home?payment_cancelled=true#book`,
+      cancel_url: `${siteOrigin}/?payment_cancelled=true#book`,
     });
 
     return NextResponse.json({

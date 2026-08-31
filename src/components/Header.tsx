@@ -15,7 +15,7 @@ const Header: React.FC<HeaderProps> = () => {
     <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-b border-amber-950/10 shadow-xs transition-all">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between">
         {/* Logo */}
-        <a href="/home" className="flex items-center gap-2.5 transition-transform hover:scale-[1.02]">
+        <a href="/" className="flex items-center gap-2.5 transition-transform hover:scale-[1.02]">
           <div className="flex items-center justify-center py-0.5">
             <Image
               src="/assets/images/srilalitha.png"

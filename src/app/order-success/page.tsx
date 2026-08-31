@@ -108,7 +108,7 @@ function OrderSuccessContent() {
           <h2 className="text-lg font-bold text-gray-900 mb-1">Payment Verification Notice</h2>
           <p className="text-xs text-gray-600 mb-5">{error || 'Session ID is missing or invalid.'}</p>
           <Link
-            href="/home"
+            href="/"
             className="inline-block px-6 py-2.5 rounded-xl text-xs font-bold text-white shadow-sm"
             style={{ background: '#C8860A' }}
           >
@@ -357,7 +357,7 @@ function OrderSuccessContent() {
           {/* Action Links */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-gray-100">
             <Link
-              href="/home"
+              href="/"
               className="text-xs font-bold text-gray-600 hover:text-gray-900 flex items-center gap-1.5"
             >
               <Icon name="ArrowLeftIcon" size={14} />
@@ -373,7 +373,7 @@ function OrderSuccessContent() {
                 Download / Print
               </button>
               <Link
-                href="/home#book"
+                href="/#book"
                 className="px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-md"
                 style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
               >

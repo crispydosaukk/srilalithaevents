@@ -1,25 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
-import Link from 'next/link';
+import HomePage from './home/page';
 
-export default function HomeRedirectPage() {
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.location.replace('/home');
-    }
-  }, []);
-
-  return (
-    <main className="min-h-screen flex flex-col items-center justify-center bg-white px-6 text-center">
-      <p className="text-lg font-medium text-slate-700 mb-4">Redirecting to the homepage...</p>
-      <p className="text-sm text-slate-500">
-        If you are not redirected automatically,{' '}
-        <Link href="/home" className="text-blue-600 underline">
-          click here
-        </Link>
-        .
-      </p>
-    </main>
-  );
+export default function RootPage() {
+  return <HomePage />;
 }
+
