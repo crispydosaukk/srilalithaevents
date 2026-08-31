@@ -179,7 +179,7 @@ function OrderSuccessContent() {
                 />
               </div>
               <p className="text-xs text-gray-500 font-medium">Authentic Indian &amp; Sri Lankan Banquet Catering</p>
-              <p className="text-[11px] text-gray-400">Website: srilalithaevents.com • Tel: +44 7700 900000</p>
+              <p className="text-[11px] text-gray-400">Website: vegchennaisrilalitha.events • Tel: +44 7700 900000</p>
             </div>
 
             <div className="text-left sm:text-right space-y-1">

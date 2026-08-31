@@ -41,6 +41,8 @@
   "scripts": {
     "dev": "next dev -p 4028",
     "build": "next build",
+    "build:cpanel": "next build && node scripts/prepare-cpanel.js",
+    "prepare:cpanel": "node scripts/prepare-cpanel.js",
     "export": "next build",
     "start": "next start",
     "lint": "next lint",

@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
       origin ||
       req.headers.get('origin') ||
       req.headers.get('referer') ||
-      'http://localhost:4028';
+      'https://vegchennaisrilalitha.events';
 
     // Format selected dishes summary for metadata
     const dishesSummary = selectedMenuDishes
@@ -46,10 +46,16 @@ export async function POST(req: NextRequest) {
           .slice(0, 450)
       : '';
 
+    // Only include images array if publicly accessible https URL is available
+    const hasValidHttpsOrigin = siteOrigin && siteOrigin.startsWith('https://');
+    const imageList = hasValidHttpsOrigin ? [`${siteOrigin}/assets/images/srilalitha.png`] : undefined;
+
+    const formattedCustomerEmail = customerEmail && customerEmail.includes('@') ? customerEmail.trim() : undefined;
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'payment',
-      customer_email: customerEmail || undefined,
+      customer_email: formattedCustomerEmail,
       line_items: [
         {
           price_data: {
@@ -57,7 +63,7 @@ export async function POST(req: NextRequest) {
             product_data: {
               name: `SriLalitha Catering - ${packageName || 'Custom Event Package'}`,
               description: `${paymentType === 'deposit' ? '30% Booking Deposit' : 'Full Payment'} for ${guests || 0} Guests on ${eventDate || 'Date TBD'}${location ? ` (${location})` : ''}`,
-              images: [`${siteOrigin}/assets/images/srilalitha.png`],
+              ...(imageList ? { images: imageList } : {}),
             },
             unit_amount: Math.round(Number(amountToPay) * 100), // In Pence
           },

@@ -8,8 +8,27 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://vegchennaisrilalitha.events'),
   title: 'SriLalitha — Authentic Pure Vegetarian Live Catering & Events',
   description: 'SriLalitha brings authentic 100% pure vegetarian South & North Indian live dosa stations, regional feasts, and bespoke catering across London and the UK.',
+  alternates: {
+    canonical: 'https://vegchennaisrilalitha.events',
+  },
+  openGraph: {
+    title: 'SriLalitha — Authentic Pure Vegetarian Live Catering & Events',
+    description: 'Authentic pure vegetarian live dosa stations and bespoke catering across London and the UK.',
+    url: 'https://vegchennaisrilalitha.events',
+    siteName: 'SriLalitha Pure Vegetarian Catering',
+    type: 'website',
+    images: [
+      {
+        url: '/assets/images/srilalitha.png',
+        width: 800,
+        height: 600,
+        alt: 'SriLalitha Catering',
+      },
+    ],
+  },
   icons: {
     icon: [
       { url: '/assets/images/srilalitha.png', type: 'image/png' }

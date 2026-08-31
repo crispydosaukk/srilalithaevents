@@ -512,10 +512,32 @@ export default function InteractiveMenuOrderModal({
     }
   };
 
+  // Step 1 Validation & Proceed to Step 2
+  const handleStep1Next = () => {
+    if (!customerName.trim()) {
+      setErrorMessage('Please enter your Full Name to proceed.');
+      return;
+    }
+    if (!customerPhone.trim()) {
+      setErrorMessage('Please enter your WhatsApp Phone Number to proceed.');
+      return;
+    }
+    if (!eventDate) {
+      setErrorMessage('Please select your Event Date.');
+      return;
+    }
+    setErrorMessage(null);
+    setStep(2);
+  };
+
   // Submit and Redirect to Stripe Checkout
   const handleProceedToStripe = async () => {
-    if (!customerName.trim() || !customerEmail.trim() || !customerPhone.trim()) {
-      setErrorMessage('Please fill in your Full Name, Email, and WhatsApp Phone Number.');
+    if (!customerName.trim()) {
+      setErrorMessage('Please enter your Full Name.');
+      return;
+    }
+    if (!customerPhone.trim()) {
+      setErrorMessage('Please enter your WhatsApp Phone Number.');
       return;
     }
     if (!eventDate) {
@@ -536,7 +558,7 @@ export default function InteractiveMenuOrderModal({
         ...selectedUpgrades.moreDishes.map(d => ({ name: `Extra Dish: ${d}`, amount: 2.50 })),
       ].filter(Boolean) as { name: string; amount: number }[];
 
-      // 1. Create order record in Firestore
+      // 1. Prepare menu details
       const liveDosaMenuDetails = isLiveDosa ? {
         starterChoice: liveDosaStarterChoice,
         liveDosaItems: LIVE_DOSA_OPTION_1.items.map(i => i.name),
@@ -611,73 +633,79 @@ export default function InteractiveMenuOrderModal({
         ? punjabiDetails
         : selectedDishes;
 
-      const orderRef = await addDoc(collection(db, 'booking_requests'), {
-        name: customerName,
-        email: customerEmail,
-        phone: customerPhone,
-        eventType: isLiveDosa
-          ? `${activePackage.name} Booking`
-          : isThali
-          ? 'Madras Thali Booking'
-          : isTailorMenu
-          ? 'Tailor Your Own Menu Booking'
-          : isDosaFestival
-          ? 'Dosa Festival Booking'
-          : isCanape
-          ? 'Canapé Service Booking'
-          : isNorthIndian
-          ? 'North Indian Standard Menu Booking'
-          : isGujarati
-          ? 'Gujarati Feast Booking'
-          : isPunjabi
-          ? 'Punjabi Feast Booking'
-          : 'Online Custom Menu Order',
-        package: activePackage.name,
-        packageName: activePackage.name,
-        cuisineType,
-        guests: Number(guests),
-        date: eventDate,
-        time: eventTime,
-        timeOfDay: eventTime,
-        location: venueAddress || 'Catering Delivery',
-        distanceMiles: deliveryResult?.distanceMiles || 0,
-        deliveryCharge,
-        selectedMenuDishes: selectedMenuPayload,
-        selectedUpgrades,
-        selectedThaliVariants: isThali ? selectedThaliVariants : null,
-        selectedThaliAdditions: isThali ? selectedThaliAdditions : null,
-        isLiveDosa,
-        isThali,
-        isTailorMenu,
-        isDosaFestival,
-        isCanape,
-        isNorthIndian,
-        isGujarati,
-        isPunjabi,
-        liveDosaOption: isLiveDosa2 ? 'option-2' : isLiveDosa1 ? 'option-1' : null,
-        liveDosaPricingTier: isLiveDosa ? liveDosaCalc.tier : null,
-        callOutAdjustment,
-        baseAmount: grandTotal,
-        totalEstimatedAmount: grandTotal,
-        deposit: depositAmount,
-        depositPaid: false,
-        finalPaymentPaid: false,
-        paymentChoice,
-        amountToPay,
-        status: 'deposit_pending',
-        isOnlineOrder: true,
-        notes,
-        extraCharges: upgradesSummaryList,
-        createdAt: new Date().toISOString(),
-        enquiryDate: new Date().toISOString().split('T')[0],
-      });
+      let generatedOrderId = `ORD_${Date.now()}`;
+      try {
+        const orderRef = await addDoc(collection(db, 'booking_requests'), {
+          name: customerName,
+          email: customerEmail || '',
+          phone: customerPhone,
+          eventType: isLiveDosa
+            ? `${activePackage.name} Booking`
+            : isThali
+            ? 'Madras Thali Booking'
+            : isTailorMenu
+            ? 'Tailor Your Own Menu Booking'
+            : isDosaFestival
+            ? 'Dosa Festival Booking'
+            : isCanape
+            ? 'Canapé Service Booking'
+            : isNorthIndian
+            ? 'North Indian Standard Menu Booking'
+            : isGujarati
+            ? 'Gujarati Feast Booking'
+            : isPunjabi
+            ? 'Punjabi Feast Booking'
+            : 'Online Custom Menu Order',
+          package: activePackage.name,
+          packageName: activePackage.name,
+          cuisineType,
+          guests: Number(guests),
+          date: eventDate,
+          time: eventTime,
+          timeOfDay: eventTime,
+          location: venueAddress || 'Catering Delivery',
+          distanceMiles: deliveryResult?.distanceMiles || 0,
+          deliveryCharge,
+          selectedMenuDishes: selectedMenuPayload,
+          selectedUpgrades,
+          selectedThaliVariants: isThali ? selectedThaliVariants : null,
+          selectedThaliAdditions: isThali ? selectedThaliAdditions : null,
+          isLiveDosa,
+          isThali,
+          isTailorMenu,
+          isDosaFestival,
+          isCanape,
+          isNorthIndian,
+          isGujarati,
+          isPunjabi,
+          liveDosaOption: isLiveDosa2 ? 'option-2' : isLiveDosa1 ? 'option-1' : null,
+          liveDosaPricingTier: isLiveDosa ? liveDosaCalc.tier : null,
+          callOutAdjustment,
+          baseAmount: grandTotal,
+          totalEstimatedAmount: grandTotal,
+          deposit: depositAmount,
+          depositPaid: false,
+          finalPaymentPaid: false,
+          paymentChoice,
+          amountToPay,
+          status: 'deposit_pending',
+          isOnlineOrder: true,
+          notes,
+          extraCharges: upgradesSummaryList,
+          createdAt: new Date().toISOString(),
+          enquiryDate: new Date().toISOString().split('T')[0],
+        });
+        generatedOrderId = orderRef.id;
+      } catch (dbErr) {
+        console.warn('Could not write order pre-record to Firestore, will record on verification:', dbErr);
+      }
 
       // 2. Call Stripe API to create Checkout Session
       const res = await fetch('/api/stripe/create-checkout-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          orderId: orderRef.id,
+          orderId: generatedOrderId,
           customerName,
           customerEmail,
           customerPhone,
@@ -697,10 +725,10 @@ export default function InteractiveMenuOrderModal({
 
       const data = await res.json();
       if (!res.ok || !data.url) {
-        throw new Error(data.error || 'Failed to start Stripe checkout session');
+        throw new Error(data.error || 'Failed to start Stripe checkout session. Please try again.');
       }
 
-      // 3. Redirect user to Stripe
+      // 3. Redirect user to Stripe Checkout
       window.location.href = data.url;
     } catch (err: any) {
       console.error('Checkout error:', err);
@@ -746,7 +774,10 @@ export default function InteractiveMenuOrderModal({
         <div className="grid grid-cols-3 border-b border-gray-100 text-xs font-bold bg-gray-50/60">
           <button
             type="button"
-            onClick={() => setStep(1)}
+            onClick={() => {
+              setErrorMessage(null);
+              setStep(1);
+            }}
             className={`py-3 px-4 flex items-center justify-center gap-2 transition-all border-b-2 cursor-pointer ${
               step === 1 ? 'border-[#C8860A] text-[#C8860A] bg-white' : 'border-transparent text-gray-500 hover:text-gray-800'
             }`}
@@ -754,12 +785,19 @@ export default function InteractiveMenuOrderModal({
             <span className={`w-5 h-5 rounded-full text-[10px] flex items-center justify-center font-bold ${
               step === 1 ? 'bg-[#C8860A] text-white' : 'bg-gray-200 text-gray-600'
             }`}>1</span>
-            <span>Package &amp; Schedule</span>
+            <span>Details &amp; Schedule</span>
           </button>
 
           <button
             type="button"
-            onClick={() => setStep(2)}
+            onClick={() => {
+              if (step === 1) {
+                handleStep1Next();
+              } else {
+                setErrorMessage(null);
+                setStep(2);
+              }
+            }}
             className={`py-3 px-4 flex items-center justify-center gap-2 transition-all border-b-2 cursor-pointer ${
               step === 2 ? 'border-[#C8860A] text-[#C8860A] bg-white' : 'border-transparent text-gray-500 hover:text-gray-800'
             }`}
@@ -772,7 +810,14 @@ export default function InteractiveMenuOrderModal({
 
           <button
             type="button"
-            onClick={() => setStep(3)}
+            onClick={() => {
+              if (step === 1 && (!customerName.trim() || !customerPhone.trim() || !eventDate)) {
+                handleStep1Next();
+              } else {
+                setErrorMessage(null);
+                setStep(3);
+              }
+            }}
             className={`py-3 px-4 flex items-center justify-center gap-2 transition-all border-b-2 cursor-pointer ${
               step === 3 ? 'border-[#C8860A] text-[#C8860A] bg-white' : 'border-transparent text-gray-500 hover:text-gray-800'
             }`}
@@ -787,9 +832,19 @@ export default function InteractiveMenuOrderModal({
         {/* Modal Scrollable Body */}
         <div className="p-5 sm:p-6 overflow-y-auto flex-1 space-y-6">
           {errorMessage && (
-            <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
-              <Icon name="ExclamationTriangleIcon" size={16} className="text-rose-600 flex-shrink-0" />
-              <span>{errorMessage}</span>
+            <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center justify-between gap-2 shadow-xs animate-in fade-in duration-150">
+              <div className="flex items-center gap-2">
+                <Icon name="ExclamationTriangleIcon" size={16} className="text-rose-600 flex-shrink-0" />
+                <span className="font-semibold">{errorMessage}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setErrorMessage(null)}
+                className="text-rose-500 hover:text-rose-800 font-bold px-1.5 py-0.5 rounded text-xs cursor-pointer"
+                title="Dismiss message"
+              >
+                ✕
+              </button>
             </div>
           )}
 
@@ -1085,7 +1140,7 @@ export default function InteractiveMenuOrderModal({
                 </div>
               )}
 
-              {/* Schedule & Location Grid */}
+              {/* Schedule & Contact Details Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">
@@ -1096,7 +1151,10 @@ export default function InteractiveMenuOrderModal({
                     min="1"
                     max="2000"
                     value={guests}
-                    onChange={(e) => setGuests(Math.max(1, parseInt(e.target.value) || 1))}
+                    onChange={(e) => {
+                      setGuests(Math.max(1, parseInt(e.target.value) || 1));
+                      setErrorMessage(null);
+                    }}
                     className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-white"
                   />
                   {isLiveDosa && guests < liveDosaCalc.minGuests && (
@@ -1114,7 +1172,10 @@ export default function InteractiveMenuOrderModal({
                     type="date"
                     value={eventDate}
                     min={new Date().toISOString().split('T')[0]}
-                    onChange={(e) => setEventDate(e.target.value)}
+                    onChange={(e) => {
+                      setEventDate(e.target.value);
+                      setErrorMessage(null);
+                    }}
                     className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-white"
                   />
                   {eventDate && (
@@ -1130,13 +1191,81 @@ export default function InteractiveMenuOrderModal({
                   </label>
                   <select
                     value={eventTime}
-                    onChange={(e) => setEventTime(e.target.value)}
+                    onChange={(e) => {
+                      setEventTime(e.target.value);
+                      setErrorMessage(null);
+                    }}
                     className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-white"
                   >
                     <option value="Lunch (12:00pm – 4:00pm)">Lunch (12:00pm – 4:00pm)</option>
                     <option value="Dinner (6:00pm – 11:00pm)">Dinner (6:00pm – 11:00pm)</option>
                     <option value="All Day (10:00am – 10:00pm)">All Day (10:00am – 10:00pm)</option>
                   </select>
+                </div>
+
+                {/* 2. Customer Contact Details Section directly in Step 1 */}
+                <div className="sm:col-span-3 bg-gradient-to-r from-amber-50/70 via-white to-amber-50/50 p-4 rounded-2xl border border-amber-200 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between border-b border-amber-100 pb-2">
+                    <label className="text-xs font-bold text-amber-950 uppercase tracking-wide flex items-center gap-1.5">
+                      <span>👤</span>
+                      <span>Your Contact Details (For Booking &amp; WhatsApp Updates)</span>
+                    </label>
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#C8860A] text-white">
+                      Instant Confirmation
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                        Full Name <span className="text-rose-600">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={customerName}
+                        onChange={(e) => {
+                          setCustomerName(e.target.value);
+                          setErrorMessage(null);
+                        }}
+                        placeholder="e.g. Priya Sharma"
+                        className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                        WhatsApp Phone Number <span className="text-rose-600">*</span>
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        value={customerPhone}
+                        onChange={(e) => {
+                          setCustomerPhone(e.target.value);
+                          setErrorMessage(null);
+                        }}
+                        placeholder="e.g. +44 7700 900000"
+                        className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                        Email Address
+                      </label>
+                      <input
+                        type="email"
+                        value={customerEmail}
+                        onChange={(e) => {
+                          setCustomerEmail(e.target.value);
+                          setErrorMessage(null);
+                        }}
+                        placeholder="e.g. priya@example.com"
+                        className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-white"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="sm:col-span-3">
@@ -1146,7 +1275,10 @@ export default function InteractiveMenuOrderModal({
                   <GoogleLocationInput
                     value={venueAddress}
                     placeholder="Enter event venue address or UK postcode..."
-                    onChange={(addr, coords) => handleLocationSelected(addr, coords)}
+                    onChange={(addr, coords) => {
+                      handleLocationSelected(addr, coords);
+                      setErrorMessage(null);
+                    }}
                     onCoordinatesChange={(coords) => {
                       if (coords && coords.lat && coords.lng && deliveryConfig.venueLat && deliveryConfig.venueLng) {
                         const dist = calculateDistanceMiles(
@@ -1176,7 +1308,7 @@ export default function InteractiveMenuOrderModal({
                 </div>
                 <button
                   type="button"
-                  onClick={() => setStep(2)}
+                  onClick={handleStep1Next}
                   className="px-6 py-3 rounded-xl font-bold text-white text-xs shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer"
                   style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
                 >
@@ -2532,45 +2664,73 @@ export default function InteractiveMenuOrderModal({
           {/* ══════════ STEP 3: REVIEW & STRIPE PAYMENT ══════════ */}
           {step === 3 && (
             <div className="space-y-6">
-              {/* Customer Contact Info Form */}
+              {/* Customer Contact & Booking Confirmation Card */}
               <div className="bg-white p-5 rounded-2xl border border-gray-200 space-y-4">
-                <h3 className="font-bold text-gray-900 text-sm border-b border-gray-100 pb-2">
-                  Contact Information for Order Confirmation
-                </h3>
+                <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                  <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                    <span>👤</span>
+                    <span>Customer &amp; Contact Details</span>
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setErrorMessage(null);
+                      setStep(1);
+                    }}
+                    className="text-[11px] font-bold text-[#C8860A] hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <span>Edit in Step 1</span>
+                    <span>✏️</span>
+                  </button>
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Full Name *</label>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Full Name <span className="text-rose-600">*</span>
+                    </label>
                     <input
                       type="text"
                       required
                       value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
+                      onChange={(e) => {
+                        setCustomerName(e.target.value);
+                        setErrorMessage(null);
+                      }}
                       placeholder="e.g. Priya Sharma"
                       className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#C8860A]"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Email Address *</label>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      WhatsApp Phone Number <span className="text-rose-600">*</span>
+                    </label>
                     <input
-                      type="email"
+                      type="tel"
                       required
-                      value={customerEmail}
-                      onChange={(e) => setCustomerEmail(e.target.value)}
-                      placeholder="priya@example.com"
+                      value={customerPhone}
+                      onChange={(e) => {
+                        setCustomerPhone(e.target.value);
+                        setErrorMessage(null);
+                      }}
+                      placeholder="+44 7700 900000"
                       className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#C8860A]"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">WhatsApp Phone *</label>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Email Address
+                    </label>
                     <input
-                      type="tel"
-                      required
-                      value={customerPhone}
-                      onChange={(e) => setCustomerPhone(e.target.value)}
-                      placeholder="+44 7700 900000"
+                      type="email"
+                      value={customerEmail}
+                      onChange={(e) => {
+                        setCustomerEmail(e.target.value);
+                        setErrorMessage(null);
+                      }}
+                      placeholder="priya@example.com"
                       className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#C8860A]"
                     />
                   </div>
