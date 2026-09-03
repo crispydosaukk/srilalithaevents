@@ -356,6 +356,11 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loadingBookings, setLoadingBookings] = useState(true);
+  const [isRefreshingBookings, setIsRefreshingBookings] = useState(false);
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+  const [userPermissions, setUserPermissions] = useState<string[] | 'all'>('all');
+  const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role: string } | null>(null);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [isEditingBookingDate, setIsEditingBookingDate] = useState(false);
   const [isEditingEventType, setIsEditingEventType] = useState(false);
@@ -556,78 +561,103 @@ export default function AdminPage() {
     return () => unsub();
   }, []);
 
-  // Real-time Firestore sync for all bookings
+  // Mapping helper to safely parse Firestore booking documents
+  const mapDocToBooking = (docSnap: any): Booking => {
+    const data = docSnap.data();
+    return {
+      id: docSnap.id,
+      name: data.name || 'Unknown',
+      email: data.email || 'N/A',
+      phone: data.phone || 'N/A',
+      eventType: data.eventType || 'N/A',
+      date: data.date || 'N/A',
+      time: data.timeOfDay || data.time || 'N/A',
+      timeOfDay: data.timeOfDay || data.time || 'N/A',
+      guests: data.guests || 0,
+      adults: data.adults ?? undefined,
+      kids4to10: data.kids4to10 ?? 0,
+      kidsUnder4: data.kidsUnder4 ?? 0,
+      status: (data.status || 'new_enquiry') as BookingStatus,
+      notes: data.message || data.notes || '',
+      baseAmount: data.baseAmount || 0,
+      deposit: data.deposit || 0,
+      depositPaid: data.depositPaid || false,
+      finalPaymentPaid: data.finalPaymentPaid || false,
+      package: data.package || data.packageName || 'Not Selected',
+      packageName: data.packageName || data.package || 'Not Selected',
+      cuisineType: data.cuisineType || 'indian',
+      selectedMenu: data.selectedMenu,
+      selectedMenuDishes: data.selectedMenuDishes || undefined,
+      isOnlineOrder: Boolean(data.isOnlineOrder || data.stripeSessionId || data.selectedMenuDishes),
+      stripeSessionId: data.stripeSessionId || '',
+      stripePaymentIntentId: data.stripePaymentIntentId || '',
+      stripeCustomerEmail: data.stripeCustomerEmail || '',
+      amountPaidSoFar: data.amountPaidSoFar || data.deposit || 0,
+      paymentChoice: data.paymentChoice,
+      kitchenStatus: data.kitchenStatus || 'received',
+      kitchenNotes: data.kitchenNotes || '',
+      extraCharges: data.extraCharges || [],
+      paymentProofDeposit: data.paymentProofDeposit,
+      paymentProofFinal: data.paymentProofFinal,
+      paymentProofExtra: data.paymentProofExtra,
+      paymentMethodDeposit: data.paymentMethodDeposit,
+      paymentMethodFinal: data.paymentMethodFinal,
+      discount: data.discount,
+      discountRequest: data.discountRequest,
+      customFields: data.customFields || {},
+      location: data.location || '',
+      customerCoords: data.customerCoords || null,
+      distanceMiles: data.distanceMiles || 0,
+      deliveryCharge: data.deliveryCharge || 0,
+      deliveryBreakdown: data.deliveryBreakdown || '',
+      totalEstimatedAmount: data.totalEstimatedAmount || (data.baseAmount || 0),
+      isWaitlist: Boolean(data.isWaitlist),
+      capacityStatus: data.capacityStatus || (data.isWaitlist ? 'exceeded_capacity' : 'normal'),
+      waitlistNote: data.waitlistNote || '',
+      enquiryDate: data.createdAt ? new Date(data.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      dueDate: (() => {
+        if (data.dueDate) return data.dueDate;
+        if (data.date && data.date !== 'N/A') {
+          const evDate = new Date(data.date);
+          const today = new Date();
+          evDate.setDate(evDate.getDate() - 14);
+          return (evDate < today ? today : evDate).toISOString().split('T')[0];
+        }
+        return '';
+      })(),
+      updatedAt: data.updatedAt,
+      createdAt: data.createdAt,
+    } as Booking;
+  };
+
+  // Manual refresh function to force-fetch all bookings on demand
+  const refreshBookingsManually = async () => {
+    setIsRefreshingBookings(true);
+    try {
+      const q = collection(db, 'booking_requests');
+      const snap = await getDocs(q);
+      const liveBookings = snap.docs.map(mapDocToBooking).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      setBookings(liveBookings);
+      setCustomAlert({ message: `Refreshed successfully! Loaded ${liveBookings.length} booking records.`, type: 'success' });
+    } catch (err: any) {
+      console.error("Error manually refreshing bookings:", err);
+      setCustomAlert({ message: `Could not refresh bookings: ${err.message || 'Check connection'}`, type: 'error' });
+    } finally {
+      setIsRefreshingBookings(false);
+    }
+  };
+
+  // Real-time Firestore sync for all bookings - automatically triggers once user is logged in
   useEffect(() => {
+    if (!loggedIn) {
+      setLoadingBookings(false);
+      return;
+    }
+
+    setLoadingBookings(true);
     const q = collection(db, 'booking_requests');
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const liveBookings: Booking[] = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          name: data.name || 'Unknown',
-          email: data.email || 'N/A',
-          phone: data.phone || 'N/A',
-          eventType: data.eventType || 'N/A',
-          date: data.date || 'N/A',
-          time: data.timeOfDay || data.time || 'N/A',
-          timeOfDay: data.timeOfDay || data.time || 'N/A',
-          guests: data.guests || 0,
-          adults: data.adults ?? undefined,
-          kids4to10: data.kids4to10 ?? 0,
-          kidsUnder4: data.kidsUnder4 ?? 0,
-          status: (data.status || 'new_enquiry') as BookingStatus,
-          notes: data.message || data.notes || '',
-          baseAmount: data.baseAmount || 0,
-          deposit: data.deposit || 0,
-          depositPaid: data.depositPaid || false,
-          finalPaymentPaid: data.finalPaymentPaid || false,
-          package: data.package || data.packageName || 'Not Selected',
-          packageName: data.packageName || data.package || 'Not Selected',
-          cuisineType: data.cuisineType || 'indian',
-          selectedMenu: data.selectedMenu,
-          selectedMenuDishes: data.selectedMenuDishes || undefined,
-          isOnlineOrder: Boolean(data.isOnlineOrder || data.stripeSessionId || data.selectedMenuDishes),
-          stripeSessionId: data.stripeSessionId || '',
-          stripePaymentIntentId: data.stripePaymentIntentId || '',
-          stripeCustomerEmail: data.stripeCustomerEmail || '',
-          amountPaidSoFar: data.amountPaidSoFar || data.deposit || 0,
-          paymentChoice: data.paymentChoice,
-          kitchenStatus: data.kitchenStatus || 'received',
-          kitchenNotes: data.kitchenNotes || '',
-          extraCharges: data.extraCharges || [],
-          paymentProofDeposit: data.paymentProofDeposit,
-          paymentProofFinal: data.paymentProofFinal,
-          paymentProofExtra: data.paymentProofExtra,
-          paymentMethodDeposit: data.paymentMethodDeposit,
-          paymentMethodFinal: data.paymentMethodFinal,
-          discount: data.discount,
-          discountRequest: data.discountRequest,
-          customFields: data.customFields || {},
-          location: data.location || '',
-          customerCoords: data.customerCoords || null,
-          distanceMiles: data.distanceMiles || 0,
-          deliveryCharge: data.deliveryCharge || 0,
-          deliveryBreakdown: data.deliveryBreakdown || '',
-          totalEstimatedAmount: data.totalEstimatedAmount || (data.baseAmount || 0),
-          isWaitlist: Boolean(data.isWaitlist),
-          capacityStatus: data.capacityStatus || (data.isWaitlist ? 'exceeded_capacity' : 'normal'),
-          waitlistNote: data.waitlistNote || '',
-          enquiryDate: data.createdAt ? new Date(data.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-          dueDate: (() => {
-            if (data.dueDate) return data.dueDate;
-            if (data.date && data.date !== 'N/A') {
-              const evDate = new Date(data.date);
-              const today = new Date();
-              evDate.setDate(evDate.getDate() - 14);
-              return (evDate < today ? today : evDate).toISOString().split('T')[0];
-            }
-            return '';
-          })(),
-          updatedAt: data.updatedAt,
-          createdAt: data.createdAt,
-        } as Booking;
-      }).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-      
+      const liveBookings: Booking[] = snapshot.docs.map(mapDocToBooking).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
       setBookings(liveBookings);
       setLoadingBookings(false);
     }, (error) => {
@@ -635,7 +665,7 @@ export default function AdminPage() {
       setLoadingBookings(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [loggedIn]);
 
   // Form Builder Handlers
   const saveFormConfigToDatabase = async () => {
@@ -785,14 +815,9 @@ export default function AdminPage() {
   };
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterEvent, setFilterEvent] = useState<string>('all');
-  const [loggedIn, setLoggedIn] = useState(false);
-  const [loadingAuth, setLoadingAuth] = useState(true);
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [loginError, setLoginError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  
-  const [userPermissions, setUserPermissions] = useState<string[] | 'all'>('all');
-  const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role: string } | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -2925,6 +2950,16 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
           </div>
           <div className="flex items-center gap-2">
             <button
+              type="button"
+              onClick={refreshBookingsManually}
+              disabled={isRefreshingBookings}
+              title="Refresh and sync real-time bookings from database"
+              className="flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all border border-gray-200 shadow-2xs cursor-pointer disabled:opacity-50 active:scale-95"
+            >
+              <Icon name="ArrowPathIcon" size={14} className={isRefreshingBookings ? 'animate-spin text-[#C8860A]' : 'text-gray-500'} />
+              <span className="hidden sm:inline">{isRefreshingBookings ? 'Syncing...' : 'Sync Bookings'}</span>
+            </button>
+            <button
               onClick={() => setShowNewBookingModal(true)}
               className="flex items-center gap-1.5 bg-[#C8860A] hover:bg-[#A06A08] text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg transition-all shadow-sm active:scale-95 cursor-pointer"
             >
@@ -3487,15 +3522,40 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
           {/* ─── BOOKINGS ─── */}
           {activeTab === 'bookings' && (
             <div className="space-y-4">
+              {/* Notification Banner for Incoming Enquiries */}
+              {stats.newEnquiries > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex items-center justify-between gap-3 shadow-2xs">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-lg flex-shrink-0">📥</span>
+                    <div>
+                      <span className="text-xs font-bold text-amber-950 block">
+                        {stats.newEnquiries} New Booking {stats.newEnquiries === 1 ? 'Enquiry' : 'Enquiries'} Received!
+                      </span>
+                      <span className="text-[11px] text-amber-800">
+                        Customers submitted booking requests awaiting your review &amp; quote.
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('enquiries')}
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold text-white shadow-2xs hover:opacity-95 cursor-pointer whitespace-nowrap"
+                    style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                  >
+                    View Enquiries ({stats.newEnquiries}) →
+                  </button>
+                </div>
+              )}
+
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-3 py-1.5 flex-wrap">
                   <Icon name="FunnelIcon" size={14} className="text-gray-400" />
                   <span className="text-xs text-gray-500 font-medium">Status:</span>
-                  {['all', ...STATUS_FLOW.filter(s => s !== 'new_enquiry' && s !== 'completed')].map((s) => (
+                  {['all', 'new_enquiry', ...STATUS_FLOW.filter(s => s !== 'new_enquiry' && s !== 'completed')].map((s) => (
                     <button key={s} onClick={() => setFilterStatus(s)}
                       className={`px-2.5 py-1 rounded-lg text-xs font-medium capitalize transition-colors ${filterStatus === s ? 'text-white' : 'text-gray-500 hover:bg-gray-100'}`}
                       style={filterStatus === s ? { background: 'linear-gradient(135deg, #C8860A, #F0A830)' } : {}}>
-                      {s === 'all' ? 'All' : STATUS_LABELS[s as BookingStatus]}
+                      {s === 'all' ? 'All Active' : STATUS_LABELS[s as BookingStatus]}
                     </button>
                   ))}
                 </div>
@@ -3521,7 +3581,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                      {filtered.filter(b => b.status !== 'new_enquiry' && b.status !== 'completed').map((booking) => (
+                      {filtered.filter(b => (filterStatus === 'all' ? b.status !== 'completed' : b.status === filterStatus)).map((booking) => (
                         <tr key={booking.id} className="hover:bg-gray-50/80 transition-colors">
                           <td className="px-4 py-3.5">
                             <div className="flex items-center gap-2.5">

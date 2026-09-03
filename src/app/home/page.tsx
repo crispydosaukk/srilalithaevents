@@ -311,6 +311,15 @@ export default function HomePage() {
       setPhoneError('Enter a valid UK number (e.g. 07700 900000)');
       return;
     }
+
+    if (bookingForm.location && /^\d{6}$/.test(bookingForm.location.trim())) {
+      setCustomHomeAlert({
+        message: "The entered venue location appears to be an Indian pincode. Sri Lalitha provides catering services across London & the UK. Please enter a valid UK postcode or venue address.",
+        type: 'error'
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     setCustomHomeAlert(null);
 

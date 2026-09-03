@@ -106,6 +106,16 @@ export default function GoogleLocationInput({
   const handleManualSearch = async () => {
     if (!value || isGeocoding) return;
     setLocationError(null);
+
+    // Check if user entered an Indian pincode (6-digit numeric)
+    const trimmedVal = value.trim();
+    if (/^\d{6}$/.test(trimmedVal)) {
+      setCurrentCoords(null);
+      if (onCoordinatesChange) onCoordinatesChange(null);
+      setLocationError('The entered number appears to be an Indian pincode. Sri Lalitha provides catering in London & across the UK. Please enter a valid UK postcode (e.g. EC1A 1BB, UB1 1AA) or UK venue address.');
+      return;
+    }
+
     setIsGeocoding(true);
     const result = await geocodeAddress(value);
     setIsGeocoding(false);
@@ -116,8 +126,10 @@ export default function GoogleLocationInput({
       onChange(result.formattedAddress || value, coords);
       if (onCoordinatesChange) onCoordinatesChange(coords);
     } else {
-      setLocationError('Could not locate address. Please check postcode or select from suggestions.');
-      setTimeout(() => setLocationError(null), 5000);
+      setCurrentCoords(null);
+      if (onCoordinatesChange) onCoordinatesChange(null);
+      setLocationError('Could not find this address in the UK. Please enter a valid UK postcode (e.g. EC1A 1BB, CR0 1AA) or select from dropdown suggestions.');
+      setTimeout(() => setLocationError(null), 6000);
     }
   };
 
@@ -129,6 +141,14 @@ export default function GoogleLocationInput({
 
     try {
       const coords = await getCurrentBrowserCoordinates();
+
+      // Guard: Check if browser GPS is outside the UK (approx. lat 49 to 61, lng -8 to 2)
+      if (coords.lat < 49 || coords.lat > 61 || coords.lng < -8 || coords.lng > 2) {
+        setLocationError('Your current location is outside the UK. Sri Lalitha caters across the United Kingdom — please enter your UK event venue address manually.');
+        setIsLocatingCurrent(false);
+        return;
+      }
+
       const geocoded = await reverseGeocodeCoords(coords.lat, coords.lng);
 
       if (geocoded) {

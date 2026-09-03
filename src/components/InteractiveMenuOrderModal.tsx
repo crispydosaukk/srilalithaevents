@@ -512,6 +512,30 @@ export default function InteractiveMenuOrderModal({
     }
   };
 
+  // Phone and Location validation helpers
+  const validateUKPhoneInput = (val: string) => {
+    const cleaned = val.replace(/[\s\-()]/g, '');
+    if (cleaned.startsWith('+91') || /^91[6-9]\d{9}$/.test(cleaned)) {
+      return { valid: false, error: 'Indian phone numbers (+91) are not supported. Sri Lalitha provides catering in the UK — please enter a valid UK phone number (+44 or 07...).' };
+    }
+    const isUK = /^(\+44\s?0?7\d{9}|\+44\s?0?[1238]\d{8,9}|07\d{9}|0[1238]\d{8,9})$/.test(cleaned);
+    if (!isUK) {
+      return { valid: false, error: 'Please enter a valid UK WhatsApp phone number (e.g. 07700 900000 or +44 7700 900000).' };
+    }
+    return { valid: true, error: '' };
+  };
+
+  const validateVenueLocation = (addr: string) => {
+    const trimmed = addr.trim();
+    if (!trimmed) {
+      return { valid: false, error: 'Please enter your event venue address or UK postcode.' };
+    }
+    if (/^\d{6}$/.test(trimmed)) {
+      return { valid: false, error: 'The entered location appears to be an Indian pincode. Sri Lalitha provides catering across the UK — please enter a UK postcode (e.g. EC1A 1BB) or UK address.' };
+    }
+    return { valid: true, error: '' };
+  };
+
   // Step 1 Validation & Proceed to Step 2
   const handleStep1Next = () => {
     if (!customerName.trim()) {
@@ -520,6 +544,16 @@ export default function InteractiveMenuOrderModal({
     }
     if (!customerPhone.trim()) {
       setErrorMessage('Please enter your WhatsApp Phone Number to proceed.');
+      return;
+    }
+    const phoneCheck = validateUKPhoneInput(customerPhone);
+    if (!phoneCheck.valid) {
+      setErrorMessage(phoneCheck.error);
+      return;
+    }
+    const locCheck = validateVenueLocation(venueAddress);
+    if (!locCheck.valid) {
+      setErrorMessage(locCheck.error);
       return;
     }
     if (!eventDate) {
@@ -538,6 +572,16 @@ export default function InteractiveMenuOrderModal({
     }
     if (!customerPhone.trim()) {
       setErrorMessage('Please enter your WhatsApp Phone Number.');
+      return;
+    }
+    const phoneCheck = validateUKPhoneInput(customerPhone);
+    if (!phoneCheck.valid) {
+      setErrorMessage(phoneCheck.error);
+      return;
+    }
+    const locCheck = validateVenueLocation(venueAddress);
+    if (!locCheck.valid) {
+      setErrorMessage(locCheck.error);
       return;
     }
     if (!eventDate) {
@@ -1237,17 +1281,24 @@ export default function InteractiveMenuOrderModal({
                       <label className="block text-[11px] font-bold text-gray-700 mb-1">
                         WhatsApp Phone Number <span className="text-rose-600">*</span>
                       </label>
-                      <input
-                        type="tel"
-                        required
-                        value={customerPhone}
-                        onChange={(e) => {
-                          setCustomerPhone(e.target.value);
-                          setErrorMessage(null);
-                        }}
-                        placeholder="e.g. +44 7700 900000"
-                        className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-white"
-                      />
+                      <div className="relative flex items-center rounded-xl border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-[#C8860A] bg-white">
+                        <span className="px-3 py-2.5 bg-gray-50 border-r border-gray-200 text-xs font-bold text-gray-600 select-none whitespace-nowrap">
+                          +44
+                        </span>
+                        <input
+                          type="tel"
+                          required
+                          value={customerPhone.replace(/^\+44\s?/, '')}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setCustomerPhone(val ? `+44 ${val.replace(/^\+44\s?/, '').replace(/^0/, '')}` : '');
+                            setErrorMessage(null);
+                          }}
+                          placeholder="7700 900000"
+                          className="w-full px-3 py-2.5 text-xs font-medium text-gray-900 focus:outline-none bg-white"
+                        />
+                      </div>
+                      <p className="text-[10px] text-gray-400 mt-1">UK numbers only (e.g. 07700 900000)</p>
                     </div>
 
                     <div>
