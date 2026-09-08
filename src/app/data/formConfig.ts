@@ -35,12 +35,38 @@ export interface FormField {
   order: number;
 }
 
+export interface TimeSlotsConfig {
+  lunchSlots: string[];
+  dinnerSlots: string[];
+  allowCustomTime: boolean;
+}
+
+export const DEFAULT_LUNCH_SLOTS = [
+  '12:00 PM to 2:00 PM',
+  '1:00 PM to 3:00 PM',
+  '2:00 PM to 4:00 PM',
+];
+
+export const DEFAULT_DINNER_SLOTS = [
+  '5:00 PM to 7:00 PM',
+  '6:00 PM to 8:00 PM',
+  '7:00 PM to 9:00 PM',
+  '8:00 PM to 10:00 PM',
+];
+
+export const DEFAULT_TIME_SLOTS_CONFIG: TimeSlotsConfig = {
+  lunchSlots: DEFAULT_LUNCH_SLOTS,
+  dinnerSlots: DEFAULT_DINNER_SLOTS,
+  allowCustomTime: true,
+};
+
 export interface BookingFormConfig {
   formTitle: string;
   formSubtitle: string;
   submitButtonText: string;
   fields: FormField[];
   slotCapacity?: SlotCapacityConfig;
+  timeSlotsConfig?: TimeSlotsConfig;
   updatedAt?: string;
 }
 
@@ -195,4 +221,5 @@ export const DEFAULT_FORM_CONFIG: BookingFormConfig = {
   submitButtonText: 'Submit Booking Request',
   fields: DEFAULT_FORM_FIELDS,
   slotCapacity: DEFAULT_SLOT_CAPACITY,
+  timeSlotsConfig: DEFAULT_TIME_SLOTS_CONFIG,
 };

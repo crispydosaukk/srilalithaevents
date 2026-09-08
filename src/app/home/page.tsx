@@ -52,6 +52,7 @@ import {
   calculateDistanceMiles,
   calculateDeliveryCharge,
   DeliveryCalculationResult,
+  sanitizeDeliveryConfig,
 } from '@/app/data/deliveryConfig';
 import GoogleLocationInput from '@/components/GoogleLocationInput';
 import InteractiveMenuOrderModal from '@/components/InteractiveMenuOrderModal';
@@ -130,10 +131,7 @@ export default function HomePage() {
     return onSnapshot(doc(db, 'site_data', 'delivery_settings'), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data() as Partial<DeliveryLocationConfig>;
-        setDeliveryConfig(prev => ({
-          ...prev,
-          ...data,
-        }));
+        setDeliveryConfig(sanitizeDeliveryConfig(data));
       }
     });
   }, []);
@@ -177,7 +175,7 @@ export default function HomePage() {
   }, []);
 
   const [pricingDetails, setPricingDetails] = useState({
-    depositPercentage: 30,
+    depositPercentage: 50,
   });
 
   React.useEffect(() => {
@@ -185,7 +183,7 @@ export default function HomePage() {
       if (docSnap.exists()) {
         const data = docSnap.data();
         setPricingDetails({
-          depositPercentage: data.depositPercentage !== undefined ? data.depositPercentage : 30,
+          depositPercentage: data.depositPercentage !== undefined ? data.depositPercentage : 50,
         });
       }
     });
@@ -1097,6 +1095,18 @@ export default function HomePage() {
                     {MENU_CATEGORIES.map((cat, idx) => {
                       const isSelected = selectedCategoryIndex === idx && !menuSearchQuery;
                       
+                      // Count matching items for active dietary filter
+                      const catMatchingCount = dietaryFilter === 'all'
+                        ? cat.items.length
+                        : cat.items.filter(item => {
+                            if (!item.tags || item.tags.length === 0) return false;
+                            if (dietaryFilter === 'V') return item.tags.includes('V');
+                            if (dietaryFilter === 'M') return item.tags.includes('M');
+                            if (dietaryFilter === 'N') return item.tags.includes('N');
+                            if (dietaryFilter === 'OJ') return item.tags.some(t => ['OJ', 'O', 'J'].includes(t));
+                            return true;
+                          }).length;
+
                       // Exact button background colors matching the user screenshot
                       let buttonBg = '#C8860A'; // Default warm caramel / terracotta
                       if (cat.id === 'super-starters') buttonBg = '#3D2614'; // Dark chocolate brown
@@ -1121,8 +1131,12 @@ export default function HomePage() {
                           <span className="truncate flex-1 text-center font-bold text-sm">
                             {cat.title}
                           </span>
-                          <span className="text-[10px] bg-black/20 text-white/90 px-2 py-0.5 rounded-full ml-2 font-mono flex-shrink-0">
-                            {cat.items.length}
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full ml-2 font-mono flex-shrink-0 ${
+                            catMatchingCount === 0 && dietaryFilter !== 'all'
+                              ? 'bg-black/40 text-white/50'
+                              : 'bg-black/20 text-white/90 font-bold'
+                          }`}>
+                            {catMatchingCount}
                           </span>
                         </button>
                       );
@@ -1149,8 +1163,18 @@ export default function HomePage() {
                   {(() => {
                     const currentCategory = MENU_CATEGORIES[selectedCategoryIndex];
 
+                    const matchesDiet = (tags?: string[]) => {
+                      if (!tags || tags.length === 0) return false;
+                      if (dietaryFilter === 'V') return tags.includes('V');
+                      if (dietaryFilter === 'M') return tags.includes('M');
+                      if (dietaryFilter === 'N') return tags.includes('N');
+                      if (dietaryFilter === 'OJ') return tags.some(t => ['OJ', 'O', 'J'].includes(t));
+                      return true;
+                    };
+
                     // If user is searching, filter across all categories; otherwise filter within active category
                     let itemsToDisplay: { item: MenuItem; categoryTitle: string }[] = [];
+                    let isGlobalFilterFallback = false;
 
                     if (menuSearchQuery.trim()) {
                       const q = menuSearchQuery.toLowerCase().trim();
@@ -1164,23 +1188,33 @@ export default function HomePage() {
                           }
                         });
                       });
+                      if (dietaryFilter !== 'all') {
+                        itemsToDisplay = itemsToDisplay.filter(({ item }) => matchesDiet(item.tags));
+                      }
                     } else {
-                      itemsToDisplay = currentCategory.items.map((item) => ({
+                      const inCategory = currentCategory.items.map((item) => ({
                         item,
                         categoryTitle: currentCategory.title,
                       }));
-                    }
 
-                    // Apply Dietary Filter
-                    if (dietaryFilter !== 'all') {
-                      itemsToDisplay = itemsToDisplay.filter(({ item }) => {
-                        if (!item.tags || item.tags.length === 0) return false;
-                        if (dietaryFilter === 'V') return item.tags.includes('V');
-                        if (dietaryFilter === 'M') return item.tags.includes('M');
-                        if (dietaryFilter === 'N') return item.tags.includes('N');
-                        if (dietaryFilter === 'OJ') return item.tags.some(t => ['OJ', 'O', 'J'].includes(t));
-                        return true;
-                      });
+                      if (dietaryFilter !== 'all') {
+                        const matchedInCategory = inCategory.filter(({ item }) => matchesDiet(item.tags));
+                        if (matchedInCategory.length > 0) {
+                          itemsToDisplay = matchedInCategory;
+                        } else {
+                          // Fallback across all categories so the user NEVER sees 0 dishes!
+                          isGlobalFilterFallback = true;
+                          MENU_CATEGORIES.forEach((cat) => {
+                            cat.items.forEach((item) => {
+                              if (matchesDiet(item.tags)) {
+                                itemsToDisplay.push({ item, categoryTitle: cat.title });
+                              }
+                            });
+                          });
+                        }
+                      } else {
+                        itemsToDisplay = inCategory;
+                      }
                     }
 
                     return (
@@ -1191,6 +1225,8 @@ export default function HomePage() {
                           style={{
                             background: menuSearchQuery
                               ? 'linear-gradient(135deg, #1F2937, #374151)'
+                              : isGlobalFilterFallback
+                              ? 'linear-gradient(135deg, #4A1D24, #9B1B30)'
                               : selectedCategoryIndex === 0
                               ? 'linear-gradient(135deg, #3D2614, #5C381E)'
                               : selectedCategoryIndex === 1
@@ -1200,14 +1236,22 @@ export default function HomePage() {
                         >
                           <div>
                             <div className="flex items-center gap-2 mb-1">
-                              <span className="text-2xl">{menuSearchQuery ? '🔍' : currentCategory.icon}</span>
+                              <span className="text-2xl">
+                                {menuSearchQuery ? '🔍' : isGlobalFilterFallback ? '🪷' : currentCategory.icon}
+                              </span>
                               <h3 className="text-xl sm:text-2xl font-bold tracking-tight">
-                                {menuSearchQuery ? `Search Results for "${menuSearchQuery}"` : currentCategory.title}
+                                {menuSearchQuery
+                                  ? `Search Results for "${menuSearchQuery}"`
+                                  : isGlobalFilterFallback
+                                  ? `All Jain / No Onion Dishes (${itemsToDisplay.length} Total)`
+                                  : currentCategory.title}
                               </h3>
                             </div>
                             <p className="text-xs sm:text-sm text-white/80 max-w-xl">
                               {menuSearchQuery
                                 ? `Found ${itemsToDisplay.length} matching dishes across our entire menu.`
+                                : isGlobalFilterFallback
+                                ? `Showing all ${itemsToDisplay.length} Jain-friendly / No-Onion dishes across our complete menu selection.`
                                 : currentCategory.description}
                             </p>
                           </div>

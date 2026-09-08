@@ -13,17 +13,55 @@ export interface DeliveryLocationConfig {
   maxDeliveryRadiusMiles: number;  // e.g. 60 miles
 }
 
+export const UK_SRI_LALITHA_VENUE = {
+  venueAddress: 'Sri Lalitha Restaurant, 37-39 The Green, Southall, UB2 4BN, UK',
+  venuePostcode: 'UB2 4BN',
+  venueLat: 51.5033,
+  venueLng: -0.3777,
+};
+
 export const DEFAULT_DELIVERY_CONFIG: DeliveryLocationConfig = {
-  venueAddress: '',
-  venuePostcode: '',
-  venueLat: 0,
-  venueLng: 0,
+  venueAddress: UK_SRI_LALITHA_VENUE.venueAddress,
+  venuePostcode: UK_SRI_LALITHA_VENUE.venuePostcode,
+  venueLat: UK_SRI_LALITHA_VENUE.venueLat,
+  venueLng: UK_SRI_LALITHA_VENUE.venueLng,
   enableDeliveryCalculation: true,
   freeDeliveryRadiusMiles: 10,
   chargePerMileAfterFree: 2.5,
   baseDeliveryFee: 0,
   maxDeliveryRadiusMiles: 60,
 };
+
+/**
+ * Checks whether coordinates fall within the United Kingdom geographic boundaries.
+ */
+export function isWithinUK(lat?: number, lng?: number): boolean {
+  if (typeof lat !== 'number' || typeof lng !== 'number') return false;
+  return lat >= 49.5 && lat <= 61.0 && lng >= -8.5 && lng <= 2.0;
+}
+
+/**
+ * Sanitizes delivery configuration. If coordinates are 0, invalid, or point outside the UK
+ * (e.g. accidentally saved with Indian coordinates during dev/admin), forces the correct UK restaurant origin.
+ */
+export function sanitizeDeliveryConfig(
+  config?: Partial<DeliveryLocationConfig> | null
+): DeliveryLocationConfig {
+  const merged: DeliveryLocationConfig = {
+    ...DEFAULT_DELIVERY_CONFIG,
+    ...(config || {}),
+  };
+
+  if (!isWithinUK(merged.venueLat, merged.venueLng)) {
+    merged.venueAddress = UK_SRI_LALITHA_VENUE.venueAddress;
+    merged.venuePostcode = UK_SRI_LALITHA_VENUE.venuePostcode;
+    merged.venueLat = UK_SRI_LALITHA_VENUE.venueLat;
+    merged.venueLng = UK_SRI_LALITHA_VENUE.venueLng;
+  }
+
+  return merged;
+}
+
 
 /**
  * Calculates straight-line distance with a realistic UK driving road factor (~1.2x)

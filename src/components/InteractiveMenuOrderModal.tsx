@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Icon from '@/components/ui/AppIcon';
 import GoogleLocationInput from '@/components/GoogleLocationInput';
 import {
@@ -28,9 +28,23 @@ import {
   calculateDistanceMiles,
   calculateDeliveryCharge,
   DeliveryCalculationResult,
+  sanitizeDeliveryConfig,
 } from '@/app/data/deliveryConfig';
 import { db } from '@/lib/firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, onSnapshot } from 'firebase/firestore';
+import {
+  DEFAULT_FORM_CONFIG,
+  BookingFormConfig,
+  DEFAULT_LUNCH_SLOTS,
+  DEFAULT_DINNER_SLOTS,
+} from '@/app/data/formConfig';
+
+const TIME_OPTIONS = [
+  '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM', '12:00 PM', '12:30 PM',
+  '1:00 PM', '1:30 PM', '2:00 PM', '2:30 PM', '3:00 PM', '3:30 PM',
+  '4:00 PM', '4:30 PM', '5:00 PM', '5:30 PM', '6:00 PM', '6:30 PM',
+  '7:00 PM', '7:30 PM', '8:00 PM', '8:30 PM', '9:00 PM', '9:30 PM', '10:00 PM', '10:30 PM', '11:00 PM'
+];
 
 interface InteractiveMenuOrderModalProps {
   isOpen: boolean;
@@ -45,6 +59,65 @@ export default function InteractiveMenuOrderModal({
   initialPackage,
   deliveryConfig = DEFAULT_DELIVERY_CONFIG,
 }: InteractiveMenuOrderModalProps) {
+  // ─── 1. DYNAMIC DELIVERY CONFIG FROM DASHBOARD ───
+  const [dynamicDeliveryConfig, setDynamicDeliveryConfig] = useState<DeliveryLocationConfig>(() =>
+    sanitizeDeliveryConfig(deliveryConfig)
+  );
+
+  useEffect(() => {
+    return onSnapshot(doc(db, 'site_data', 'delivery_settings'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data() as Partial<DeliveryLocationConfig>;
+        setDynamicDeliveryConfig(sanitizeDeliveryConfig(data));
+      }
+    });
+  }, []);
+
+  // ─── 2. DYNAMIC DEPOSIT PERCENTAGE FROM DASHBOARD ───
+  const [depositPercentage, setDepositPercentage] = useState<number>(50);
+
+  useEffect(() => {
+    return onSnapshot(doc(db, 'site_data', 'pricing_details'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (typeof data.depositPercentage === 'number' && data.depositPercentage > 0) {
+          setDepositPercentage(data.depositPercentage);
+        }
+      }
+    });
+  }, []);
+
+  // ─── 3. DYNAMIC FORM CONFIG & TIME SLOTS FROM DASHBOARD ───
+  const [formConfig, setFormConfig] = useState<BookingFormConfig>(DEFAULT_FORM_CONFIG);
+
+  useEffect(() => {
+    return onSnapshot(doc(db, 'site_data', 'booking_form_config'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data() as Partial<BookingFormConfig>;
+        setFormConfig((prev) => ({ ...prev, ...data }));
+      }
+    });
+  }, []);
+
+  // ─── 4. DYNAMIC MENUS FROM DASHBOARD ───
+  const [dynamicMenus, setDynamicMenus] = useState<any>(null);
+
+  useEffect(() => {
+    return onSnapshot(doc(db, 'site_data', 'menus'), (docSnap) => {
+      if (docSnap.exists()) {
+        setDynamicMenus(docSnap.data());
+      }
+    });
+  }, []);
+
+  const lunchSlots = formConfig?.timeSlotsConfig?.lunchSlots?.length
+    ? formConfig.timeSlotsConfig.lunchSlots
+    : DEFAULT_LUNCH_SLOTS;
+  const dinnerSlots = formConfig?.timeSlotsConfig?.dinnerSlots?.length
+    ? formConfig.timeSlotsConfig.dinnerSlots
+    : DEFAULT_DINNER_SLOTS;
+  const allowCustomTime = formConfig?.timeSlotsConfig?.allowCustomTime ?? true;
+
   // Step State: 1 = Package & Schedule, 2 = Dish Selection & Upgrades, 3 = Review & Payment
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
@@ -68,7 +141,13 @@ export default function InteractiveMenuOrderModal({
   const [cuisineType, setCuisineType] = useState<'indian' | 'srilankan'>('indian');
   const [guests, setGuests] = useState<number>(50);
   const [eventDate, setEventDate] = useState<string>('');
-  const [eventTime, setEventTime] = useState<string>('Dinner (6:00pm – 11:00pm)');
+
+  // Structured Time of Day State: (A) Lunch, (B) Dinner, (C) Custom
+  const [timeCategory, setTimeCategory] = useState<'lunch' | 'dinner' | 'custom'>('lunch');
+  const [customStartTime, setCustomStartTime] = useState<string>('12:00 PM');
+  const [customEndTime, setCustomEndTime] = useState<string>('2:00 PM');
+  const [eventTime, setEventTime] = useState<string>('12:00 PM to 2:00 PM');
+
   const [venueAddress, setVenueAddress] = useState<string>('');
   const [deliveryResult, setDeliveryResult] = useState<DeliveryCalculationResult | null>(null);
 
@@ -423,9 +502,8 @@ export default function InteractiveMenuOrderModal({
     : (packageTotal + thaliAdditionsTotal + upgradesTotal);
   const deliveryCharge = deliveryResult?.charge || 0;
   const grandTotal = foodAndUpgradesTotal + deliveryCharge;
-  const depositAmount = isTailorMenu
-    ? Math.round(grandTotal * 0.5 * 100) / 100
-    : Math.round(grandTotal * 0.3 * 100) / 100;
+  const effectiveDepositPercentage = depositPercentage && depositPercentage > 0 ? depositPercentage : 50;
+  const depositAmount = Math.round(grandTotal * (effectiveDepositPercentage / 100) * 100) / 100;
   const amountToPay = paymentChoice === 'deposit' ? depositAmount : grandTotal;
 
   // Quotas based on active package
@@ -495,24 +573,24 @@ export default function InteractiveMenuOrderModal({
     });
   };
 
-  // Location handler
+  // Location handler using dynamic dashboard delivery settings
   const handleLocationSelected = (address: string, coords?: { lat: number; lng: number; postcode?: string }) => {
     setVenueAddress(address);
-    if (coords && coords.lat && coords.lng && deliveryConfig.venueLat && deliveryConfig.venueLng) {
+    if (coords && coords.lat && coords.lng && dynamicDeliveryConfig.venueLat && dynamicDeliveryConfig.venueLng) {
       const dist = calculateDistanceMiles(
-        deliveryConfig.venueLat,
-        deliveryConfig.venueLng,
+        dynamicDeliveryConfig.venueLat,
+        dynamicDeliveryConfig.venueLng,
         coords.lat,
         coords.lng
       );
-      const res = calculateDeliveryCharge(dist, deliveryConfig);
+      const res = calculateDeliveryCharge(dist, dynamicDeliveryConfig);
       setDeliveryResult(res);
     } else {
       setDeliveryResult(null);
     }
   };
 
-  // Phone and Location validation helpers
+  // Phone, Email, and Location validation helpers
   const validateUKPhoneInput = (val: string) => {
     const cleaned = val.replace(/[\s\-()]/g, '');
     if (cleaned.startsWith('+91') || /^91[6-9]\d{9}$/.test(cleaned)) {
@@ -521,6 +599,18 @@ export default function InteractiveMenuOrderModal({
     const isUK = /^(\+44\s?0?7\d{9}|\+44\s?0?[1238]\d{8,9}|07\d{9}|0[1238]\d{8,9})$/.test(cleaned);
     if (!isUK) {
       return { valid: false, error: 'Please enter a valid UK WhatsApp phone number (e.g. 07700 900000 or +44 7700 900000).' };
+    }
+    return { valid: true, error: '' };
+  };
+
+  const validateEmailInput = (val: string) => {
+    const trimmed = val.trim();
+    if (!trimmed) {
+      return { valid: false, error: 'Please enter your Email Address for instant confirmation & invoice.' };
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    if (!emailRegex.test(trimmed)) {
+      return { valid: false, error: 'Please enter a valid email address (e.g. yourname@domain.com).' };
     }
     return { valid: true, error: '' };
   };
@@ -551,6 +641,11 @@ export default function InteractiveMenuOrderModal({
       setErrorMessage(phoneCheck.error);
       return;
     }
+    const emailCheck = validateEmailInput(customerEmail);
+    if (!emailCheck.valid) {
+      setErrorMessage(emailCheck.error);
+      return;
+    }
     const locCheck = validateVenueLocation(venueAddress);
     if (!locCheck.valid) {
       setErrorMessage(locCheck.error);
@@ -577,6 +672,11 @@ export default function InteractiveMenuOrderModal({
     const phoneCheck = validateUKPhoneInput(customerPhone);
     if (!phoneCheck.valid) {
       setErrorMessage(phoneCheck.error);
+      return;
+    }
+    const emailCheck = validateEmailInput(customerEmail);
+    if (!emailCheck.valid) {
+      setErrorMessage(emailCheck.error);
       return;
     }
     const locCheck = validateVenueLocation(venueAddress);
@@ -762,7 +862,9 @@ export default function InteractiveMenuOrderModal({
           selectedMenuDishes: selectedMenuPayload,
           totalAmount: grandTotal,
           paymentType: paymentChoice,
+          depositPercentage: effectiveDepositPercentage,
           amountToPay,
+          notes,
           origin: window.location.origin,
         }),
       });
@@ -1185,7 +1287,7 @@ export default function InteractiveMenuOrderModal({
               )}
 
               {/* Schedule & Contact Details Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">
                     Number of Guests *
@@ -1229,26 +1331,185 @@ export default function InteractiveMenuOrderModal({
                   )}
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">
-                    Time of Day *
-                  </label>
-                  <select
-                    value={eventTime}
-                    onChange={(e) => {
-                      setEventTime(e.target.value);
-                      setErrorMessage(null);
-                    }}
-                    className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-white"
-                  >
-                    <option value="Lunch (12:00pm – 4:00pm)">Lunch (12:00pm – 4:00pm)</option>
-                    <option value="Dinner (6:00pm – 11:00pm)">Dinner (6:00pm – 11:00pm)</option>
-                    <option value="All Day (10:00am – 10:00pm)">All Day (10:00am – 10:00pm)</option>
-                  </select>
+                {/* Dynamic Time of Day Section (Lunch Slots / Dinner Slots / Customised Time) */}
+                <div className="sm:col-span-2 bg-gradient-to-r from-amber-50/40 via-white to-amber-50/30 p-4 rounded-2xl border border-amber-200/90 shadow-2xs space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-100 pb-2.5">
+                    <label className="text-xs font-extrabold text-amber-950 uppercase tracking-wide flex items-center gap-1.5">
+                      <span>⏰</span>
+                      <span>Time of Day *</span>
+                    </label>
+
+                    {/* Time Category Selector */}
+                    <div className="inline-flex rounded-xl bg-gray-100 p-1 border border-gray-200">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTimeCategory('lunch');
+                          if (lunchSlots.length > 0) setEventTime(lunchSlots[0]);
+                          setErrorMessage(null);
+                        }}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          timeCategory === 'lunch'
+                            ? 'bg-[#C8860A] text-white shadow-xs'
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        ☀️ Lunch Slots
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTimeCategory('dinner');
+                          if (dinnerSlots.length > 0) setEventTime(dinnerSlots[0]);
+                          setErrorMessage(null);
+                        }}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          timeCategory === 'dinner'
+                            ? 'bg-[#C8860A] text-white shadow-xs'
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        🌙 Dinner Slots
+                      </button>
+                      {allowCustomTime && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTimeCategory('custom');
+                            setEventTime(`${customStartTime} to ${customEndTime}`);
+                            setErrorMessage(null);
+                          }}
+                          className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            timeCategory === 'custom'
+                              ? 'bg-[#C8860A] text-white shadow-xs'
+                              : 'text-gray-600 hover:text-gray-900'
+                          }`}
+                        >
+                          ⏱️ Customised Time
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Slot Buttons for Lunch */}
+                  {timeCategory === 'lunch' && (
+                    <div className="space-y-2">
+                      <p className="text-[11px] text-gray-500 font-medium">
+                        Select your preferred 2-hour lunch catering service window:
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {lunchSlots.map((slot) => {
+                          const isSelected = eventTime === slot;
+                          return (
+                            <button
+                              key={slot}
+                              type="button"
+                              onClick={() => {
+                                setEventTime(slot);
+                                setErrorMessage(null);
+                              }}
+                              className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer text-center ${
+                                isSelected
+                                  ? 'border-[#C8860A] bg-amber-50 text-[#C8860A] ring-2 ring-[#C8860A]/20 shadow-xs'
+                                  : 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-white hover:border-amber-200'
+                              }`}
+                            >
+                              {slot}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Slot Buttons for Dinner */}
+                  {timeCategory === 'dinner' && (
+                    <div className="space-y-2">
+                      <p className="text-[11px] text-gray-500 font-medium">
+                        Select your preferred evening catering service window:
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {dinnerSlots.map((slot) => {
+                          const isSelected = eventTime === slot;
+                          return (
+                            <button
+                              key={slot}
+                              type="button"
+                              onClick={() => {
+                                setEventTime(slot);
+                                setErrorMessage(null);
+                              }}
+                              className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer text-center ${
+                                isSelected
+                                  ? 'border-[#C8860A] bg-amber-50 text-[#C8860A] ring-2 ring-[#C8860A]/20 shadow-xs'
+                                  : 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-white hover:border-amber-200'
+                              }`}
+                            >
+                              {slot}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Custom Time Selection */}
+                  {timeCategory === 'custom' && allowCustomTime && (
+                    <div className="space-y-2">
+                      <p className="text-[11px] text-gray-500 font-medium">
+                        Select start and end time from dropdowns:
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                            Start Time Dropdown
+                          </label>
+                          <select
+                            value={customStartTime}
+                            onChange={(e) => {
+                              const s = e.target.value;
+                              setCustomStartTime(s);
+                              setEventTime(`${s} to ${customEndTime}`);
+                              setErrorMessage(null);
+                            }}
+                            className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-white"
+                          >
+                            {TIME_OPTIONS.map((t) => (
+                              <option key={`s-${t}`} value={t}>{t}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                            End Time Dropdown
+                          </label>
+                          <select
+                            value={customEndTime}
+                            onChange={(e) => {
+                              const end = e.target.value;
+                              setCustomEndTime(end);
+                              setEventTime(`${customStartTime} to ${end}`);
+                              setErrorMessage(null);
+                            }}
+                            className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-white"
+                          >
+                            {TIME_OPTIONS.map((t) => (
+                              <option key={`e-${t}`} value={t}>{t}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="text-[11px] text-amber-950 font-medium bg-amber-100/50 px-3 py-1.5 rounded-lg border border-amber-200/60 flex items-center justify-between">
+                    <span>Selected Window:</span>
+                    <span className="font-extrabold text-[#C8860A]">{eventTime}</span>
+                  </div>
                 </div>
 
-                {/* 2. Customer Contact Details Section directly in Step 1 */}
-                <div className="sm:col-span-3 bg-gradient-to-r from-amber-50/70 via-white to-amber-50/50 p-4 rounded-2xl border border-amber-200 shadow-xs space-y-3">
+                {/* Customer Contact Details Section */}
+                <div className="sm:col-span-2 bg-gradient-to-r from-amber-50/70 via-white to-amber-50/50 p-4 rounded-2xl border border-amber-200 shadow-xs space-y-3">
                   <div className="flex items-center justify-between border-b border-amber-100 pb-2">
                     <label className="text-xs font-bold text-amber-950 uppercase tracking-wide flex items-center gap-1.5">
                       <span>👤</span>
@@ -1303,10 +1564,11 @@ export default function InteractiveMenuOrderModal({
 
                     <div>
                       <label className="block text-[11px] font-bold text-gray-700 mb-1">
-                        Email Address
+                        Email Address <span className="text-rose-600">*</span>
                       </label>
                       <input
                         type="email"
+                        required
                         value={customerEmail}
                         onChange={(e) => {
                           setCustomerEmail(e.target.value);
@@ -1315,30 +1577,31 @@ export default function InteractiveMenuOrderModal({
                         placeholder="e.g. priya@example.com"
                         className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-white"
                       />
+                      <p className="text-[10px] text-amber-700 font-medium mt-1">Instant confirmation &amp; invoice sent here</p>
                     </div>
                   </div>
                 </div>
 
-                <div className="sm:col-span-3">
+                <div className="sm:col-span-2">
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">
-                    Event Venue Location / UK Postcode
+                    Event Venue Location / UK Postcode *
                   </label>
                   <GoogleLocationInput
                     value={venueAddress}
-                    placeholder="Enter event venue address or UK postcode..."
+                    placeholder="Enter event venue address or UK postcode (e.g. HA3, UB2 4BN, London)..."
                     onChange={(addr, coords) => {
                       handleLocationSelected(addr, coords);
                       setErrorMessage(null);
                     }}
                     onCoordinatesChange={(coords) => {
-                      if (coords && coords.lat && coords.lng && deliveryConfig.venueLat && deliveryConfig.venueLng) {
+                      if (coords && coords.lat && coords.lng && dynamicDeliveryConfig.venueLat && dynamicDeliveryConfig.venueLng) {
                         const dist = calculateDistanceMiles(
-                          deliveryConfig.venueLat,
-                          deliveryConfig.venueLng,
+                          dynamicDeliveryConfig.venueLat,
+                          dynamicDeliveryConfig.venueLng,
                           coords.lat,
                           coords.lng
                         );
-                        const res = calculateDeliveryCharge(dist, deliveryConfig);
+                        const res = calculateDeliveryCharge(dist, dynamicDeliveryConfig);
                         setDeliveryResult(res);
                       }
                     }}
@@ -1861,7 +2124,7 @@ export default function InteractiveMenuOrderModal({
                         <span>What We Bring:</span>
                       </span>
                       <ul className="text-xs text-gray-700 space-y-1.5">
-                        {TAILOR_MENU_OPTION_4.whatWeBring.map((item, idx) => (
+                        {(dynamicMenus?.TAILOR_MENU_OPTION_4?.whatWeBring || TAILOR_MENU_OPTION_4.whatWeBring).map((item: string, idx: number) => (
                           <li key={idx} className="flex items-start gap-1.5">
                             <span className="text-emerald-600 font-bold mt-0.5">✓</span>
                             <span>{item}</span>
@@ -1877,7 +2140,7 @@ export default function InteractiveMenuOrderModal({
                         <span>What We Need From You:</span>
                       </span>
                       <ul className="text-xs text-gray-700 space-y-1.5">
-                        {TAILOR_MENU_OPTION_4.whatWeNeedFromYou.map((item, idx) => (
+                        {(dynamicMenus?.TAILOR_MENU_OPTION_4?.whatWeNeedFromYou || TAILOR_MENU_OPTION_4.whatWeNeedFromYou).map((item: string, idx: number) => (
                           <li key={idx} className="flex items-start gap-1.5">
                             <span className="text-amber-600 font-bold mt-0.5">•</span>
                             <span>{item}</span>
@@ -2690,6 +2953,29 @@ export default function InteractiveMenuOrderModal({
                 </div>
               </div>
 
+              {/* Dedicated Dietary Requirements & Notes (Requirement #3) */}
+              <div className="bg-gradient-to-r from-amber-50/70 via-white to-amber-50/50 p-4 rounded-2xl border border-amber-200/90 shadow-2xs space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-amber-950 uppercase tracking-wide flex items-center gap-1.5">
+                    <span>🌿</span>
+                    <span>Dietary Requirements &amp; Special Instructions</span>
+                  </label>
+                  <span className="text-[10px] text-amber-800 font-semibold bg-amber-100/70 px-2 py-0.5 rounded-full">
+                    Optional
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-600">
+                  Please let our chefs know of any specific dietary needs: <strong>Jain option (no onion / no garlic)</strong>, vegan, nut allergies, gluten preferences, mild/medium/spicy preferences, or venue access notes.
+                </p>
+                <textarea
+                  rows={2}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="e.g. 5 Jain meals required (no onion/garlic), severe nut allergy for 1 guest, medium spice level..."
+                  className="w-full border border-amber-200 rounded-xl px-3.5 py-2.5 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-white resize-none"
+                />
+              </div>
+
               {/* Bottom navigation */}
               <div className="pt-2 flex items-center justify-between border-t border-gray-100">
                 <button
@@ -2772,10 +3058,11 @@ export default function InteractiveMenuOrderModal({
 
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      Email Address
+                      Email Address <span className="text-rose-600">*</span>
                     </label>
                     <input
                       type="email"
+                      required
                       value={customerEmail}
                       onChange={(e) => {
                         setCustomerEmail(e.target.value);
@@ -2809,6 +3096,13 @@ export default function InteractiveMenuOrderModal({
                     👥 {guests} Guests • 📅 {eventDate || 'Date TBD'} ({isWeekendOrBankHoliday(eventDate) ? 'Weekend' : 'Weekday'})
                   </span>
                 </div>
+
+                {/* Dietary requirements callout in summary if filled */}
+                {notes && (
+                  <div className="p-2.5 rounded-xl bg-amber-100/60 border border-amber-300/80 text-xs text-amber-950">
+                    <strong className="text-amber-900 font-bold">🌿 Dietary &amp; Event Notes:</strong> {notes}
+                  </div>
+                )}
 
                 {isLiveDosa ? (
                   <div className="text-xs text-gray-700 space-y-1.5">
@@ -3011,7 +3305,7 @@ export default function InteractiveMenuOrderModal({
                   {/* Payment Breakdown Cards */}
                   <div className="grid grid-cols-2 gap-2 pt-2">
                     <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200">
-                      <span className="block text-[10px] font-bold text-amber-800 uppercase tracking-wider">Deposit Payable Now ({isTailorMenu ? '50%' : '30%'})</span>
+                      <span className="block text-[10px] font-bold text-amber-800 uppercase tracking-wider">Deposit Payable Now ({effectiveDepositPercentage}%)</span>
                       <span className="text-sm font-extrabold text-amber-950">£{depositAmount.toFixed(2)}</span>
                     </div>
                     <div className="p-2.5 rounded-xl bg-gray-50 border border-gray-200">
@@ -3044,10 +3338,10 @@ export default function InteractiveMenuOrderModal({
                     />
                     <div>
                       <div className="font-bold text-gray-900 text-xs">
-                        Pay 30% Booking Deposit (£{depositAmount.toFixed(2)})
+                        Pay {effectiveDepositPercentage}% Booking Deposit (£{depositAmount.toFixed(2)})
                       </div>
                       <div className="text-[11px] text-gray-500 mt-0.5">
-                        Secures your date immediately. Remaining £{(grandTotal - depositAmount).toFixed(2)} due 14 days before event.
+                        Secures your date immediately. Remaining £{(grandTotal - depositAmount).toFixed(2)} due before event.
                       </div>
                     </div>
                   </label>

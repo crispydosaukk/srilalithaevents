@@ -18,7 +18,9 @@ export async function POST(req: NextRequest) {
       selectedMenuDishes,
       totalAmount,
       paymentType, // 'deposit' | 'full'
+      depositPercentage,
       amountToPay,
+      notes,
       origin,
     } = body;
 
@@ -51,6 +53,7 @@ export async function POST(req: NextRequest) {
     const imageList = hasValidHttpsOrigin ? [`${siteOrigin}/assets/images/srilalitha.png`] : undefined;
 
     const formattedCustomerEmail = customerEmail && customerEmail.includes('@') ? customerEmail.trim() : undefined;
+    const effectiveDepositPct = depositPercentage && Number(depositPercentage) > 0 ? Number(depositPercentage) : 50;
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -62,7 +65,7 @@ export async function POST(req: NextRequest) {
             currency: 'gbp',
             product_data: {
               name: `SriLalitha Catering - ${packageName || 'Custom Event Package'}`,
-              description: `${paymentType === 'deposit' ? '30% Booking Deposit' : 'Full Payment'} for ${guests || 0} Guests on ${eventDate || 'Date TBD'}${location ? ` (${location})` : ''}`,
+              description: `${paymentType === 'deposit' ? `${effectiveDepositPct}% Booking Deposit` : 'Full Payment'} for ${guests || 0} Guests on ${eventDate || 'Date TBD'}${location ? ` (${location})` : ''}`,
               ...(imageList ? { images: imageList } : {}),
             },
             unit_amount: Math.round(Number(amountToPay) * 100), // In Pence
@@ -81,9 +84,11 @@ export async function POST(req: NextRequest) {
         eventTime: String(eventTime || ''),
         location: String(location || ''),
         paymentType: String(paymentType || 'full'),
+        depositPercentage: String(effectiveDepositPct),
         totalAmount: String(totalAmount || amountToPay),
         amountPaid: String(amountToPay),
         deliveryCharge: String(deliveryCharge || '0'),
+        notes: String(notes || '').slice(0, 450),
         dishesSummary,
       },
       success_url: `${siteOrigin}/order-success?session_id={CHECKOUT_SESSION_ID}&order_id=${encodeURIComponent(orderId || '')}`,

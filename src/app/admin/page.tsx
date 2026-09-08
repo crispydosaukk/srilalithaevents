@@ -41,6 +41,9 @@ import {
   DEFAULT_OUTDOOR_TIME_SLOTS,
   DEFAULT_SLOT_CAPACITY,
   SlotCapacityConfig,
+  DEFAULT_LUNCH_SLOTS,
+  DEFAULT_DINNER_SLOTS,
+  TimeSlotsConfig,
 } from '@/app/data/formConfig';
 import {
   DeliveryLocationConfig,
@@ -48,6 +51,7 @@ import {
   calculateDistanceMiles,
   calculateDeliveryCharge,
   DeliveryCalculationResult,
+  sanitizeDeliveryConfig,
 } from '@/app/data/deliveryConfig';
 import GoogleLocationInput from '@/components/GoogleLocationInput';
 import { PaymentGatewayConfig, DEFAULT_PAYMENT_CONFIG } from '@/lib/stripe';
@@ -419,6 +423,8 @@ export default function AdminPage() {
   const [showAddFieldModal, setShowAddFieldModal] = useState(false);
   const [newOptionInput, setNewOptionInput] = useState('');
   const [newOutdoorSlotInput, setNewOutdoorSlotInput] = useState('');
+  const [newLunchSlotInput, setNewLunchSlotInput] = useState('');
+  const [newDinnerSlotInput, setNewDinnerSlotInput] = useState('');
   const [fieldToManageOptions, setFieldToManageOptions] = useState<FormField | null>(null);
   const [newFieldForm, setNewFieldForm] = useState<Partial<FormField>>({
     id: '',
@@ -553,6 +559,7 @@ export default function AdminPage() {
           submitButtonText: data.submitButtonText || DEFAULT_FORM_CONFIG.submitButtonText,
           fields,
           slotCapacity: data.slotCapacity || DEFAULT_FORM_CONFIG.slotCapacity || DEFAULT_SLOT_CAPACITY,
+          timeSlotsConfig: data.timeSlotsConfig || DEFAULT_FORM_CONFIG.timeSlotsConfig,
         };
         setFormConfig(merged);
         setEditableFormConfig(merged);
@@ -709,6 +716,7 @@ export default function AdminPage() {
         submitButtonText: editableFormConfig.submitButtonText || 'Submit Booking Request',
         fields: cleanFields,
         slotCapacity,
+        timeSlotsConfig: editableFormConfig.timeSlotsConfig || DEFAULT_FORM_CONFIG.timeSlotsConfig,
         updatedAt: new Date().toISOString(),
       }));
 
@@ -959,7 +967,7 @@ export default function AdminPage() {
       if (docSnap.exists()) {
         const data = docSnap.data();
         setPricingDetails({
-          depositPercentage: data.depositPercentage !== undefined ? data.depositPercentage : 30,
+          depositPercentage: data.depositPercentage !== undefined ? data.depositPercentage : 50,
           minimumBookingHours: data.minimumBookingHours || 4,
           weekdayRate: data.weekdayRate || 350,
           weekendRate: data.weekendRate || 550
@@ -972,9 +980,10 @@ export default function AdminPage() {
     return onSnapshot(doc(db, 'site_data', 'delivery_settings'), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data() as Partial<DeliveryLocationConfig>;
+        const sanitized = sanitizeDeliveryConfig(data);
         setDeliverySettings(prev => ({
           ...prev,
-          ...data,
+          ...sanitized,
         }));
       }
     });
@@ -2166,7 +2175,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     setIsSavingPricingDetails(true);
     try {
       await setDoc(doc(db, 'site_data', 'pricing_details'), pricingDetails, { merge: true });
-      setCustomAlert({ message: 'Pricing & Deposits successfully updated!', type: 'success' });
+      await setDoc(doc(db, 'site_data', 'payment_gateway_settings'), {
+        depositPercentage: pricingDetails.depositPercentage || 50,
+      }, { merge: true });
+      setCustomAlert({ message: 'Pricing & Deposits successfully updated across the website and Stripe checkout!', type: 'success' });
     } catch (error) {
       console.error('Error saving pricing details:', error);
       setCustomAlert({ message: 'Error saving pricing details.', type: 'error' });
@@ -2176,13 +2188,14 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
   };
 
   const updateAndSaveRestaurantLocation = async (address: string, coords?: { lat: number; lng: number; postcode?: string }) => {
-    const updated: DeliveryLocationConfig = {
+    const rawUpdated: DeliveryLocationConfig = {
       ...deliverySettings,
       venueAddress: address,
       venueLat: coords?.lat !== undefined ? coords.lat : deliverySettings.venueLat,
       venueLng: coords?.lng !== undefined ? coords.lng : deliverySettings.venueLng,
       venuePostcode: coords?.postcode !== undefined ? coords.postcode : deliverySettings.venuePostcode,
     };
+    const updated = sanitizeDeliveryConfig(rawUpdated);
     setDeliverySettings(updated);
     try {
       await setDoc(doc(db, 'site_data', 'delivery_settings'), JSON.parse(JSON.stringify(updated)), { merge: true });
@@ -2199,12 +2212,12 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
   const saveDeliverySettings = async () => {
     setIsSavingDeliverySettings(true);
     try {
-      const cleanData = JSON.parse(JSON.stringify(deliverySettings));
+      const cleanData = JSON.parse(JSON.stringify(sanitizeDeliveryConfig(deliverySettings)));
       await setDoc(doc(db, 'site_data', 'delivery_settings'), cleanData, { merge: true });
       await setDoc(doc(db, 'site_data', 'venue_details'), {
-        address: deliverySettings.venueAddress,
-        venueLat: deliverySettings.venueLat,
-        venueLng: deliverySettings.venueLng,
+        address: cleanData.venueAddress,
+        venueLat: cleanData.venueLat,
+        venueLng: cleanData.venueLng,
       }, { merge: true });
       setCustomAlert({ message: 'Restaurant location & dynamic delivery pricing rules saved successfully!', type: 'success' });
     } catch (error: any) {
@@ -6829,6 +6842,220 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             </div>
                           </div>
                         </div>
+
+                        {/* ── INTERACTIVE CATERING TIME SLOTS (LUNCH, DINNER, CUSTOM) ── */}
+                        <div className="bg-gradient-to-r from-amber-50/70 via-white to-amber-50/50 rounded-xl p-5 border border-amber-200 space-y-4 shadow-2xs">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-200/60 pb-3">
+                            <div>
+                              <span className="text-sm font-bold text-amber-950 flex items-center gap-2">
+                                <span>⏰</span>
+                                <span>Interactive Catering Time Slots Manager</span>
+                              </span>
+                              <p className="text-xs text-amber-800/80 mt-0.5">
+                                Manage Lunch slots, Dinner slots, and custom time range selection displayed dynamically in the online order modal.
+                              </p>
+                            </div>
+                            <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-1.5 rounded-xl border border-amber-300 shadow-2xs">
+                              <input
+                                type="checkbox"
+                                checked={editableFormConfig.timeSlotsConfig?.allowCustomTime ?? true}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  setEditableFormConfig(prev => ({
+                                    ...prev,
+                                    timeSlotsConfig: {
+                                      lunchSlots: prev.timeSlotsConfig?.lunchSlots || DEFAULT_LUNCH_SLOTS,
+                                      dinnerSlots: prev.timeSlotsConfig?.dinnerSlots || DEFAULT_DINNER_SLOTS,
+                                      allowCustomTime: checked,
+                                    }
+                                  }));
+                                }}
+                                className="rounded text-[#C8860A] focus:ring-[#C8860A]"
+                              />
+                              <span className="text-xs font-bold text-amber-950">Allow Custom Time Dropdowns</span>
+                            </label>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Lunch Slots Manager */}
+                            <div className="bg-white p-3.5 rounded-xl border border-amber-200 space-y-2.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                                  <span>☀️</span>
+                                  <span>Lunch Slots ({(editableFormConfig.timeSlotsConfig?.lunchSlots || DEFAULT_LUNCH_SLOTS).length})</span>
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5 min-h-[38px] p-1.5 bg-amber-50/40 rounded-lg border border-amber-100">
+                                {(editableFormConfig.timeSlotsConfig?.lunchSlots || DEFAULT_LUNCH_SLOTS).map((slot, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-amber-950 shadow-2xs"
+                                  >
+                                    <span>{slot}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const current = editableFormConfig.timeSlotsConfig?.lunchSlots || DEFAULT_LUNCH_SLOTS;
+                                        const updated = current.filter((_, i) => i !== idx);
+                                        setEditableFormConfig(prev => ({
+                                          ...prev,
+                                          timeSlotsConfig: {
+                                            lunchSlots: updated,
+                                            dinnerSlots: prev.timeSlotsConfig?.dinnerSlots || DEFAULT_DINNER_SLOTS,
+                                            allowCustomTime: prev.timeSlotsConfig?.allowCustomTime ?? true,
+                                          }
+                                        }));
+                                      }}
+                                      className="text-gray-400 hover:text-rose-600 transition-colors cursor-pointer"
+                                      title="Remove lunch slot"
+                                    >
+                                      <Icon name="XMarkIcon" size={12} />
+                                    </button>
+                                  </span>
+                                ))}
+                              </div>
+
+                              <div className="flex items-center gap-1.5 pt-1">
+                                <input
+                                  type="text"
+                                  placeholder="e.g. 12:00 PM to 2:00 PM"
+                                  value={newLunchSlotInput}
+                                  onChange={(e) => setNewLunchSlotInput(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      const val = newLunchSlotInput.trim();
+                                      const current = editableFormConfig.timeSlotsConfig?.lunchSlots || DEFAULT_LUNCH_SLOTS;
+                                      if (val && !current.includes(val)) {
+                                        setEditableFormConfig(prev => ({
+                                          ...prev,
+                                          timeSlotsConfig: {
+                                            lunchSlots: [...current, val],
+                                            dinnerSlots: prev.timeSlotsConfig?.dinnerSlots || DEFAULT_DINNER_SLOTS,
+                                            allowCustomTime: prev.timeSlotsConfig?.allowCustomTime ?? true,
+                                          }
+                                        }));
+                                        setNewLunchSlotInput('');
+                                      }
+                                    }
+                                  }}
+                                  className="flex-1 border border-amber-300 bg-white rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#C8860A]"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const val = newLunchSlotInput.trim();
+                                    const current = editableFormConfig.timeSlotsConfig?.lunchSlots || DEFAULT_LUNCH_SLOTS;
+                                    if (val && !current.includes(val)) {
+                                      setEditableFormConfig(prev => ({
+                                        ...prev,
+                                        timeSlotsConfig: {
+                                          lunchSlots: [...current, val],
+                                          dinnerSlots: prev.timeSlotsConfig?.dinnerSlots || DEFAULT_DINNER_SLOTS,
+                                          allowCustomTime: prev.timeSlotsConfig?.allowCustomTime ?? true,
+                                        }
+                                      }));
+                                      setNewLunchSlotInput('');
+                                    }
+                                  }}
+                                  className="px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-colors cursor-pointer"
+                                  style={{ background: '#C8860A' }}
+                                >
+                                  + Add
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Dinner Slots Manager */}
+                            <div className="bg-white p-3.5 rounded-xl border border-amber-200 space-y-2.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                                  <span>🌙</span>
+                                  <span>Dinner Slots ({(editableFormConfig.timeSlotsConfig?.dinnerSlots || DEFAULT_DINNER_SLOTS).length})</span>
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5 min-h-[38px] p-1.5 bg-amber-50/40 rounded-lg border border-amber-100">
+                                {(editableFormConfig.timeSlotsConfig?.dinnerSlots || DEFAULT_DINNER_SLOTS).map((slot, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-amber-950 shadow-2xs"
+                                  >
+                                    <span>{slot}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const current = editableFormConfig.timeSlotsConfig?.dinnerSlots || DEFAULT_DINNER_SLOTS;
+                                        const updated = current.filter((_, i) => i !== idx);
+                                        setEditableFormConfig(prev => ({
+                                          ...prev,
+                                          timeSlotsConfig: {
+                                            lunchSlots: prev.timeSlotsConfig?.lunchSlots || DEFAULT_LUNCH_SLOTS,
+                                            dinnerSlots: updated,
+                                            allowCustomTime: prev.timeSlotsConfig?.allowCustomTime ?? true,
+                                          }
+                                        }));
+                                      }}
+                                      className="text-gray-400 hover:text-rose-600 transition-colors cursor-pointer"
+                                      title="Remove dinner slot"
+                                    >
+                                      <Icon name="XMarkIcon" size={12} />
+                                    </button>
+                                  </span>
+                                ))}
+                              </div>
+
+                              <div className="flex items-center gap-1.5 pt-1">
+                                <input
+                                  type="text"
+                                  placeholder="e.g. 6:00 PM to 8:00 PM"
+                                  value={newDinnerSlotInput}
+                                  onChange={(e) => setNewDinnerSlotInput(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      const val = newDinnerSlotInput.trim();
+                                      const current = editableFormConfig.timeSlotsConfig?.dinnerSlots || DEFAULT_DINNER_SLOTS;
+                                      if (val && !current.includes(val)) {
+                                        setEditableFormConfig(prev => ({
+                                          ...prev,
+                                          timeSlotsConfig: {
+                                            lunchSlots: prev.timeSlotsConfig?.lunchSlots || DEFAULT_LUNCH_SLOTS,
+                                            dinnerSlots: [...current, val],
+                                            allowCustomTime: prev.timeSlotsConfig?.allowCustomTime ?? true,
+                                          }
+                                        }));
+                                        setNewDinnerSlotInput('');
+                                      }
+                                    }
+                                  }}
+                                  className="flex-1 border border-amber-300 bg-white rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#C8860A]"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const val = newDinnerSlotInput.trim();
+                                    const current = editableFormConfig.timeSlotsConfig?.dinnerSlots || DEFAULT_DINNER_SLOTS;
+                                    if (val && !current.includes(val)) {
+                                      setEditableFormConfig(prev => ({
+                                        ...prev,
+                                        timeSlotsConfig: {
+                                          lunchSlots: prev.timeSlotsConfig?.lunchSlots || DEFAULT_LUNCH_SLOTS,
+                                          dinnerSlots: [...current, val],
+                                          allowCustomTime: prev.timeSlotsConfig?.allowCustomTime ?? true,
+                                        }
+                                      }));
+                                      setNewDinnerSlotInput('');
+                                    }
+                                  }}
+                                  className="px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-colors cursor-pointer"
+                                  style={{ background: '#C8860A' }}
+                                >
+                                  + Add
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
 
                       {/* Fields Manager List */}
@@ -7494,10 +7721,20 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   </h3>
                   <div className="space-y-3.5">
                     <div className="flex items-center justify-between">
-                      <label className="text-sm text-gray-700 font-medium">Deposit Amount</label>
-                      <div className="flex items-center gap-1">
-                        <span className="text-gray-500 text-sm">£</span>
-                        <input type="number" value={pricingDetails.depositPercentage} onChange={e => setPricingDetails(p => ({ ...p, depositPercentage: Number(e.target.value) }))} className="w-24 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none bg-gray-50 font-bold text-gray-900" />
+                      <div>
+                        <label className="text-sm text-gray-700 font-medium block">Booking Deposit Policy (%)</label>
+                        <span className="text-[11px] text-gray-500">Deposit required at booking across catering packages (default: 50%)</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          min="10"
+                          max="100"
+                          value={pricingDetails.depositPercentage}
+                          onChange={e => setPricingDetails(p => ({ ...p, depositPercentage: Number(e.target.value) || 50 }))}
+                          className="w-20 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none bg-gray-50 font-bold text-gray-900"
+                        />
+                        <span className="text-gray-600 text-sm font-bold">%</span>
                       </div>
                     </div>
                     <div className="flex items-center justify-between">

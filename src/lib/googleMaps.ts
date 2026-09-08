@@ -104,13 +104,14 @@ export async function geocodeAddress(input: string): Promise<GeocodeResult | nul
     console.warn('Google Maps Geocoding attempt:', error);
   }
 
-  // Fallback 1: Free UK Postcodes.io API for any UK postcode (e.g. UB1 1AA, CR0 1AA, EC1A 1BB)
+  // Fallback 1: Free UK Postcodes.io API for any UK postcode (full e.g. HA3 0AA or partial outcode e.g. HA3, UB2)
   try {
     const postcodeRegex = /([Gg][Ii][Rr] 0[Aa]{2})|((([A-Za-z][0-9]{1,2})|(([A-Za-z][A-Ha-hJ-Yj-y][0-9]{1,2})|(([A-Za-z][0-9][A-Za-z])|([A-Za-z][A-Ha-hJ-Yj-y][0-9][A-Za-z]?))))\s?[0-9][A-Za-z]{2})/i;
     const match = cleanInput.match(postcodeRegex);
     const extractedPostcode = match ? match[0].replace(/\s+/g, '') : cleanInput.replace(/\s+/g, '');
 
-    const res = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(extractedPostcode)}`);
+    // Try full postcode first
+    let res = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(extractedPostcode)}`);
     if (res.ok) {
       const data = await res.json();
       if (data.status === 200 && data.result) {
@@ -122,6 +123,25 @@ export async function geocodeAddress(input: string): Promise<GeocodeResult | nul
           lng: p.longitude,
           postcode: p.postcode,
         };
+      }
+    }
+
+    // If full postcode failed or input is a UK outcode (e.g. HA3, UB2, SW1A, NW9)
+    const outcodeClean = extractedPostcode.toUpperCase();
+    if (/^[A-Z]{1,2}[0-9][A-Z0-9]?$/i.test(outcodeClean)) {
+      const outcodeRes = await fetch(`https://api.postcodes.io/outcodes/${encodeURIComponent(outcodeClean)}`);
+      if (outcodeRes.ok) {
+        const data = await outcodeRes.json();
+        if (data.status === 200 && data.result) {
+          const p = data.result;
+          const adminDist = Array.isArray(p.admin_district) ? p.admin_district.join(', ') : p.admin_district;
+          return {
+            formattedAddress: `${p.outcode}${adminDist ? ` (${adminDist})` : ''}, London & UK`,
+            lat: p.latitude,
+            lng: p.longitude,
+            postcode: p.outcode,
+          };
+        }
       }
     }
   } catch (e) {
