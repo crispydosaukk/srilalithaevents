@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -45,6 +45,10 @@ import {
   DEFAULT_OUTDOOR_TIME_SLOTS,
   DEFAULT_SLOT_CAPACITY,
   SlotCapacityConfig,
+  TIME_OPTIONS,
+  DEFAULT_LUNCH_SLOTS,
+  DEFAULT_DINNER_SLOTS,
+  DEFAULT_TIME_SLOTS_CONFIG,
 } from '@/app/data/formConfig';
 import {
   DeliveryLocationConfig,
@@ -122,6 +126,7 @@ export default function HomePage() {
           submitButtonText: data.submitButtonText || DEFAULT_FORM_CONFIG.submitButtonText,
           fields,
           slotCapacity: data.slotCapacity || DEFAULT_FORM_CONFIG.slotCapacity || DEFAULT_SLOT_CAPACITY,
+          timeSlotsConfig: data.timeSlotsConfig || DEFAULT_FORM_CONFIG.timeSlotsConfig || DEFAULT_TIME_SLOTS_CONFIG,
         });
       }
     });
@@ -198,8 +203,20 @@ export default function HomePage() {
 
   const { INDIAN_MENU, SRI_LANKAN_MENU, LIVE_COUNTER_PACKAGE, BANQUET_PACKAGES, VENUE_HALL_CHARGES, TABLE_SERVICE, KIDS_PRICING, STANDARD_SETUP, TERMS_AND_CONDITIONS, DRY_HIRE_PRICES } = menus;
 
+  const [timeCategory, setTimeCategory] = useState<'lunch' | 'dinner' | 'custom'>('lunch');
+  const [customStartTime, setCustomStartTime] = useState<string>('12:00 PM');
+  const [customEndTime, setCustomEndTime] = useState<string>('2:00 PM');
+
+  const lunchSlots = formConfig.timeSlotsConfig?.lunchSlots && formConfig.timeSlotsConfig.lunchSlots.length > 0
+    ? formConfig.timeSlotsConfig.lunchSlots
+    : DEFAULT_LUNCH_SLOTS;
+  const dinnerSlots = formConfig.timeSlotsConfig?.dinnerSlots && formConfig.timeSlotsConfig.dinnerSlots.length > 0
+    ? formConfig.timeSlotsConfig.dinnerSlots
+    : DEFAULT_DINNER_SLOTS;
+  const allowCustomTime = formConfig.timeSlotsConfig?.allowCustomTime ?? true;
+
   const [bookingForm, setBookingForm] = useState<Record<string, any>>({
-    name: '', email: '', phone: '', eventType: '', date: '', timeOfDay: '', guests: '', message: '', selectedPackage: '',
+    name: '', email: '', phone: '', eventType: '', location: '', date: '', timeOfDay: '', guests: '', message: '', selectedPackage: '',
   });
 
   const isOutdoorCateringSelected = (form: Record<string, any>) => {
@@ -245,6 +262,132 @@ export default function HomePage() {
     const remaining = Math.max(0, maxSlotCapacity - count);
     return { count, full, remaining };
   };
+
+  const instantQuote = useMemo(() => {
+    const guestCount = Number(bookingForm.guests) || 0;
+    const pkgLower = (bookingForm.selectedPackage || '').toLowerCase();
+    let baseAmount = 0;
+    let minGuests = 35;
+    let minCallOut = 385;
+    let pricePerPerson = 11;
+    const isWeekend = isWeekendOrBankHoliday(bookingForm.date);
+
+    if (pkgLower.includes('live dosa') || !bookingForm.selectedPackage) {
+      const isOption2 = pkgLower.includes('option 2');
+      const liveCalc = calculateLiveDosaPrice(
+        bookingForm.date || (isWeekend ? 'weekend' : 'weekday'),
+        guestCount,
+        0,
+        isOption2 ? 'live-dosa-2' : 'live-dosa-1',
+        isOption2 ? menus.LIVE_DOSA_OPTION_2?.pricing : menus.LIVE_DOSA_OPTION_1?.pricing
+      );
+      baseAmount = liveCalc.finalSubtotal;
+      minGuests = liveCalc.minGuests;
+      minCallOut = liveCalc.minCallOutCharge;
+      pricePerPerson = liveCalc.pricePerPerson;
+    } else if (pkgLower.includes('thali') || pkgLower.includes('meals') || pkgLower.includes('bhojanam') || pkgLower.includes('option 3')) {
+      pricePerPerson = menus.MADRAS_THALI_OPTION_3?.pricePerPerson || 10.99;
+      minGuests = 1;
+      baseAmount = pricePerPerson * Math.max(1, guestCount);
+    } else if (pkgLower.includes('tailor') || pkgLower.includes('option 4')) {
+      pricePerPerson = 15.00;
+      minGuests = 1;
+      baseAmount = pricePerPerson * Math.max(1, guestCount);
+    } else if (pkgLower.includes('festival') || pkgLower.includes('option 5')) {
+      pricePerPerson = menus.DOSA_FESTIVAL_OPTION_5?.pricePerPerson || 14.99;
+      minGuests = 1;
+      baseAmount = pricePerPerson * Math.max(1, guestCount);
+    } else if (pkgLower.includes('canape') || pkgLower.includes('option 6')) {
+      pricePerPerson = menus.CANAPE_OPTION_6?.pricePerPerson || 8.99;
+      minGuests = 1;
+      baseAmount = pricePerPerson * Math.max(1, guestCount);
+    } else if (pkgLower.includes('north indian') || pkgLower.includes('option 7')) {
+      pricePerPerson = menus.NORTH_INDIAN_OPTION_7?.pricePerPerson || 12.00;
+      minGuests = 25;
+      baseAmount = pricePerPerson * Math.max(25, guestCount);
+    } else if (pkgLower.includes('gujarati') || pkgLower.includes('option 8')) {
+      pricePerPerson = menus.GUJARATI_OPTION_8?.pricePerPerson || 14.99;
+      minGuests = 1;
+      baseAmount = pricePerPerson * Math.max(1, guestCount);
+    } else if (pkgLower.includes('punjabi') || pkgLower.includes('option 9')) {
+      pricePerPerson = menus.PUNJABI_OPTION_9?.pricePerPerson || 13.99;
+      minGuests = 1;
+      baseAmount = pricePerPerson * Math.max(1, guestCount);
+    } else if (pkgLower.includes('gazebo')) {
+      baseAmount = 70.00;
+    } else if (pkgLower.includes('waiter')) {
+      baseAmount = 70.00;
+    } else if (pkgLower.includes('crockery')) {
+      baseAmount = 3.00 * guestCount;
+    } else if (pkgLower.includes('extra hour')) {
+      baseAmount = 100.00;
+    } else {
+      const selectedPkg = BANQUET_PACKAGES.find(p => p.name === bookingForm.selectedPackage);
+      if (selectedPkg) {
+        pricePerPerson = selectedPkg.pricePerPerson;
+        baseAmount = pricePerPerson * guestCount;
+      }
+    }
+
+    const deliveryFee = deliveryResult ? deliveryResult.charge : 0;
+    const totalAmount = baseAmount + deliveryFee;
+    const depositPercent = pricingDetails.depositPercentage || 50;
+    const depositAmount = Math.round((baseAmount * (depositPercent / 100)) * 100) / 100;
+
+    return {
+      baseAmount,
+      deliveryFee,
+      totalAmount,
+      depositAmount,
+      minGuests,
+      minCallOut,
+      pricePerPerson,
+      isWeekend,
+    };
+  }, [bookingForm.guests, bookingForm.selectedPackage, bookingForm.date, deliveryResult, menus, pricingDetails.depositPercentage]);
+
+  const activePackageInfo = useMemo(() => {
+    const pkg = bookingForm.selectedPackage || '';
+    const pkgLower = pkg.toLowerCase();
+    const isWeekend = isWeekendOrBankHoliday(bookingForm.date);
+
+    if (pkgLower.includes('live dosa option 1') || pkgLower.includes('live dosa 1') || !pkg) {
+      return {
+        title: 'Live Dosa Option 1 — Authentic Live Catering',
+        pricingText: isWeekend
+          ? '🌟 Weekend & Bank Holiday Pricing: £12.00/person (Min 40 guaranteed guests • £480.00 min call out charge)'
+          : '📅 Weekday (Monday to Friday) Pricing: £11.00/person (Min 35 guaranteed guests • £385.00 min call out charge)',
+        detailsText: 'Service Duration: 2 Hours • Minimum call out charge can be reached by guest count or menu upgrades. Unlimited live dosa station with fresh chutneys & piping hot sambar.',
+      };
+    } else if (pkgLower.includes('live dosa option 2') || pkgLower.includes('live dosa 2')) {
+      return {
+        title: 'Live Dosa Option 2 — Deluxe Catering Experience',
+        pricingText: isWeekend
+          ? '🌟 Weekend & Bank Holiday Pricing: £17.50/person (Min 40 guaranteed guests • £700.00 min call out charge)'
+          : '📅 Weekday (Monday to Friday) Pricing: £16.50/person (Min 35 guaranteed guests • £577.50 min call out charge)',
+        detailsText: 'Service Duration: 2.5 Hours • Includes live starter, 1 main dish, 1 dessert, unlimited dosa station & filter coffee.',
+      };
+    } else if (pkgLower.includes('thali') || pkgLower.includes('meals') || pkgLower.includes('bhojanam')) {
+      return {
+        title: 'Madras Thali / South Indian Meals / Andhra Bhojanam',
+        pricingText: '£10.99/person • Traditional South Indian banana leaf or stainless thali feast',
+        detailsText: 'Complete authentic spread with rice, sambar, rasam, kootu, poriyal, papad, curd, sweet & pickle.',
+      };
+    } else if (pkgLower.includes('tailor') || pkgLower.includes('option 4')) {
+      return {
+        title: 'Tailor Your Own Menu (Option 4)',
+        pricingText: 'From £15.00/person • Fully bespoke live stations & multi-course catering',
+        detailsText: 'Choose from 4 live stations, bespoke appetisers, mains, breads, and desserts customized to your theme.',
+      };
+    } else if (pkgLower.includes('festival') || pkgLower.includes('option 5')) {
+      return {
+        title: 'Dosa Festival At Your Home (Option 5)',
+        pricingText: '£14.99/person • 34+ Signature & Fusion Dosa Varieties',
+        detailsText: 'Ultimate live dosa experience featuring chocolate dosa, cheese burst, schezwan, Mysore masala, and more.',
+      };
+    }
+    return null;
+  }, [bookingForm.selectedPackage, bookingForm.date]);
 
   const handleLocationSelected = (address: string, coords?: { lat: number; lng: number; postcode?: string }) => {
     setBookingForm(prev => ({ ...prev, location: address }));
@@ -408,7 +551,7 @@ export default function HomePage() {
       const deliveryFee = deliveryResult ? deliveryResult.charge : 0;
       const totalAmount = baseAmount + deliveryFee;
 
-      const depositPercent = pricingDetails.depositPercentage || 30;
+      const depositPercent = pricingDetails.depositPercentage || 50;
       const depositAmount = Math.round((baseAmount * depositPercent) / 100);
 
       // Collect custom fields
@@ -493,7 +636,8 @@ export default function HomePage() {
       isCompact ? 'px-3 py-2.5 text-sm' : 'px-4 py-3 text-sm'
     } focus:outline-none focus:ring-2 focus:border-yellow-500 bg-white transition-all`;
 
-    return (
+    // Content for the field itself
+    const fieldContent = (
       <div key={field.id} className={colSpanClass}>
         <label className={`block ${isCompact ? 'text-xs' : 'text-sm'} font-medium text-gray-700 mb-1 flex items-center gap-1.5`}>
           {field.id === 'phone' && (
@@ -527,36 +671,17 @@ export default function HomePage() {
               }}
             />
 
-            {/* Dynamic Distance & Delivery Pricing Badge */}
             {deliveryResult && bookingForm[field.id] && (
-              <div className={`mt-2 p-3 rounded-xl border text-xs leading-relaxed transition-all animate-in fade-in duration-200 ${
-                deliveryResult.isFree
-                  ? 'bg-emerald-50/80 border-emerald-200 text-emerald-900'
-                  : deliveryResult.isOutOfRange
-                  ? 'bg-amber-50 border-amber-300 text-amber-900'
-                  : 'bg-amber-50/80 border-amber-200 text-amber-950'
-              }`}>
-                <div className="flex items-center justify-between font-bold text-xs mb-1">
-                  <span className="flex items-center gap-1.5">
-                    <Icon name="MapPinIcon" size={14} className={deliveryResult.isFree ? 'text-emerald-600' : 'text-[#C8860A]'} />
-                    <span>Distance: {deliveryResult.distanceMiles} miles from Restaurant</span>
-                  </span>
-                  <span className={`px-2 py-0.5 rounded-md font-bold text-xs ${
-                    deliveryResult.isFree
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-amber-200 text-amber-900'
-                  }`}>
-                    {deliveryResult.isFree ? 'FREE Delivery' : `+£${deliveryResult.charge.toFixed(2)} Delivery Fee`}
-                  </span>
-                </div>
-                <p className="text-[11px] opacity-90">
-                  {deliveryResult.breakdownText}
-                  {deliveryResult.isOutOfRange && (
-                    <span className="block text-rose-700 font-semibold mt-0.5">
-                      ⚠️ Note: Event is over {deliveryConfig.maxDeliveryRadiusMiles} miles. Custom long-distance arrangements will be confirmed with you.
-                    </span>
-                  )}
-                </p>
+              <div className="mt-2 p-2.5 rounded-xl border border-amber-200 bg-amber-50/60 text-xs text-amber-950 flex items-center justify-between">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <Icon name="MapPinIcon" size={14} className="text-[#C8860A]" />
+                  <span>Distance: {deliveryResult.distanceMiles} miles from Kitchen</span>
+                </span>
+                {deliveryResult.isFree ? (
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[10px]">Free Delivery Zone</span>
+                ) : deliveryResult.isOutOfRange ? (
+                  <span className="px-2 py-0.5 rounded-md bg-amber-200 text-amber-900 font-bold text-[10px]">Over {deliveryConfig.maxDeliveryRadiusMiles} miles</span>
+                ) : null}
               </div>
             )}
           </div>
@@ -569,7 +694,7 @@ export default function HomePage() {
             value={bookingForm[field.id] || ''}
             onChange={(e) => setBookingForm({ ...bookingForm, [field.id]: e.target.value })}
             className={inputBaseClass}
-            placeholder={field.placeholder || ''}
+            placeholder={field.placeholder || (field.id === 'name' ? 'Your name' : '')}
           />
         )}
 
@@ -599,7 +724,11 @@ export default function HomePage() {
                 maxLength={12}
               />
             </div>
-            {phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}
+            {phoneError ? (
+              <p className="text-red-500 text-xs mt-1">{phoneError}</p>
+            ) : field.helperText ? (
+              <p className="text-[10px] text-gray-400 mt-1">{field.helperText}</p>
+            ) : null}
           </div>
         )}
 
@@ -612,7 +741,7 @@ export default function HomePage() {
             value={bookingForm[field.id] || ''}
             onChange={(e) => setBookingForm({ ...bookingForm, [field.id]: e.target.value })}
             className={inputBaseClass}
-            placeholder={field.placeholder || 'e.g. 100'}
+            placeholder={field.placeholder || '50'}
           />
         )}
 
@@ -630,11 +759,17 @@ export default function HomePage() {
                   : ''
               }`}
             />
-            {bookingForm[field.id] && blockedDates.includes(bookingForm[field.id]) && (
-              <span className="text-red-500 text-xs font-semibold mt-1 flex items-center gap-1">
-                <Icon name="ExclamationTriangleIcon" size={12} className="text-red-500 flex-shrink-0" />
-                Unavailable / Fully Booked
-              </span>
+            {bookingForm[field.id] && (
+              blockedDates.includes(bookingForm[field.id]) ? (
+                <span className="text-red-500 text-xs font-semibold mt-1 flex items-center gap-1">
+                  <Icon name="ExclamationTriangleIcon" size={12} className="text-red-500 flex-shrink-0" />
+                  Unavailable / Fully Booked
+                </span>
+              ) : (
+                <span className="text-[10px] text-amber-800 font-semibold mt-1 block">
+                  {isWeekendOrBankHoliday(bookingForm[field.id]) ? '🌟 Weekend / Bank Holiday' : '📅 Weekday (Mon–Fri)'}
+                </span>
+              )
             )}
           </div>
         )}
@@ -655,56 +790,53 @@ export default function HomePage() {
           </select>
         )}
 
+        {/* Clean Dropdown for Time of Day matching Image 2 request */}
         {field.type === 'time_select' && (
-          <div>
-            <select
-              required={field.required}
-              value={bookingForm[field.id] || ''}
-              onChange={(e) => setBookingForm({ ...bookingForm, [field.id]: e.target.value })}
-              className={`${inputBaseClass} ${isOutdoorActive ? 'border-amber-400 bg-amber-50/10' : ''}`}
-            >
-              <option value="">{field.placeholder || 'Select time'}</option>
-              {dynamicTimeSlots.map((slot) => {
-                const { count, full, remaining } = getSlotOccupancy(slot);
-                return (
-                  <option key={slot} value={slot} className={full ? 'text-amber-800 bg-amber-50/60 font-semibold' : ''}>
-                    {slot}
-                    {bookingForm.date
-                      ? full
-                        ? ` — (High Demand / Full Capacity - Special Request)`
-                        : isOutdoorActive
-                        ? ` — (${remaining} of ${maxSlotCapacity} slots left)`
-                        : count > 0
-                        ? ` — (Booked - Special Request)`
-                        : ` — (Available)`
-                      : isOutdoorActive
-                      ? ` (Up to ${maxSlotCapacity} bookings / slot)`
-                      : ''}
-                  </option>
-                );
-              })}
-            </select>
-
-            {/* High Demand Warning Banner when selected slot is full */}
-            {bookingForm.date && bookingForm.timeOfDay && getSlotOccupancy(bookingForm.timeOfDay).full && (
-              <div className="flex items-start gap-2.5 text-xs text-amber-950 mt-2 bg-gradient-to-r from-amber-50 via-amber-100/60 to-amber-50 p-3 rounded-xl border border-amber-300 shadow-2xs animate-in fade-in duration-200">
-                <span className="text-base flex-shrink-0">✨</span>
-                <div>
-                  <span className="font-bold block text-amber-950">High Demand Slot — We'll Strive to Accommodate You!</span>
-                  <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
-                    This time slot has reached standard booking capacity for this date. You can still submit your request! Our senior event coordinators will review our schedule and contact you within 24 hours to do our very best to adjust timings and accommodate your event.
-                  </p>
-                </div>
-              </div>
+          <select
+            required={field.required}
+            value={bookingForm[field.id] || ''}
+            onChange={(e) => setBookingForm({ ...bookingForm, [field.id]: e.target.value })}
+            className={inputBaseClass}
+          >
+            <option value="">{field.placeholder || 'Select time'}</option>
+            {lunchSlots.length > 0 && (
+              <optgroup label="☀️ Lunch Slots">
+                {lunchSlots.map((slot) => {
+                  const { full } = getSlotOccupancy(slot);
+                  return (
+                    <option key={slot} value={slot}>
+                      {slot} {bookingForm.date && full ? '(High Demand)' : ''}
+                    </option>
+                  );
+                })}
+              </optgroup>
             )}
-
-            {isOutdoorActive && !(bookingForm.date && bookingForm.timeOfDay && getSlotOccupancy(bookingForm.timeOfDay).full) && (
-              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-800 mt-1.5 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200">
-                <Icon name="ClockIcon" size={13} className="text-amber-600 flex-shrink-0" />
-                <span>Outdoor Catering: {dynamicTimeSlots.length} dynamic time slots ({maxSlotCapacity} bookings per slot capacity)</span>
-              </div>
+            {dinnerSlots.length > 0 && (
+              <optgroup label="🌙 Dinner Slots">
+                {dinnerSlots.map((slot) => {
+                  const { full } = getSlotOccupancy(slot);
+                  return (
+                    <option key={slot} value={slot}>
+                      {slot} {bookingForm.date && full ? '(High Demand)' : ''}
+                    </option>
+                  );
+                })}
+              </optgroup>
             )}
-          </div>
+            {allowCustomTime && (
+              <optgroup label="⏱️ Customised &amp; Full Day">
+                <option value="Full Day Hire (10:00 AM to 11:00 PM)">Full Day Hire (10:00 AM to 11:00 PM)</option>
+                <option value="Custom Time (Discuss with Team)">Custom Time (Discuss with Team)</option>
+              </optgroup>
+            )}
+            {lunchSlots.length === 0 && dinnerSlots.length === 0 && (
+              dynamicTimeSlots.map((slot) => (
+                <option key={slot} value={slot}>
+                  {slot}
+                </option>
+              ))
+            )}
+          </select>
         )}
 
         {field.type === 'package_select' && (
@@ -721,10 +853,10 @@ export default function HomePage() {
             <option value="">{field.placeholder || 'No specific package – help me choose'}</option>
             
             <optgroup label="── 🎪 Live Dosa Stations ──">
-              <option value="Live Dosa Option 1 (Weekday: Mon-Fri)">Live Dosa Option 1 (Weekday: Mon-Fri) — £11.00/person (Min 35 guests / £385 min)</option>
-              <option value="Live Dosa Option 1 (Weekend & Holidays)">Live Dosa Option 1 (Weekend &amp; Holidays) — £12.00/person (Min 40 guests / £480 min)</option>
-              <option value="Live Dosa Option 2 (Weekday: Mon-Fri)">Live Dosa Option 2 (Weekday: Mon-Fri) — £16.50/person (Min 35 guests / £577.50 min)</option>
-              <option value="Live Dosa Option 2 (Weekend & Holidays)">Live Dosa Option 2 (Weekend &amp; Holidays) — £17.50/person (Min 40 guests / £700 min)</option>
+              <option value="Live Dosa Option 1 (Weekday: Mon-Fri)">Live Dosa Option 1 (Weekday: Mon-Fri) — £11.00/person (Min 35 guests)</option>
+              <option value="Live Dosa Option 1 (Weekend & Holidays)">Live Dosa Option 1 (Weekend &amp; Holidays) — £12.00/person (Min 40 guests)</option>
+              <option value="Live Dosa Option 2 (Weekday: Mon-Fri)">Live Dosa Option 2 (Weekday: Mon-Fri) — £16.50/person (Min 35 guests)</option>
+              <option value="Live Dosa Option 2 (Weekend & Holidays)">Live Dosa Option 2 (Weekend &amp; Holidays) — £17.50/person (Min 40 guests)</option>
             </optgroup>
 
             <optgroup label="── 🍲 Traditional Meals &amp; Thali ──">
@@ -732,7 +864,7 @@ export default function HomePage() {
             </optgroup>
 
             <optgroup label="── 🎨 Bespoke &amp; Festival Experiences ──">
-              <option value="Tailor Your Own Menu (Option 4)">Tailor Your Own Menu (Option 4) — 4 Live Stations (50% Deposit)</option>
+              <option value="Tailor Your Own Menu (Option 4)">Tailor Your Own Menu (Option 4) — 4 Live Stations</option>
               <option value="Dosa Festival At Your Home (Option 5)">Dosa Festival At Your Home (Option 5) — 34+ Varieties (£14.99/person)</option>
             </optgroup>
 
@@ -763,11 +895,13 @@ export default function HomePage() {
           />
         )}
 
-        {field.helperText && (
+        {field.helperText && field.type !== 'tel' && (
           <p className="text-[11px] text-gray-400 mt-1">{field.helperText}</p>
         )}
       </div>
     );
+
+    return fieldContent;
   };
 
   const toggleSection = (key: string) => {
@@ -935,6 +1069,7 @@ export default function HomePage() {
                         .sort((a, b) => a.order - b.order)
                         .map((field) => renderField(field, true))}
                     </div>
+
                     <button
                       type="submit"
                       disabled={isSubmitting}
@@ -944,12 +1079,12 @@ export default function HomePage() {
                       {isSubmitting ? (
                         <span className="flex items-center gap-2">
                           <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span>
-                          Submitting...
+                          Submitting Booking...
                         </span>
                       ) : (
                         <>
                           <Icon name="CalendarDaysIcon" size={16} />
-                          {formConfig.submitButtonText || 'Submit Booking Request'}
+                          <span>{formConfig.submitButtonText || 'Submit Booking Request'}</span>
                         </>
                       )}
                     </button>
@@ -2942,32 +3077,55 @@ export default function HomePage() {
               </div>
             )
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-12 gap-4">
-                {formConfig.fields
-                  .filter((f) => f.enabled)
-                  .sort((a, b) => a.order - b.order)
-                  .map((field) => renderField(field, false))}
+            <div>
+              {/* Option to Customize Menu & Pay Online */}
+              <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-400/20 to-amber-500/10 border border-amber-300 flex items-center justify-between gap-4 shadow-2xs">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-xl flex-shrink-0">🍽️</span>
+                  <div>
+                    <span className="text-sm font-bold text-gray-900 block">Choose Menu Dishes &amp; Pay Online</span>
+                    <span className="text-xs text-gray-500">Pick dishes &amp; pay deposit online via Stripe</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsMenuOrderModalOpen(true)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-white shadow-xs hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                  style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                >
+                  <span>Build Menu</span>
+                  <span>→</span>
+                </button>
               </div>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full text-white font-semibold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg disabled:opacity-70 cursor-pointer disabled:cursor-not-allowed"
-                style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
-              >
-                {isSubmitting ? (
-                  <span className="flex items-center gap-2">
-                    <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span>
-                    Submitting...
-                  </span>
-                ) : (
-                  <>
-                    <Icon name="CalendarDaysIcon" size={18} />
-                    {formConfig.submitButtonText || 'Submit Booking Request'}
-                  </>
-                )}
-              </button>
-            </form>
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-12 gap-4">
+                  {formConfig.fields
+                    .filter((f) => f.enabled)
+                    .sort((a, b) => a.order - b.order)
+                    .map((field) => renderField(field, false))}
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full text-white font-semibold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg disabled:opacity-70 cursor-pointer disabled:cursor-not-allowed"
+                  style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                >
+                  {isSubmitting ? (
+                    <span className="flex items-center gap-2">
+                      <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span>
+                      Submitting Booking...
+                    </span>
+                  ) : (
+                    <>
+                      <Icon name="CalendarDaysIcon" size={18} />
+                      <span>{formConfig.submitButtonText || 'Submit Booking Request'}</span>
+                    </>
+                  )}
+                </button>
+              </form>
+            </div>
           )}
         </div>
       </section>

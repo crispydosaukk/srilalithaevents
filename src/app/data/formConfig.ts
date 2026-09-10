@@ -54,6 +54,13 @@ export const DEFAULT_DINNER_SLOTS = [
   '8:00 PM to 10:00 PM',
 ];
 
+export const TIME_OPTIONS = [
+  '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM', '12:00 PM', '12:30 PM',
+  '1:00 PM', '1:30 PM', '2:00 PM', '2:30 PM', '3:00 PM', '3:30 PM',
+  '4:00 PM', '4:30 PM', '5:00 PM', '5:30 PM', '6:00 PM', '6:30 PM',
+  '7:00 PM', '7:30 PM', '8:00 PM', '8:30 PM', '9:00 PM', '9:30 PM', '10:00 PM', '10:30 PM', '11:00 PM'
+];
+
 export const DEFAULT_TIME_SLOTS_CONFIG: TimeSlotsConfig = {
   lunchSlots: DEFAULT_LUNCH_SLOTS,
   dinnerSlots: DEFAULT_DINNER_SLOTS,
@@ -126,6 +133,7 @@ export const DEFAULT_FORM_FIELDS: FormField[] = [
     label: 'WhatsApp Number',
     type: 'tel',
     placeholder: '07700 900000',
+    helperText: 'UK numbers only (e.g. 07700 900000)',
     required: true,
     enabled: true,
     isSystem: true,
@@ -153,7 +161,6 @@ export const DEFAULT_FORM_FIELDS: FormField[] = [
     enabled: true,
     isSystem: true,
     width: 'full',
-    helperText: 'Enter postcode for dynamic distance & travel delivery estimate',
     order: 5,
   },
   {
@@ -193,7 +200,7 @@ export const DEFAULT_FORM_FIELDS: FormField[] = [
     id: 'guests',
     label: 'Number of Guests',
     type: 'number',
-    placeholder: 'e.g. 100',
+    placeholder: '50',
     required: true,
     enabled: true,
     isSystem: true,

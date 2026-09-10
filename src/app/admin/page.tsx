@@ -496,7 +496,7 @@ export default function AdminPage() {
         const pricingSnap = await getDoc(doc(db, 'site_data', 'pricing_details'));
         if (!pricingSnap.exists()) {
           await setDoc(doc(db, 'site_data', 'pricing_details'), {
-            depositPercentage: 30,
+            depositPercentage: 50,
             minimumBookingHours: 4,
             weekdayRate: 350,
             weekendRate: 550
@@ -956,7 +956,7 @@ export default function AdminPage() {
   }, []);
 
   const [pricingDetails, setPricingDetails] = useState({
-    depositPercentage: 30,
+    depositPercentage: 50,
     minimumBookingHours: 4,
     weekdayRate: 350,
     weekendRate: 550
@@ -1578,7 +1578,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
         baseAmount = adults * 25;
       }
 
-      const depositPercent = pricingDetails.depositPercentage || 30;
+      const depositPercent = pricingDetails.depositPercentage || 50;
       const deposit = Math.round((baseAmount * depositPercent) / 100);
 
       const fullPhone = newBookingForm.phone ? (newBookingForm.phone.startsWith('+') ? newBookingForm.phone : `+44${newBookingForm.phone.replace(/^0/, '').replace(/\s/g, '')}`) : '';
@@ -7877,8 +7877,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           onChange={(e) => setPaymentGatewaySettings(prev => ({ ...prev, paymentMode: e.target.value as any }))}
                           className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold bg-gray-50 focus:bg-white focus:outline-none"
                         >
-                          <option value="both">Both 30% Deposit &amp; Full Payment (Recommended)</option>
-                          <option value="deposit">Deposit Only (e.g. 30%)</option>
+                          <option value="both">Both 50% Deposit &amp; Full Payment (Recommended)</option>
+                          <option value="deposit">Deposit Only (e.g. 50%)</option>
                           <option value="full">100% Full Payment Only</option>
                         </select>
                       </div>
@@ -7893,7 +7893,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             min="10"
                             max="100"
                             value={paymentGatewaySettings.depositPercentage}
-                            onChange={(e) => setPaymentGatewaySettings(prev => ({ ...prev, depositPercentage: parseInt(e.target.value) || 30 }))}
+                            onChange={(e) => setPaymentGatewaySettings(prev => ({ ...prev, depositPercentage: parseInt(e.target.value) || 50 }))}
                             className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-bold bg-gray-50 focus:bg-white focus:outline-none"
                           />
                           <span className="text-xs font-bold text-gray-600">%</span>
@@ -8889,7 +8889,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           if (!foundUpgrade && !isLiveDosaPkg && val !== 'custom') {
                             baseAmount = (adults * pricePerPerson) + (kids4to10 * kidsPrice);
                           }
-                          const depositPercent = pricingDetails.depositPercentage || 30;
+                          const depositPercent = pricingDetails.depositPercentage || 50;
                           const deposit = Math.round((baseAmount * depositPercent) / 100);
 
                           // Update locally

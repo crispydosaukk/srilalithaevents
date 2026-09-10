@@ -18,7 +18,7 @@ export const DEFAULT_PAYMENT_CONFIG: PaymentGatewayConfig = {
   publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '',
   secretKey: process.env.STRIPE_SECRET_KEY || '',
   paymentMode: 'both',
-  depositPercentage: 30,
+  depositPercentage: 50,
   currency: 'gbp',
   allowPayLater: true,
 };
