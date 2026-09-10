@@ -1824,6 +1824,41 @@ export default function InteractiveMenuOrderModal({
                       </div>
                     </div>
                   )}
+
+                  {/* Logistics: What We Bring & What We Need */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* What We Bring */}
+                    <div className="bg-emerald-50/60 p-4 rounded-2xl border border-emerald-200 space-y-2">
+                      <span className="text-xs font-extrabold text-emerald-950 flex items-center gap-1.5 uppercase tracking-wide">
+                        <span>🚚</span>
+                        <span>What We Bring:</span>
+                      </span>
+                      <ul className="text-xs text-gray-700 space-y-1.5">
+                        {(dynamicMenus?.TAILOR_MENU_OPTION_4?.whatWeBring || TAILOR_MENU_OPTION_4.whatWeBring).map((item: string, idx: number) => (
+                          <li key={idx} className="flex items-start gap-1.5">
+                            <span className="text-emerald-600 font-bold mt-0.5">✓</span>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* What We Need From You */}
+                    <div className="bg-amber-50/60 p-4 rounded-2xl border border-amber-200 space-y-2">
+                      <span className="text-xs font-extrabold text-amber-950 flex items-center gap-1.5 uppercase tracking-wide">
+                        <span>🔌</span>
+                        <span>What We Need From You:</span>
+                      </span>
+                      <ul className="text-xs text-gray-700 space-y-1.5">
+                        {(dynamicMenus?.TAILOR_MENU_OPTION_4?.whatWeNeedFromYou || TAILOR_MENU_OPTION_4.whatWeNeedFromYou).map((item: string, idx: number) => (
+                          <li key={idx} className="flex items-start gap-1.5">
+                            <span className="text-amber-600 font-bold mt-0.5">•</span>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
                 </div>
               )}
 

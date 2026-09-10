@@ -1636,6 +1636,47 @@ export default function HomePage() {
                 </div>
               </div>
 
+              {/* Logistics Grid: What We Bring & What We Need From You */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* What We Bring */}
+                <div className="bg-emerald-50/70 border-2 border-emerald-200/80 rounded-3xl p-6 sm:p-7 shadow-sm space-y-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl">🚚</span>
+                    <div>
+                      <h4 className="font-bold text-emerald-950 text-base sm:text-lg">WHAT WE BRING ?</h4>
+                      <p className="text-xs text-emerald-800">Complete professional catering equipment provided</p>
+                    </div>
+                  </div>
+                  <ul className="space-y-2.5 text-xs sm:text-sm text-gray-700">
+                    {(menus.TAILOR_MENU_OPTION_4?.whatWeBring || TAILOR_MENU_OPTION_4.whatWeBring).map((item, idx) => (
+                      <li key={idx} className="flex items-start gap-2">
+                        <span className="text-emerald-600 font-bold text-base leading-none">✓</span>
+                        <span className="leading-snug">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* What We Need From You */}
+                <div className="bg-amber-50/70 border-2 border-amber-200/80 rounded-3xl p-6 sm:p-7 shadow-sm space-y-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl">🔌</span>
+                    <div>
+                      <h4 className="font-bold text-amber-950 text-base sm:text-lg">WHAT WE NEED FROM YOU ?</h4>
+                      <p className="text-xs text-amber-800">Venue requirements for smooth event setup</p>
+                    </div>
+                  </div>
+                  <ul className="space-y-2.5 text-xs sm:text-sm text-gray-700">
+                    {(menus.TAILOR_MENU_OPTION_4?.whatWeNeedFromYou || TAILOR_MENU_OPTION_4.whatWeNeedFromYou).map((item, idx) => (
+                      <li key={idx} className="flex items-start gap-2">
+                        <span className="text-[#C8860A] font-bold text-base leading-none">•</span>
+                        <span className="leading-snug">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
               {/* ─── DYNAMIC UPGRADES SECTION ─── */}
               <div className="bg-gradient-to-br from-amber-50/80 via-white to-amber-50/40 rounded-3xl border-2 border-amber-200/80 p-6 sm:p-8 shadow-sm">
                 <div className="text-center max-w-2xl mx-auto mb-8">
@@ -1853,6 +1894,47 @@ export default function HomePage() {
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+
+              {/* Logistics Grid: What We Bring & What We Need From You */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* What We Bring */}
+                <div className="bg-emerald-50/70 border-2 border-emerald-200/80 rounded-3xl p-6 sm:p-7 shadow-sm space-y-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl">🚚</span>
+                    <div>
+                      <h4 className="font-bold text-emerald-950 text-base sm:text-lg">WHAT WE BRING ?</h4>
+                      <p className="text-xs text-emerald-800">Complete professional catering equipment provided</p>
+                    </div>
+                  </div>
+                  <ul className="space-y-2.5 text-xs sm:text-sm text-gray-700">
+                    {(menus.TAILOR_MENU_OPTION_4?.whatWeBring || TAILOR_MENU_OPTION_4.whatWeBring).map((item, idx) => (
+                      <li key={idx} className="flex items-start gap-2">
+                        <span className="text-emerald-600 font-bold text-base leading-none">✓</span>
+                        <span className="leading-snug">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* What We Need From You */}
+                <div className="bg-amber-50/70 border-2 border-amber-200/80 rounded-3xl p-6 sm:p-7 shadow-sm space-y-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl">🔌</span>
+                    <div>
+                      <h4 className="font-bold text-amber-950 text-base sm:text-lg">WHAT WE NEED FROM YOU ?</h4>
+                      <p className="text-xs text-amber-800">Venue requirements for smooth event setup</p>
+                    </div>
+                  </div>
+                  <ul className="space-y-2.5 text-xs sm:text-sm text-gray-700">
+                    {(menus.TAILOR_MENU_OPTION_4?.whatWeNeedFromYou || TAILOR_MENU_OPTION_4.whatWeNeedFromYou).map((item, idx) => (
+                      <li key={idx} className="flex items-start gap-2">
+                        <span className="text-[#C8860A] font-bold text-base leading-none">•</span>
+                        <span className="leading-snug">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               </div>
 
