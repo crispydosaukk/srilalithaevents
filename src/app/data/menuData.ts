@@ -356,7 +356,7 @@ export const TAILOR_MENU_OPTION_4 = {
     'One Serving table of any size',
     'One power plug point (standard 240V socket)',
     '50 to 60 square feet or 3×3 meters empty space for cooking with shade or cover on top and lighting',
-    'Empty Space can be at any part of your home - (Garage, Rear Garden, Front Car park).',
+    'Empty Space can be at any part of Your home - ( Garage, Rear Garden, Front car park ).',
   ],
   depositPolicy: {
     depositPercentage: 50,

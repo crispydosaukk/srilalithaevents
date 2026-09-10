@@ -2312,7 +2312,7 @@ export default function HomePage() {
                     </div>
                   </div>
                   <ul className="space-y-2.5 text-xs sm:text-sm text-gray-700">
-                    {TAILOR_MENU_OPTION_4.whatWeBring.map((item, idx) => (
+                    {(menus.TAILOR_MENU_OPTION_4?.whatWeBring || TAILOR_MENU_OPTION_4.whatWeBring).map((item, idx) => (
                       <li key={idx} className="flex items-start gap-2">
                         <span className="text-emerald-600 font-bold text-base leading-none">✓</span>
                         <span className="leading-snug">{item}</span>
@@ -2331,7 +2331,7 @@ export default function HomePage() {
                     </div>
                   </div>
                   <ul className="space-y-2.5 text-xs sm:text-sm text-gray-700">
-                    {TAILOR_MENU_OPTION_4.whatWeNeedFromYou.map((item, idx) => (
+                    {(menus.TAILOR_MENU_OPTION_4?.whatWeNeedFromYou || TAILOR_MENU_OPTION_4.whatWeNeedFromYou).map((item, idx) => (
                       <li key={idx} className="flex items-start gap-2">
                         <span className="text-[#C8860A] font-bold text-base leading-none">•</span>
                         <span className="leading-snug">{item}</span>
