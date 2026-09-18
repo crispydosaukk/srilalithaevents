@@ -225,6 +225,34 @@ export default function HomePage() {
     return (menus.LIVE_DOSA_OPTION_2 || LIVE_DOSA_OPTION_2) as any;
   }, [menus.LIVE_DOSA_OPTION_2]);
 
+  const activeMadrasThali = useMemo(() => {
+    return (menus.MADRAS_THALI_OPTION_3 || MADRAS_THALI_OPTION_3) as any;
+  }, [menus.MADRAS_THALI_OPTION_3]);
+
+  const activeTailorMenu = useMemo(() => {
+    return (menus.TAILOR_MENU_OPTION_4 || TAILOR_MENU_OPTION_4) as any;
+  }, [menus.TAILOR_MENU_OPTION_4]);
+
+  const activeDosaFestival = useMemo(() => {
+    return (menus.DOSA_FESTIVAL_OPTION_5 || DOSA_FESTIVAL_OPTION_5) as any;
+  }, [menus.DOSA_FESTIVAL_OPTION_5]);
+
+  const activeCanape = useMemo(() => {
+    return (menus.CANAPE_OPTION_6 || CANAPE_OPTION_6) as any;
+  }, [menus.CANAPE_OPTION_6]);
+
+  const activeNorthIndian = useMemo(() => {
+    return (menus.NORTH_INDIAN_OPTION_7 || NORTH_INDIAN_OPTION_7) as any;
+  }, [menus.NORTH_INDIAN_OPTION_7]);
+
+  const activeGujarati = useMemo(() => {
+    return (menus.GUJARATI_OPTION_8 || GUJARATI_OPTION_8) as any;
+  }, [menus.GUJARATI_OPTION_8]);
+
+  const activePunjabi = useMemo(() => {
+    return (menus.PUNJABI_OPTION_9 || PUNJABI_OPTION_9) as any;
+  }, [menus.PUNJABI_OPTION_9]);
+
   const [timeCategory, setTimeCategory] = useState<'lunch' | 'dinner' | 'custom'>('lunch');
   const [customStartTime, setCustomStartTime] = useState<string>('12:00 PM');
   const [customEndTime, setCustomEndTime] = useState<string>('2:00 PM');
@@ -374,20 +402,32 @@ export default function HomePage() {
     const isWeekend = isWeekendOrBankHoliday(bookingForm.date);
 
     if (pkgLower.includes('live dosa option 1') || pkgLower.includes('live dosa 1') || !pkg) {
+      const p1WeekPrice = Number(activeLiveDosa1.pricing?.weekday?.pricePerPerson ?? 11).toFixed(2);
+      const p1WkndPrice = Number(activeLiveDosa1.pricing?.weekend?.pricePerPerson ?? 12).toFixed(2);
+      const p1WeekMin = activeLiveDosa1.pricing?.weekday?.minGuests ?? 35;
+      const p1WkndMin = activeLiveDosa1.pricing?.weekend?.minGuests ?? 40;
+      const p1WeekCall = Number(activeLiveDosa1.pricing?.weekday?.minCallOutCharge ?? 385).toFixed(2);
+      const p1WkndCall = Number(activeLiveDosa1.pricing?.weekend?.minCallOutCharge ?? 480).toFixed(2);
       return {
-        title: 'Live Dosa Option 1 — Authentic Live Catering',
+        title: `${activeLiveDosa1.title || 'Live Dosa Option 1'} — Authentic Live Catering`,
         pricingText: isWeekend
-          ? '🌟 Weekend & Bank Holiday Pricing: £12.00/person (Min 40 guaranteed guests • £480.00 min call out charge)'
-          : '📅 Weekday (Monday to Friday) Pricing: £11.00/person (Min 35 guaranteed guests • £385.00 min call out charge)',
-        detailsText: 'Service Duration: 2 Hours • Minimum call out charge can be reached by guest count or menu upgrades. Unlimited live dosa station with fresh chutneys & piping hot sambar.',
+          ? `🌟 Weekend & Bank Holiday Pricing: £${p1WkndPrice}/person (Min ${p1WkndMin} guaranteed guests • £${p1WkndCall} min call out charge)`
+          : `📅 Weekday (Monday to Friday) Pricing: £${p1WeekPrice}/person (Min ${p1WeekMin} guaranteed guests • £${p1WeekCall} min call out charge)`,
+        detailsText: `Service Duration: ${activeLiveDosa1.serviceDuration || '2 Hours Live Station'} • Minimum call out charge can be reached by guest count or menu upgrades. Unlimited live dosa station with fresh chutneys & piping hot sambar.`,
       };
     } else if (pkgLower.includes('live dosa option 2') || pkgLower.includes('live dosa 2')) {
+      const p2WeekPrice = Number(activeLiveDosa2.pricing?.weekday?.pricePerPerson ?? 16.50).toFixed(2);
+      const p2WkndPrice = Number(activeLiveDosa2.pricing?.weekend?.pricePerPerson ?? 17.50).toFixed(2);
+      const p2WeekMin = activeLiveDosa2.pricing?.weekday?.minGuests ?? 35;
+      const p2WkndMin = activeLiveDosa2.pricing?.weekend?.minGuests ?? 40;
+      const p2WeekCall = Number(activeLiveDosa2.pricing?.weekday?.minCallOutCharge ?? 577.50).toFixed(2);
+      const p2WkndCall = Number(activeLiveDosa2.pricing?.weekend?.minCallOutCharge ?? 700).toFixed(2);
       return {
-        title: 'Live Dosa Option 2 — Deluxe Catering Experience',
+        title: `${activeLiveDosa2.title || 'Live Dosa Option 2'} — Deluxe Catering Experience`,
         pricingText: isWeekend
-          ? '🌟 Weekend & Bank Holiday Pricing: £17.50/person (Min 40 guaranteed guests • £700.00 min call out charge)'
-          : '📅 Weekday (Monday to Friday) Pricing: £16.50/person (Min 35 guaranteed guests • £577.50 min call out charge)',
-        detailsText: 'Service Duration: 2.5 Hours • Includes live starter, 1 main dish, 1 dessert, unlimited dosa station & filter coffee.',
+          ? `🌟 Weekend & Bank Holiday Pricing: £${p2WkndPrice}/person (Min ${p2WkndMin} guaranteed guests • £${p2WkndCall} min call out charge)`
+          : `📅 Weekday (Monday to Friday) Pricing: £${p2WeekPrice}/person (Min ${p2WeekMin} guaranteed guests • £${p2WeekCall} min call out charge)`,
+        detailsText: `Service Duration: ${activeLiveDosa2.serviceDuration || '3 Hours Service Duration'} • Includes live starter, 1 main dish, 1 dessert, unlimited dosa station & filter coffee.`,
       };
     } else if (pkgLower.includes('thali') || pkgLower.includes('meals') || pkgLower.includes('bhojanam')) {
       return {
@@ -620,14 +660,13 @@ export default function HomePage() {
         date: bookingForm.date || '',
         timeOfDay: bookingForm.timeOfDay || '',
       });
-      setSubmitted(true);
-      setPhoneError('');
 
-      // Asynchronously dispatch automated email notification to dynamic admin recipients
+      // Dispatch automated email notification to dynamic admin recipients and customer
       try {
-        fetch('/api/send-enquiry-email', {
+        await fetch('/api/send-enquiry-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          keepalive: true,
           body: JSON.stringify({
             bookingId: docRef.id,
             name: (bookingForm.name || '').trim(),
@@ -647,10 +686,13 @@ export default function HomePage() {
             customFields,
             isWaitlist,
           }),
-        }).catch((err) => console.warn('Enquiry email notification deferred:', err));
+        });
       } catch (mailErr) {
-        console.warn('Email dispatch call skipped:', mailErr);
+        console.warn('Email dispatch warning (non-fatal):', mailErr);
       }
+
+      setSubmitted(true);
+      setPhoneError('');
       // Reset form
       const resetObj: Record<string, any> = {
         name: '', email: '', phone: '', eventType: '', location: '', date: '', timeOfDay: '', guests: '', message: '', selectedPackage: '',
@@ -904,10 +946,10 @@ export default function HomePage() {
             <option value="">{field.placeholder || 'No specific package – help me choose'}</option>
             
             <optgroup label="── 🎪 Live Dosa Stations ──">
-              <option value="Live Dosa Option 1 (Weekday: Mon-Fri)">Live Dosa Option 1 (Weekday: Mon-Fri) — £11.00/person (Min 35 guests)</option>
-              <option value="Live Dosa Option 1 (Weekend & Holidays)">Live Dosa Option 1 (Weekend &amp; Holidays) — £12.00/person (Min 40 guests)</option>
-              <option value="Live Dosa Option 2 (Weekday: Mon-Fri)">Live Dosa Option 2 (Weekday: Mon-Fri) — £16.50/person (Min 35 guests)</option>
-              <option value="Live Dosa Option 2 (Weekend & Holidays)">Live Dosa Option 2 (Weekend &amp; Holidays) — £17.50/person (Min 40 guests)</option>
+              <option value="Live Dosa Option 1 (Weekday: Mon-Fri)">{activeLiveDosa1.title || 'Live Dosa Option 1'} (Weekday: Mon-Fri) — £{Number(activeLiveDosa1.pricing?.weekday?.pricePerPerson ?? 11).toFixed(2)}/person (Min {activeLiveDosa1.pricing?.weekday?.minGuests ?? 35} guests)</option>
+              <option value="Live Dosa Option 1 (Weekend & Holidays)">{activeLiveDosa1.title || 'Live Dosa Option 1'} (Weekend &amp; Holidays) — £{Number(activeLiveDosa1.pricing?.weekend?.pricePerPerson ?? 12).toFixed(2)}/person (Min {activeLiveDosa1.pricing?.weekend?.minGuests ?? 40} guests)</option>
+              <option value="Live Dosa Option 2 (Weekday: Mon-Fri)">{activeLiveDosa2.title || 'Live Dosa Option 2'} (Weekday: Mon-Fri) — £{Number(activeLiveDosa2.pricing?.weekday?.pricePerPerson ?? 16.50).toFixed(2)}/person (Min {activeLiveDosa2.pricing?.weekday?.minGuests ?? 35} guests)</option>
+              <option value="Live Dosa Option 2 (Weekend & Holidays)">{activeLiveDosa2.title || 'Live Dosa Option 2'} (Weekend &amp; Holidays) — £{Number(activeLiveDosa2.pricing?.weekend?.pricePerPerson ?? 17.50).toFixed(2)}/person (Min {activeLiveDosa2.pricing?.weekend?.minGuests ?? 40} guests)</option>
             </optgroup>
 
             <optgroup label="── 🍲 Traditional Meals &amp; Thali ──">
@@ -1068,7 +1110,10 @@ export default function HomePage() {
                       <Icon name="CheckCircleIcon" size={28} style={{ color: '#C8860A' }} />
                     </div>
                     <h3 className="text-lg font-semibold text-gray-900 mb-1">Request Received!</h3>
-                    <p className="text-gray-500 text-sm mb-3">We'll contact you within 24 hours to confirm your booking.</p>
+                    <p className="text-gray-500 text-sm mb-2">We'll contact you within 24 hours to confirm your booking.</p>
+                    <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200/80 rounded-xl px-3 py-2 max-w-sm mx-auto mb-3">
+                      ✉️ A confirmation has been sent to your email. (Please check your <strong>Spam / Junk</strong> folder if not seen shortly).
+                    </p>
                     {submittedBookingId && (
                       <div className="bg-white border border-amber-200 rounded-xl p-3 inline-block max-w-full text-left mb-3">
                         <span className="text-xs text-gray-400 block uppercase font-semibold">Booking Reference</span>
@@ -1565,7 +1610,7 @@ export default function HomePage() {
                       🔥 {activeLiveDosa1.serviceDuration || `${activeLiveDosa1.durationHours || 2} Hours Live Station`}
                     </span>
                     <span className="inline-block text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-emerald-400/20 text-emerald-300 border border-emerald-400/30">
-                      {(activeLiveDosa1.items || []).length} Live Dishes
+                      {activeLiveDosa1.dishesBadge || `${(activeLiveDosa1.items || []).length} Live Dishes`}
                     </span>
                   </div>
                   <h3 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white mb-2">
@@ -1582,23 +1627,23 @@ export default function HomePage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 my-4">
                     <div className="bg-white/10 backdrop-blur-xs border border-white/20 p-3.5 rounded-2xl text-left">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-bold text-amber-300">📅 Week days (Mon – Fri)</span>
+                        <span className="text-xs font-bold text-amber-300">{activeLiveDosa1.pricing?.weekday?.days || '📅 Week days (Mon – Fri)'}</span>
                         <span className="text-sm font-extrabold text-white">£{Number(activeLiveDosa1.pricing?.weekday?.pricePerPerson ?? 11).toFixed(2)} <span className="text-[10px] font-normal text-gray-300">/ person</span></span>
                       </div>
-                      <p className="text-[11px] text-gray-300 mb-1">{activeLiveDosa1.pricing?.weekday?.minGuests ?? 35} people minimum guarantee</p>
+                      <p className="text-[11px] text-gray-300 mb-1">{activeLiveDosa1.pricing?.weekday?.minGuestsNote || `${activeLiveDosa1.pricing?.weekday?.minGuests ?? 35} people minimum guarantee`}</p>
                       <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-400/20 text-amber-200 border border-amber-400/30">
-                        Min. call out: £{Number(activeLiveDosa1.pricing?.weekday?.minCallOutCharge ?? 385).toFixed(2)}
+                        {activeLiveDosa1.pricing?.weekday?.minCallOutNote || `Min. call out: £${Number(activeLiveDosa1.pricing?.weekday?.minCallOutCharge ?? 385).toFixed(2)}`}
                       </span>
                     </div>
 
                     <div className="bg-white/10 backdrop-blur-xs border border-white/20 p-3.5 rounded-2xl text-left">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-bold text-amber-300">🌟 Week Ends &amp; Bank Holidays</span>
+                        <span className="text-xs font-bold text-amber-300">{activeLiveDosa1.pricing?.weekend?.days || '🌟 Week Ends & Bank Holidays'}</span>
                         <span className="text-sm font-extrabold text-white">£{Number(activeLiveDosa1.pricing?.weekend?.pricePerPerson ?? 12).toFixed(2)} <span className="text-[10px] font-normal text-gray-300">/ person</span></span>
                       </div>
-                      <p className="text-[11px] text-gray-300 mb-1">{activeLiveDosa1.pricing?.weekend?.minGuests ?? 40} people minimum guarantee</p>
+                      <p className="text-[11px] text-gray-300 mb-1">{activeLiveDosa1.pricing?.weekend?.minGuestsNote || `${activeLiveDosa1.pricing?.weekend?.minGuests ?? 40} people minimum guarantee`}</p>
                       <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-400/20 text-amber-200 border border-amber-400/30">
-                        Min. call out: £{Number(activeLiveDosa1.pricing?.weekend?.minCallOutCharge ?? 480).toFixed(2)}
+                        {activeLiveDosa1.pricing?.weekend?.minCallOutNote || `Min. call out: £${Number(activeLiveDosa1.pricing?.weekend?.minCallOutCharge ?? 480).toFixed(2)}`}
                       </span>
                     </div>
                   </div>
@@ -1615,14 +1660,14 @@ export default function HomePage() {
                       }}
                       className="px-6 py-3 rounded-xl font-bold text-gray-900 bg-amber-400 hover:bg-amber-300 transition-all text-xs sm:text-sm shadow-md cursor-pointer flex items-center gap-2"
                     >
-                      <span>Book {activeLiveDosa1.title || 'Live Dosa Option 1'}</span>
+                      <span>{activeLiveDosa1.bookBtnText || `Book ${activeLiveDosa1.title || 'Live Dosa Option 1'}`}</span>
                       <span>→</span>
                     </button>
                     <button
                       onClick={() => setActiveMenuTab('live-dosa-2')}
                       className="px-5 py-3 rounded-xl font-bold text-white bg-white/10 hover:bg-white/20 border border-white/20 transition-all text-xs sm:text-sm cursor-pointer flex items-center gap-1.5"
                     >
-                      <span>👑 View {activeLiveDosa2.title || 'Option 2'} (3 Hours + Main + Dessert) →</span>
+                      <span>{activeLiveDosa1.switchBtnText || `👑 View ${activeLiveDosa2.title || 'Option 2'} (3 Hours + Main + Dessert) →`}</span>
                     </button>
                   </div>
                 </div>
@@ -1793,7 +1838,7 @@ export default function HomePage() {
                       ⏱️ {activeLiveDosa2.serviceDuration || `${activeLiveDosa2.durationHours || 3} Hours Service Duration`}
                     </span>
                     <span className="inline-block text-xs font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-emerald-400/20 text-emerald-200 border border-emerald-400/30">
-                      + 1 Main Course + 1 Dessert
+                      {activeLiveDosa2.extraBadge || '+ 1 Main Course + 1 Dessert'}
                     </span>
                   </div>
                   <h3 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white mb-2">
@@ -1810,23 +1855,23 @@ export default function HomePage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 my-4">
                     <div className="bg-white/10 backdrop-blur-xs border border-white/20 p-4 rounded-2xl text-left">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-bold text-amber-300">📅 Week days (Mon – Fri)</span>
+                        <span className="text-sm font-bold text-amber-300">{activeLiveDosa2.pricing?.weekday?.days || '📅 Week days (Mon – Fri)'}</span>
                         <span className="text-base font-extrabold text-white">£{Number(activeLiveDosa2.pricing?.weekday?.pricePerPerson ?? 16.50).toFixed(2)} <span className="text-xs font-normal text-gray-300">/ person</span></span>
                       </div>
-                      <p className="text-xs text-gray-300 mb-1.5">{activeLiveDosa2.pricing?.weekday?.minGuests ?? 35} people minimum guarantee</p>
+                      <p className="text-xs text-gray-300 mb-1.5">{activeLiveDosa2.pricing?.weekday?.minGuestsNote || `${activeLiveDosa2.pricing?.weekday?.minGuests ?? 35} people minimum guarantee`}</p>
                       <span className="inline-block text-xs font-bold px-2.5 py-0.5 rounded-md bg-amber-400/20 text-amber-200 border border-amber-400/30">
-                        Min. call out: £{Number(activeLiveDosa2.pricing?.weekday?.minCallOutCharge ?? 577.50).toFixed(2)}
+                        {activeLiveDosa2.pricing?.weekday?.minCallOutNote || `Min. call out: £${Number(activeLiveDosa2.pricing?.weekday?.minCallOutCharge ?? 577.50).toFixed(2)}`}
                       </span>
                     </div>
 
                     <div className="bg-white/10 backdrop-blur-xs border border-white/20 p-4 rounded-2xl text-left">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-bold text-amber-300">🌟 Week Ends &amp; Bank Holidays</span>
+                        <span className="text-sm font-bold text-amber-300">{activeLiveDosa2.pricing?.weekend?.days || '🌟 Week Ends & Bank Holidays'}</span>
                         <span className="text-base font-extrabold text-white">£{Number(activeLiveDosa2.pricing?.weekend?.pricePerPerson ?? 17.50).toFixed(2)} <span className="text-xs font-normal text-gray-300">/ person</span></span>
                       </div>
-                      <p className="text-xs text-gray-300 mb-1.5">{activeLiveDosa2.pricing?.weekend?.minGuests ?? 40} people minimum guarantee</p>
+                      <p className="text-xs text-gray-300 mb-1.5">{activeLiveDosa2.pricing?.weekend?.minGuestsNote || `${activeLiveDosa2.pricing?.weekend?.minGuests ?? 40} people minimum guarantee`}</p>
                       <span className="inline-block text-xs font-bold px-2.5 py-0.5 rounded-md bg-amber-400/20 text-amber-200 border border-amber-400/30">
-                        Min. call out: £{Number(activeLiveDosa2.pricing?.weekend?.minCallOutCharge ?? 700.00).toFixed(2)}
+                        {activeLiveDosa2.pricing?.weekend?.minCallOutNote || `Min. call out: £${Number(activeLiveDosa2.pricing?.weekend?.minCallOutCharge ?? 700.00).toFixed(2)}`}
                       </span>
                     </div>
                   </div>
@@ -1843,14 +1888,14 @@ export default function HomePage() {
                       }}
                       className="px-6 py-3.5 rounded-xl font-bold text-gray-900 bg-amber-400 hover:bg-amber-300 transition-all text-sm shadow-md cursor-pointer flex items-center gap-2"
                     >
-                      <span>Book {activeLiveDosa2.title || 'Live Dosa Option 2'}</span>
+                      <span>{activeLiveDosa2.bookBtnText || `Book ${activeLiveDosa2.title || 'Live Dosa Option 2'}`}</span>
                       <span>→</span>
                     </button>
                     <button
                       onClick={() => setActiveMenuTab('live-dosa-1')}
                       className="px-5 py-3.5 rounded-xl font-bold text-white bg-white/10 hover:bg-white/20 border border-white/20 transition-all text-sm cursor-pointer flex items-center gap-1.5"
                     >
-                      <span>← Switch to {activeLiveDosa1.title || 'Option 1'} (£{Number(activeLiveDosa1.pricing?.weekday?.pricePerPerson ?? 11).toFixed(0)} / £{Number(activeLiveDosa1.pricing?.weekend?.pricePerPerson ?? 12).toFixed(0)})</span>
+                      <span>{activeLiveDosa2.switchBtnText || `← Switch to ${activeLiveDosa1.title || 'Option 1'} (£${Number(activeLiveDosa1.pricing?.weekday?.pricePerPerson ?? 11).toFixed(0)} / £${Number(activeLiveDosa1.pricing?.weekend?.pricePerPerson ?? 12).toFixed(0)})`}</span>
                     </button>
                   </div>
                 </div>
@@ -2048,55 +2093,59 @@ export default function HomePage() {
                 <div className="relative z-10 max-w-3xl">
                   <div className="flex flex-wrap gap-2 mb-3">
                     <span className="inline-block text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                      🍲 Option 3 Full Meals
+                      {activeMadrasThali.badge1 || '🍲 Option 3 Full Meals'}
                     </span>
                     <span className="inline-block text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-emerald-400/20 text-emerald-300 border border-emerald-400/30">
-                      12 Core Items Included
+                      {activeMadrasThali.badge2 || `${(activeMadrasThali.coreDishes || []).length} Core Items Included`}
                     </span>
                   </div>
                   <h3 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white mb-2">
-                    {MADRAS_THALI_OPTION_3.title}
+                    {activeMadrasThali.title || MADRAS_THALI_OPTION_3.title}
                   </h3>
                   <p className="text-amber-200 font-medium text-sm sm:text-base mb-3">
-                    {MADRAS_THALI_OPTION_3.tagline}
+                    {activeMadrasThali.tagline || MADRAS_THALI_OPTION_3.tagline}
                   </p>
                   <p className="text-xs sm:text-sm text-gray-200 leading-relaxed mb-5">
-                    An authentic South Indian royal feast. Includes Plain Rice, Sambar, Rasam, Koottu, Poriyal, Kaarakolambu, Sweet, Pappad, Yoghurt, Pickle, Veg Kurma, and 1 Poori, with full flexibility to customize your favourite vegetable styles and add extra dishes.
+                    {activeMadrasThali.description || 'An authentic South Indian royal feast. Includes Plain Rice, Sambar, Rasam, Koottu, Poriyal, Kaarakolambu, Sweet, Pappad, Yoghurt, Pickle, Veg Kurma, and 1 Poori, with full flexibility to customize your favourite vegetable styles and add extra dishes.'}
                   </p>
 
                   {/* Price Banner Card */}
                   <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
                     <div>
-                      <span className="text-xs text-amber-300 font-bold block uppercase tracking-wide">Per Person Rate</span>
+                      <span className="text-xs text-amber-300 font-bold block uppercase tracking-wide">
+                        {activeMadrasThali.priceLabel || 'Per Person Rate'}
+                      </span>
                       <div className="flex items-baseline gap-1.5">
-                        <span className="text-3xl sm:text-4xl font-black text-white">£10.99</span>
-                        <span className="text-xs text-gray-300">/ per person</span>
+                        <span className="text-3xl sm:text-4xl font-black text-white">
+                          £{Number(activeMadrasThali.pricePerPerson ?? 10.99).toFixed(2)}
+                        </span>
+                        <span className="text-xs text-gray-300">{activeMadrasThali.priceUnit || '/ per person'}</span>
                       </div>
                     </div>
                     <p className="text-xs text-amber-100 max-w-xs leading-snug">
-                      *Price dynamically updates when additions or extra event upgrades are selected.
+                      {activeMadrasThali.priceNote || '*Price dynamically updates when additions or extra event upgrades are selected.'}
                     </p>
                   </div>
 
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={() => {
-                        setSelectedPackageForModal('Madras Thali (Option 3)');
+                        setSelectedPackageForModal(activeMadrasThali.title || 'Madras Thali (Option 3)');
                         setIsMenuOrderModalOpen(true);
                       }}
                       className="px-6 py-3 rounded-xl font-bold text-gray-900 bg-amber-400 hover:bg-amber-300 transition-all text-xs sm:text-sm shadow-md cursor-pointer flex items-center gap-2"
                     >
-                      <span>Book Madras Thali (£10.99/pp)</span>
+                      <span>{activeMadrasThali.bookBtnText || `Book ${activeMadrasThali.shortTitle || activeMadrasThali.title || 'Madras Thali'} (£${Number(activeMadrasThali.pricePerPerson ?? 10.99).toFixed(2)}/pp)`}</span>
                       <span>→</span>
                     </button>
                     <button
                       onClick={() => {
-                        setSelectedPackageForModal('Madras Thali (Option 3)');
+                        setSelectedPackageForModal(activeMadrasThali.title || 'Madras Thali (Option 3)');
                         setIsMenuOrderModalOpen(true);
                       }}
                       className="px-5 py-3 rounded-xl font-bold text-white bg-white/10 hover:bg-white/20 border border-white/20 transition-all text-xs sm:text-sm cursor-pointer flex items-center gap-1.5"
                     >
-                      <span>✨ Choose Custom Variants &amp; Upgrades</span>
+                      <span>{activeMadrasThali.customizeBtnText || '✨ Choose Custom Variants & Upgrades'}</span>
                     </button>
                   </div>
                 </div>
@@ -2106,8 +2155,8 @@ export default function HomePage() {
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h4 className="text-xl font-bold text-gray-900">12 Core Traditional Items Included</h4>
-                    <p className="text-xs text-gray-500">Every plate comes standard with all 12 authentic South Indian elements</p>
+                    <h4 className="text-xl font-bold text-gray-900">{(activeMadrasThali.coreDishes || []).length} Core Traditional Items Included</h4>
+                    <p className="text-xs text-gray-500">{activeMadrasThali.inclusionsSubtitle || 'Every plate comes standard with all 12 authentic South Indian elements'}</p>
                   </div>
                   <span className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
                     Standard Inclusions
@@ -2115,9 +2164,9 @@ export default function HomePage() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {MADRAS_THALI_OPTION_3.coreDishes.map((dish, idx) => (
+                  {(activeMadrasThali.coreDishes || MADRAS_THALI_OPTION_3.coreDishes).map((dish: any, idx: number) => (
                     <div
-                      key={dish.name}
+                      key={dish.name + '-' + idx}
                       className="bg-white rounded-2xl border-2 border-amber-200/80 p-4 shadow-xs hover:shadow-sm transition-all flex items-start gap-3"
                     >
                       <span className="w-7 h-7 rounded-full bg-amber-100 text-[#C8860A] font-bold text-xs flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -2143,7 +2192,7 @@ export default function HomePage() {
                     <p className="text-sm text-gray-500">Choose your favorite vegetable styles and preparations when booking</p>
                   </div>
                   <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
-                    Included in £10.99
+                    Included in £{Number(activeMadrasThali.pricePerPerson ?? 10.99).toFixed(2)}
                   </span>
                 </div>
 
@@ -2155,7 +2204,7 @@ export default function HomePage() {
                       <span>Sambar Options:</span>
                     </span>
                     <ul className="text-sm font-medium text-gray-800 space-y-1.5">
-                      {MADRAS_THALI_OPTION_3.variantOptions.sambarOptions.map(opt => (
+                      {(activeMadrasThali.variantOptions?.sambarOptions || MADRAS_THALI_OPTION_3.variantOptions.sambarOptions).map((opt: string) => (
                         <li key={opt} className="flex items-center gap-2">
                           <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
                           <span>{opt}</span>
@@ -2171,7 +2220,7 @@ export default function HomePage() {
                       <span>Rasam Options:</span>
                     </span>
                     <ul className="text-sm font-medium text-gray-800 space-y-1.5">
-                      {MADRAS_THALI_OPTION_3.variantOptions.rasamOptions.map(opt => (
+                      {(activeMadrasThali.variantOptions?.rasamOptions || MADRAS_THALI_OPTION_3.variantOptions.rasamOptions).map((opt: string) => (
                         <li key={opt} className="flex items-center gap-2">
                           <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
                           <span>{opt}</span>
@@ -2187,7 +2236,7 @@ export default function HomePage() {
                       <span>Koottu Options:</span>
                     </span>
                     <ul className="text-sm font-medium text-gray-800 space-y-1.5">
-                      {MADRAS_THALI_OPTION_3.variantOptions.koottuOptions.map(opt => (
+                      {(activeMadrasThali.variantOptions?.koottuOptions || MADRAS_THALI_OPTION_3.variantOptions.koottuOptions).map((opt: string) => (
                         <li key={opt} className="flex items-center gap-2">
                           <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
                           <span>{opt}</span>
@@ -2203,7 +2252,7 @@ export default function HomePage() {
                       <span>Poriyal Options:</span>
                     </span>
                     <ul className="text-sm font-medium text-gray-800 space-y-1.5">
-                      {MADRAS_THALI_OPTION_3.variantOptions.poriyalOptions.map(opt => (
+                      {(activeMadrasThali.variantOptions?.poriyalOptions || MADRAS_THALI_OPTION_3.variantOptions.poriyalOptions).map((opt: string) => (
                         <li key={opt} className="flex items-center gap-2">
                           <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
                           <span>{opt}</span>
@@ -2219,7 +2268,7 @@ export default function HomePage() {
                       <span>Kaarakolambu Options:</span>
                     </span>
                     <ul className="text-sm font-medium text-gray-800 space-y-1.5">
-                      {MADRAS_THALI_OPTION_3.variantOptions.kaarakolambuOptions.map(opt => (
+                      {(activeMadrasThali.variantOptions?.kaarakolambuOptions || MADRAS_THALI_OPTION_3.variantOptions.kaarakolambuOptions).map((opt: string) => (
                         <li key={opt} className="flex items-center gap-2">
                           <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
                           <span>{opt}</span>
@@ -2235,7 +2284,7 @@ export default function HomePage() {
                       <span>Sweet Options:</span>
                     </span>
                     <ul className="text-sm font-medium text-gray-800 space-y-1.5">
-                      {MADRAS_THALI_OPTION_3.variantOptions.sweetOptions.map(opt => (
+                      {(activeMadrasThali.variantOptions?.sweetOptions || MADRAS_THALI_OPTION_3.variantOptions.sweetOptions).map((opt: string) => (
                         <li key={opt} className="flex items-center gap-2">
                           <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
                           <span>{opt}</span>
@@ -2259,14 +2308,14 @@ export default function HomePage() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                  {MADRAS_THALI_OPTION_3.additions.map((addition) => (
+                  {(activeMadrasThali.additions || MADRAS_THALI_OPTION_3.additions).map((addition: any, idx: number) => (
                     <div
-                      key={addition.name}
+                      key={(addition.name || '') + '-' + idx}
                       className="p-3.5 rounded-2xl border-2 border-amber-200/60 bg-amber-50/30 flex items-center justify-between gap-3 hover:border-amber-400 transition-colors"
                     >
                       <span className="text-sm font-semibold text-gray-900 truncate">{addition.name}</span>
                       <span className="text-xs font-bold text-[#C8860A] whitespace-nowrap bg-white px-2 py-1 rounded-lg border border-amber-200">
-                        +£{addition.price.toFixed(2)}
+                        +£{Number(addition.price || 0).toFixed(2)}
                       </span>
                     </div>
                   ))}
@@ -2339,54 +2388,56 @@ export default function HomePage() {
                 <div className="relative z-10 max-w-3xl">
                   <div className="flex flex-wrap gap-2 mb-3">
                     <span className="inline-block text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                      🎨 Option 4 Bespoke Catering
+                      {activeTailorMenu.badge1 || '🎨 Option 4 Bespoke Catering'}
                     </span>
                     <span className="inline-block text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-amber-300/20 text-amber-200 border border-amber-300/30">
-                      4 Live Stations Included
+                      {activeTailorMenu.badge2 || `${(activeTailorMenu.liveStationsFeatured || []).length} Live Stations Included`}
                     </span>
                   </div>
                   <h3 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white mb-2">
-                    {TAILOR_MENU_OPTION_4.title}
+                    {activeTailorMenu.title || TAILOR_MENU_OPTION_4.title}
                   </h3>
                   <p className="text-amber-200 font-medium text-sm sm:text-base mb-3">
-                    {TAILOR_MENU_OPTION_4.subtitle}
+                    {activeTailorMenu.subtitle || TAILOR_MENU_OPTION_4.subtitle}
                   </p>
                   <p className="text-xs sm:text-sm text-gray-200 leading-relaxed mb-5">
-                    Create your dream personalized event menu with theatrical Live Jilebi, Live Sweet Paan, Live Dosa, and Live Vada stations. We provide full commercial cooking gear, Bain Marie food warmers, and high-quality 9-inch compartment plates.
+                    {activeTailorMenu.description || 'Create your dream personalized event menu with theatrical Live Jilebi, Live Sweet Paan, Live Dosa, and Live Vada stations. We provide full commercial cooking gear, Bain Marie food warmers, and high-quality 9-inch compartment plates.'}
                   </p>
 
                   {/* Pricing & Deposit Banner Card */}
                   <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
                     <div>
-                      <span className="text-xs text-amber-300 font-bold block uppercase tracking-wide">Pricing Policy</span>
+                      <span className="text-xs text-amber-300 font-bold block uppercase tracking-wide">
+                        {activeTailorMenu.pricingHeading || 'Pricing Policy'}
+                      </span>
                       <div className="text-xl sm:text-2xl font-black text-white">
-                        {TAILOR_MENU_OPTION_4.priceLabel}
+                        {activeTailorMenu.priceLabel || TAILOR_MENU_OPTION_4.priceLabel}
                       </div>
                     </div>
                     <div className="bg-amber-400/20 border border-amber-300/40 px-3.5 py-2 rounded-xl text-xs text-amber-100 max-w-xs leading-snug">
-                      <strong>50% Deposit:</strong> Paid online at booking. Balance paid by cash after event completion.
+                      {activeTailorMenu.depositNote || '50% Deposit: Paid online at booking. Balance paid by cash after event completion.'}
                     </div>
                   </div>
 
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={() => {
-                        setSelectedPackageForModal('Tailor Your Own Menu (Option 4)');
+                        setSelectedPackageForModal(activeTailorMenu.title || 'Tailor Your Own Menu (Option 4)');
                         setIsMenuOrderModalOpen(true);
                       }}
                       className="px-6 py-3 rounded-xl font-bold text-gray-900 bg-amber-400 hover:bg-amber-300 transition-all text-xs sm:text-sm shadow-md cursor-pointer flex items-center gap-2"
                     >
-                      <span>Tailor Your Menu Online</span>
+                      <span>{activeTailorMenu.bookBtnText || 'Tailor Your Menu Online'}</span>
                       <span>→</span>
                     </button>
                     <button
                       onClick={() => {
-                        setSelectedPackageForModal('Tailor Your Own Menu (Option 4)');
+                        setSelectedPackageForModal(activeTailorMenu.title || 'Tailor Your Own Menu (Option 4)');
                         setIsMenuOrderModalOpen(true);
                       }}
                       className="px-5 py-3 rounded-xl font-bold text-white bg-white/10 hover:bg-white/20 border border-white/20 transition-all text-xs sm:text-sm cursor-pointer flex items-center gap-1.5"
                     >
-                      <span>✨ Choose Live Stations &amp; Upgrades</span>
+                      <span>{activeTailorMenu.customizeBtnText || '✨ Choose Live Stations & Upgrades'}</span>
                     </button>
                   </div>
                 </div>
@@ -2396,18 +2447,18 @@ export default function HomePage() {
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h4 className="text-xl font-bold text-gray-900">4 Signature Live Stations</h4>
+                    <h4 className="text-xl font-bold text-gray-900">{(activeTailorMenu.liveStationsFeatured || []).length} Signature Live Stations</h4>
                     <p className="text-xs text-gray-500">Live on-the-spot theatrical cooking stations for your event</p>
                   </div>
                   <span className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
-                    4 Live Counters
+                    {(activeTailorMenu.liveStationsFeatured || []).length} Live Counters
                   </span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {TAILOR_MENU_OPTION_4.liveStationsFeatured.map((stn) => (
+                  {(activeTailorMenu.liveStationsFeatured || TAILOR_MENU_OPTION_4.liveStationsFeatured).map((stn: any, idx: number) => (
                     <div
-                      key={stn.name}
+                      key={(stn.name || '') + '-' + idx}
                       className="bg-white rounded-2xl border-2 border-amber-200/80 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
                     >
                       <div>
@@ -2438,7 +2489,7 @@ export default function HomePage() {
                     </div>
                   </div>
                   <ul className="space-y-2.5 text-xs sm:text-sm text-gray-700">
-                    {(menus.TAILOR_MENU_OPTION_4?.whatWeBring || TAILOR_MENU_OPTION_4.whatWeBring).map((item, idx) => (
+                    {(activeTailorMenu.whatWeBring || TAILOR_MENU_OPTION_4.whatWeBring).map((item: string, idx: number) => (
                       <li key={idx} className="flex items-start gap-2">
                         <span className="text-emerald-600 font-bold text-base leading-none">✓</span>
                         <span className="leading-snug">{item}</span>
@@ -2457,7 +2508,7 @@ export default function HomePage() {
                     </div>
                   </div>
                   <ul className="space-y-2.5 text-xs sm:text-sm text-gray-700">
-                    {(menus.TAILOR_MENU_OPTION_4?.whatWeNeedFromYou || TAILOR_MENU_OPTION_4.whatWeNeedFromYou).map((item, idx) => (
+                    {(activeTailorMenu.whatWeNeedFromYou || TAILOR_MENU_OPTION_4.whatWeNeedFromYou).map((item: string, idx: number) => (
                       <li key={idx} className="flex items-start gap-2">
                         <span className="text-[#C8860A] font-bold text-base leading-none">•</span>
                         <span className="leading-snug">{item}</span>
@@ -2533,55 +2584,59 @@ export default function HomePage() {
                 <div className="relative z-10 max-w-3xl">
                   <div className="flex flex-wrap gap-2 mb-3">
                     <span className="inline-block text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-orange-300/20 text-orange-200 border border-orange-300/30">
-                      🥞 Option 5 London Dosa Festival
+                      {activeDosaFestival.badge1 || '🥞 Option 5 London Dosa Festival'}
                     </span>
                     <span className="inline-block text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-amber-300/20 text-amber-200 border border-amber-300/30">
-                      🏆 16 Years Quality &amp; Trust
+                      {activeDosaFestival.badge2 || '🏆 16 Years Quality & Trust'}
                     </span>
                   </div>
                   <h3 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white mb-2">
-                    {DOSA_FESTIVAL_OPTION_5.title}
+                    {activeDosaFestival.title || DOSA_FESTIVAL_OPTION_5.title}
                   </h3>
                   <p className="text-orange-200 font-semibold text-sm sm:text-base mb-3 leading-snug">
-                    {DOSA_FESTIVAL_OPTION_5.tagline}
+                    {activeDosaFestival.tagline || DOSA_FESTIVAL_OPTION_5.tagline}
                   </p>
                   <p className="text-xs sm:text-sm text-gray-100 leading-relaxed mb-5">
-                    Experience London's ultimate Dosa celebration at your home. Over 34 signature artisan Dosa varieties fried golden and crispy on hot live tawas, served alongside fresh chutneys and boiling hot sambar.
+                    {activeDosaFestival.description || 'Experience London\'s ultimate Dosa celebration at your home. Over 34 signature artisan Dosa varieties fried golden and crispy on hot live tawas, served alongside fresh chutneys and boiling hot sambar.'}
                   </p>
 
                   {/* Price Banner Card */}
                   <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
                     <div>
-                      <span className="text-xs text-orange-200 font-bold block uppercase tracking-wide">Festival Package Rate</span>
+                      <span className="text-xs text-orange-200 font-bold block uppercase tracking-wide">
+                        {activeDosaFestival.priceLabel || 'Festival Package Rate'}
+                      </span>
                       <div className="flex items-baseline gap-1.5">
-                        <span className="text-3xl sm:text-4xl font-black text-white">£14.99</span>
-                        <span className="text-xs text-gray-200">/ per person</span>
+                        <span className="text-3xl sm:text-4xl font-black text-white">
+                          £{Number(activeDosaFestival.pricePerPerson ?? 14.99).toFixed(2)}
+                        </span>
+                        <span className="text-xs text-gray-200">{activeDosaFestival.priceUnit || '/ per person'}</span>
                       </div>
                     </div>
                     <p className="text-xs text-orange-100 max-w-xs leading-snug">
-                      Includes continuous live tawa cooking with Coconut, Tomato-Onion, and Mint chutneys + Sambar.
+                      {activeDosaFestival.inclusions || 'Includes continuous live tawa cooking with Coconut, Tomato-Onion, and Mint chutneys + Sambar.'}
                     </p>
                   </div>
 
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={() => {
-                        setSelectedPackageForModal('Dosa Festival At Your Home (Option 5)');
+                        setSelectedPackageForModal(activeDosaFestival.title || 'Dosa Festival At Your Home (Option 5)');
                         setIsMenuOrderModalOpen(true);
                       }}
                       className="px-6 py-3 rounded-xl font-bold text-gray-950 bg-orange-300 hover:bg-orange-200 transition-all text-xs sm:text-sm shadow-md cursor-pointer flex items-center gap-2"
                     >
-                      <span>Book Dosa Festival (£14.99/pp)</span>
+                      <span>{activeDosaFestival.bookBtnText || `Book ${activeDosaFestival.shortTitle || activeDosaFestival.title || 'Dosa Festival'} (£${Number(activeDosaFestival.pricePerPerson ?? 14.99).toFixed(2)}/pp)`}</span>
                       <span>→</span>
                     </button>
                     <button
                       onClick={() => {
-                        setSelectedPackageForModal('Dosa Festival At Your Home (Option 5)');
+                        setSelectedPackageForModal(activeDosaFestival.title || 'Dosa Festival At Your Home (Option 5)');
                         setIsMenuOrderModalOpen(true);
                       }}
                       className="px-5 py-3 rounded-xl font-bold text-white bg-white/10 hover:bg-white/20 border border-white/20 transition-all text-xs sm:text-sm cursor-pointer flex items-center gap-1.5"
                     >
-                      <span>✨ View 34+ Varieties &amp; Upgrades</span>
+                      <span>{activeDosaFestival.customizeBtnText || `✨ View ${(activeDosaFestival.dosaVarieties || []).length}+ Varieties & Upgrades`}</span>
                     </button>
                   </div>
                 </div>
@@ -2595,21 +2650,21 @@ export default function HomePage() {
                       Artisan Varieties
                     </span>
                     <h4 className="text-xl sm:text-2xl font-bold text-gray-900">
-                      34+ Signature Festival Dosa Varieties
+                      {(activeDosaFestival.dosaVarieties || []).length}+ Signature Festival Dosa Varieties
                     </h4>
                     <p className="text-xs text-gray-500">
                       From traditional ferments to creative gourmet fillings, made live on hot tawas
                     </p>
                   </div>
                   <span className="text-xs font-bold text-orange-900 bg-orange-100 px-3 py-1 rounded-full border border-orange-200">
-                    34 Varieties
+                    {(activeDosaFestival.dosaVarieties || []).length} Varieties
                   </span>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                  {DOSA_FESTIVAL_OPTION_5.dosaVarieties.map((dosa, idx) => (
+                  {(activeDosaFestival.dosaVarieties || DOSA_FESTIVAL_OPTION_5.dosaVarieties).map((dosa: string, idx: number) => (
                     <div
-                      key={dosa}
+                      key={dosa + '-' + idx}
                       className="p-3 rounded-xl border border-orange-200/80 bg-orange-50/40 hover:bg-orange-50 hover:border-orange-400 transition-all flex items-center gap-2 group"
                     >
                       <span className="w-5 h-5 rounded-full bg-orange-200 text-orange-900 font-bold text-[10px] flex items-center justify-center flex-shrink-0 group-hover:bg-[#C8860A] group-hover:text-white transition-colors">
@@ -2686,41 +2741,45 @@ export default function HomePage() {
                 <div className="relative z-10 max-w-3xl">
                   <div className="flex flex-wrap gap-2 mb-3">
                     <span className="inline-block text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-rose-400/20 text-rose-200 border border-rose-400/30">
-                      🍢 Option 6 Cocktail Catering
+                      {activeCanape.badge1 || '🍢 Option 6 Cocktail Catering'}
                     </span>
                   </div>
                   <h3 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white mb-2">
-                    {CANAPE_OPTION_6.title}
+                    {activeCanape.title || CANAPE_OPTION_6.title}
                   </h3>
                   <p className="text-rose-200 font-semibold text-sm sm:text-base mb-3 leading-snug">
-                    {CANAPE_OPTION_6.tagline}
+                    {activeCanape.tagline || CANAPE_OPTION_6.tagline}
                   </p>
                   <p className="text-xs sm:text-sm text-gray-200 leading-relaxed mb-5">
-                    {CANAPE_OPTION_6.description}
+                    {activeCanape.description || CANAPE_OPTION_6.description}
                   </p>
 
                   <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
                     <div>
-                      <span className="text-xs text-rose-200 font-bold block uppercase tracking-wide">Starting Price</span>
+                      <span className="text-xs text-rose-200 font-bold block uppercase tracking-wide">
+                        {activeCanape.priceLabel || 'Starting Price'}
+                      </span>
                       <div className="flex items-baseline gap-1.5">
-                        <span className="text-3xl sm:text-4xl font-black text-white">£8.99</span>
-                        <span className="text-xs text-gray-200">/ per person</span>
+                        <span className="text-3xl sm:text-4xl font-black text-white">
+                          £{Number(activeCanape.pricePerPerson ?? 8.99).toFixed(2)}
+                        </span>
+                        <span className="text-xs text-gray-200">{activeCanape.priceUnit || '/ per person'}</span>
                       </div>
                     </div>
                     <p className="text-xs text-rose-100 max-w-xs leading-snug">
-                      Passed canapés &amp; interactive cocktail table setups for weddings, receptions, and birthday bashes.
+                      {activeCanape.priceNote || 'Passed canapés & interactive cocktail table setups for weddings, receptions, and birthday bashes.'}
                     </p>
                   </div>
 
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={() => {
-                        setSelectedPackageForModal('Canapé Service (Option 6)');
+                        setSelectedPackageForModal(activeCanape.title || 'Canapé Service (Option 6)');
                         setIsMenuOrderModalOpen(true);
                       }}
                       className="px-6 py-3 rounded-xl font-bold text-gray-950 bg-rose-200 hover:bg-rose-100 transition-all text-xs sm:text-sm shadow-md cursor-pointer flex items-center gap-2"
                     >
-                      <span>Book Canapé Service</span>
+                      <span>{activeCanape.bookBtnText || 'Book Canapé Service'}</span>
                       <span>→</span>
                     </button>
                   </div>
@@ -2738,11 +2797,11 @@ export default function HomePage() {
                     <p className="text-sm text-gray-500">Live passed hors d&apos;oeuvres and interactive cocktail table stations</p>
                   </div>
                   <span className="text-xs font-bold text-rose-900 bg-rose-100 px-3 py-1 rounded-full border border-rose-200">
-                    {CANAPE_OPTION_6.suggestedItems.length} Suggestions
+                    {(activeCanape.suggestedItems || []).length} Suggestions
                   </span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                  {CANAPE_OPTION_6.suggestedItems.map((item, idx) => (
+                  {(activeCanape.suggestedItems || CANAPE_OPTION_6.suggestedItems).map((item: string, idx: number) => (
                     <div key={idx} className="p-3.5 rounded-2xl border-2 border-rose-200/70 bg-rose-50/40 font-semibold text-sm text-rose-950 flex items-center gap-2.5 hover:border-rose-400 hover:bg-rose-50/80 transition-all">
                       <span className="w-6 h-6 rounded-full bg-rose-200 text-rose-900 font-bold text-xs flex items-center justify-center flex-shrink-0">✓</span>
                       <span className="truncate">{item}</span>
@@ -2768,41 +2827,45 @@ export default function HomePage() {
                 <div className="relative z-10 max-w-3xl">
                   <div className="flex flex-wrap gap-2 mb-3">
                     <span className="inline-block text-xs font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-indigo-400/20 text-indigo-200 border border-indigo-400/30">
-                      🍛 Option 7 North Indian Standard Menu
+                      {activeNorthIndian.badge1 || '🍛 Option 7 North Indian Standard Menu'}
                     </span>
                     <span className="inline-block text-xs font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-amber-400/20 text-amber-200 border border-amber-400/30">
-                      Min 25 People
+                      {activeNorthIndian.badge2 || `Min ${activeNorthIndian.minGuests || 25} People`}
                     </span>
                   </div>
                   <h3 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white mb-2">
-                    {NORTH_INDIAN_OPTION_7.title}
+                    {activeNorthIndian.title || NORTH_INDIAN_OPTION_7.title}
                   </h3>
                   <p className="text-indigo-200 font-semibold text-base sm:text-lg mb-3 leading-snug">
-                    {NORTH_INDIAN_OPTION_7.subtitle}
+                    {activeNorthIndian.subtitle || NORTH_INDIAN_OPTION_7.subtitle}
                   </p>
 
                   <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
                     <div>
-                      <span className="text-xs sm:text-sm text-indigo-200 font-bold block uppercase tracking-wide">Fixed Package Price</span>
+                      <span className="text-xs sm:text-sm text-indigo-200 font-bold block uppercase tracking-wide">
+                        {activeNorthIndian.priceLabel || 'Fixed Package Price'}
+                      </span>
                       <div className="flex items-baseline gap-1.5">
-                        <span className="text-3xl sm:text-4xl font-black text-white">£12.00</span>
-                        <span className="text-sm text-gray-200">/ per person</span>
+                        <span className="text-3xl sm:text-4xl font-black text-white">
+                          £{Number(activeNorthIndian.pricePerPerson ?? 12.00).toFixed(2)}
+                        </span>
+                        <span className="text-sm text-gray-200">{activeNorthIndian.priceUnit || '/ per person'}</span>
                       </div>
                     </div>
                     <p className="text-xs sm:text-sm text-indigo-100 max-w-sm leading-relaxed">
-                      Includes 1 Tava Roti or Nan, 2 North Indian/Punjabi Subjies, Dal, Veg Biryani/Pulao, Salad, Pappad and Pickle.
+                      {activeNorthIndian.priceNote || 'Includes 1 Tava Roti or Nan, 2 North Indian/Punjabi Subjies, Dal, Veg Biryani/Pulao, Salad, Pappad and Pickle.'}
                     </p>
                   </div>
 
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={() => {
-                        setSelectedPackageForModal('North Indian Standard Menu (Option 7)');
+                        setSelectedPackageForModal(activeNorthIndian.title || 'North Indian Standard Menu (Option 7)');
                         setIsMenuOrderModalOpen(true);
                       }}
                       className="px-6 py-3.5 rounded-xl font-bold text-gray-950 bg-indigo-200 hover:bg-indigo-100 transition-all text-sm shadow-md cursor-pointer flex items-center gap-2"
                     >
-                      <span>Book North Indian Menu (£12/pp)</span>
+                      <span>{activeNorthIndian.bookBtnText || `Book ${activeNorthIndian.shortTitle || activeNorthIndian.title || 'North Indian Menu'} (£${Number(activeNorthIndian.pricePerPerson ?? 12).toFixed(0)}/pp)`}</span>
                       <span>→</span>
                     </button>
                   </div>
@@ -2814,17 +2877,23 @@ export default function HomePage() {
                 <div className="bg-white p-6 rounded-3xl border-2 border-indigo-200/90 shadow-sm space-y-3 hover:shadow-md transition-shadow">
                   <span className="text-xs font-extrabold text-indigo-900 uppercase tracking-wider bg-indigo-50 px-3 py-1 rounded-lg inline-block">1. Breads</span>
                   <div className="text-lg font-bold text-gray-900">One Tava Roti or Nan</div>
-                  <p className="text-sm font-medium text-gray-600 leading-relaxed">Tava Roti, Plain Naan, Butter Naan, Garlic Naan</p>
+                  <p className="text-sm font-medium text-gray-600 leading-relaxed">
+                    {(activeNorthIndian.breadOptions || NORTH_INDIAN_OPTION_7.breadOptions).join(', ')}
+                  </p>
                 </div>
                 <div className="bg-white p-6 rounded-3xl border-2 border-indigo-200/90 shadow-sm space-y-3 hover:shadow-md transition-shadow">
                   <span className="text-xs font-extrabold text-indigo-900 uppercase tracking-wider bg-indigo-50 px-3 py-1 rounded-lg inline-block">2. Subjies</span>
                   <div className="text-lg font-bold text-gray-900">Two Punjabi Subjies</div>
-                  <p className="text-sm font-medium text-gray-600 leading-relaxed">Paneer Butter Masala, Palak Paneer, Aloo Gobi, Chana Masala, etc.</p>
+                  <p className="text-sm font-medium text-gray-600 leading-relaxed">
+                    {(activeNorthIndian.subjiOptions || NORTH_INDIAN_OPTION_7.subjiOptions).slice(0, 5).join(', ')}, etc.
+                  </p>
                 </div>
                 <div className="bg-white p-6 rounded-3xl border-2 border-indigo-200/90 shadow-sm space-y-3 hover:shadow-md transition-shadow">
                   <span className="text-xs font-extrabold text-indigo-900 uppercase tracking-wider bg-indigo-50 px-3 py-1 rounded-lg inline-block">3. Dal &amp; Rice</span>
                   <div className="text-lg font-bold text-gray-900">Dal &amp; Veg Biryani / Pulao</div>
-                  <p className="text-sm font-medium text-gray-600 leading-relaxed">Yellow Tadka Dal or Dal Makhani served with fragrant basmati</p>
+                  <p className="text-sm font-medium text-gray-600 leading-relaxed">
+                    {(activeNorthIndian.dalOptions || NORTH_INDIAN_OPTION_7.dalOptions).slice(0, 2).join(' or ')} served with fragrant {(activeNorthIndian.riceOptions || NORTH_INDIAN_OPTION_7.riceOptions).slice(0, 2).join(' / ')}
+                  </p>
                 </div>
                 <div className="bg-white p-6 rounded-3xl border-2 border-indigo-200/90 shadow-sm space-y-3 hover:shadow-md transition-shadow">
                   <span className="text-xs font-extrabold text-indigo-900 uppercase tracking-wider bg-indigo-50 px-3 py-1 rounded-lg inline-block">4. Accompaniments</span>
@@ -2850,38 +2919,42 @@ export default function HomePage() {
                 <div className="relative z-10 max-w-3xl">
                   <div className="flex flex-wrap gap-2 mb-3">
                     <span className="inline-block text-xs font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-teal-400/20 text-teal-200 border border-teal-400/30">
-                      🪔 Option 8 Gujarati Menu
+                      {activeGujarati.badge1 || '🪔 Option 8 Gujarati Menu'}
                     </span>
                   </div>
                   <h3 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white mb-2">
-                    {GUJARATI_OPTION_8.title}
+                    {activeGujarati.title || GUJARATI_OPTION_8.title}
                   </h3>
                   <p className="text-teal-200 font-semibold text-base sm:text-lg mb-3 leading-snug">
-                    {GUJARATI_OPTION_8.subtitle}
+                    {activeGujarati.subtitle || GUJARATI_OPTION_8.subtitle}
                   </p>
 
                   <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
                     <div>
-                      <span className="text-xs sm:text-sm text-teal-200 font-bold block uppercase tracking-wide">Package Price</span>
+                      <span className="text-xs sm:text-sm text-teal-200 font-bold block uppercase tracking-wide">
+                        {activeGujarati.priceLabel || 'Package Price'}
+                      </span>
                       <div className="flex items-baseline gap-1.5">
-                        <span className="text-3xl sm:text-4xl font-black text-white">£14.99</span>
-                        <span className="text-sm text-gray-200">/ per person</span>
+                        <span className="text-3xl sm:text-4xl font-black text-white">
+                          £{Number(activeGujarati.pricePerPerson ?? 14.99).toFixed(2)}
+                        </span>
+                        <span className="text-sm text-gray-200">{activeGujarati.priceUnit || '/ per person'}</span>
                       </div>
                     </div>
                     <p className="text-xs sm:text-sm text-teal-100 max-w-sm leading-relaxed">
-                      40+ Mithai, 20+ Farsan, 30+ Shaak including Undhiyu, Bharelu Ringan Bateta, Kadhi, Gujarati Dal &amp; Fresh Rotlis.
+                      {activeGujarati.priceNote || '40+ Mithai, 20+ Farsan, 30+ Shaak including Undhiyu, Bharelu Ringan Bateta, Kadhi, Gujarati Dal & Fresh Rotlis.'}
                     </p>
                   </div>
 
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={() => {
-                        setSelectedPackageForModal('Gujarati Menu (Option 8)');
+                        setSelectedPackageForModal(activeGujarati.title || 'Gujarati Menu (Option 8)');
                         setIsMenuOrderModalOpen(true);
                       }}
                       className="px-6 py-3.5 rounded-xl font-bold text-gray-950 bg-teal-200 hover:bg-teal-100 transition-all text-sm shadow-md cursor-pointer flex items-center gap-2"
                     >
-                      <span>Book Gujarati Menu (£14.99/pp)</span>
+                      <span>{activeGujarati.bookBtnText || `Book ${activeGujarati.shortTitle || activeGujarati.title || 'Gujarati Menu'} (£${Number(activeGujarati.pricePerPerson ?? 14.99).toFixed(2)}/pp)`}</span>
                       <span>→</span>
                     </button>
                   </div>
@@ -2894,15 +2967,15 @@ export default function HomePage() {
                   <div className="flex items-center justify-between border-b border-teal-100 pb-3">
                     <h4 className="font-bold text-teal-950 text-lg flex items-center gap-2">
                       <span className="text-xl">🍬</span>
-                      <span>Mithai (40+ Sweets)</span>
+                      <span>Mithai (Sweets)</span>
                     </h4>
                     <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-teal-100 text-teal-900 border border-teal-200">
-                      {GUJARATI_OPTION_8.categories.mithai.length} Items
+                      {(activeGujarati.categories?.mithai || GUJARATI_OPTION_8.categories.mithai).length} Items
                     </span>
                   </div>
                   <ul className="space-y-2 text-sm text-gray-800 font-medium max-h-80 overflow-y-auto pr-1">
-                    {GUJARATI_OPTION_8.categories.mithai.map(m => (
-                      <li key={m} className="flex items-start gap-2.5 leading-snug">
+                    {(activeGujarati.categories?.mithai || GUJARATI_OPTION_8.categories.mithai).map((m: string, idx: number) => (
+                      <li key={m + '-' + idx} className="flex items-start gap-2.5 leading-snug">
                         <span className="w-2 h-2 rounded-full bg-teal-600 flex-shrink-0 mt-1.5" />
                         <span>{m}</span>
                       </li>
@@ -2914,15 +2987,15 @@ export default function HomePage() {
                   <div className="flex items-center justify-between border-b border-teal-100 pb-3">
                     <h4 className="font-bold text-teal-950 text-lg flex items-center gap-2">
                       <span className="text-xl">🥟</span>
-                      <span>Farsan (20+ Savouries)</span>
+                      <span>Farsan (Savouries)</span>
                     </h4>
                     <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-teal-100 text-teal-900 border border-teal-200">
-                      {GUJARATI_OPTION_8.categories.farsan.length} Items
+                      {(activeGujarati.categories?.farsan || GUJARATI_OPTION_8.categories.farsan).length} Items
                     </span>
                   </div>
                   <ul className="space-y-2 text-sm text-gray-800 font-medium max-h-80 overflow-y-auto pr-1">
-                    {GUJARATI_OPTION_8.categories.farsan.map(f => (
-                      <li key={f} className="flex items-start gap-2.5 leading-snug">
+                    {(activeGujarati.categories?.farsan || GUJARATI_OPTION_8.categories.farsan).map((f: string, idx: number) => (
+                      <li key={f + '-' + idx} className="flex items-start gap-2.5 leading-snug">
                         <span className="w-2 h-2 rounded-full bg-teal-600 flex-shrink-0 mt-1.5" />
                         <span>{f}</span>
                       </li>
@@ -2934,15 +3007,15 @@ export default function HomePage() {
                   <div className="flex items-center justify-between border-b border-teal-100 pb-3">
                     <h4 className="font-bold text-teal-950 text-lg flex items-center gap-2">
                       <span className="text-xl">🥘</span>
-                      <span>Shaak &amp; Curries (30+)</span>
+                      <span>Shaak &amp; Curries</span>
                     </h4>
                     <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-teal-100 text-teal-900 border border-teal-200">
-                      {GUJARATI_OPTION_8.categories.shaak.length} Items
+                      {(activeGujarati.categories?.shaak || GUJARATI_OPTION_8.categories.shaak).length} Items
                     </span>
                   </div>
                   <ul className="space-y-2 text-sm text-gray-800 font-medium max-h-80 overflow-y-auto pr-1">
-                    {GUJARATI_OPTION_8.categories.shaak.map(s => (
-                      <li key={s} className="flex items-start gap-2.5 leading-snug">
+                    {(activeGujarati.categories?.shaak || GUJARATI_OPTION_8.categories.shaak).map((s: string, idx: number) => (
+                      <li key={s + '-' + idx} className="flex items-start gap-2.5 leading-snug">
                         <span className="w-2 h-2 rounded-full bg-teal-600 flex-shrink-0 mt-1.5" />
                         <span>{s}</span>
                       </li>
@@ -2968,38 +3041,42 @@ export default function HomePage() {
                 <div className="relative z-10 max-w-3xl">
                   <div className="flex flex-wrap gap-2 mb-3">
                     <span className="inline-block text-xs font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-amber-400/20 text-amber-200 border border-amber-400/30">
-                      👑 Option 9 Punjabi Feast
+                      {activePunjabi.badge1 || '👑 Option 9 Punjabi Feast'}
                     </span>
                   </div>
                   <h3 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white mb-2">
-                    {PUNJABI_OPTION_9.title}
+                    {activePunjabi.title || PUNJABI_OPTION_9.title}
                   </h3>
                   <p className="text-amber-200 font-semibold text-base sm:text-lg mb-3 leading-snug">
-                    {PUNJABI_OPTION_9.subtitle}
+                    {activePunjabi.subtitle || PUNJABI_OPTION_9.subtitle}
                   </p>
 
                   <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
                     <div>
-                      <span className="text-xs sm:text-sm text-amber-200 font-bold block uppercase tracking-wide">Package Price</span>
+                      <span className="text-xs sm:text-sm text-amber-200 font-bold block uppercase tracking-wide">
+                        {activePunjabi.priceLabel || 'Package Price'}
+                      </span>
                       <div className="flex items-baseline gap-1.5">
-                        <span className="text-3xl sm:text-4xl font-black text-white">£13.99</span>
-                        <span className="text-sm text-gray-200">/ per person</span>
+                        <span className="text-3xl sm:text-4xl font-black text-white">
+                          £{Number(activePunjabi.pricePerPerson ?? 13.99).toFixed(2)}
+                        </span>
+                        <span className="text-sm text-gray-200">{activePunjabi.priceUnit || '/ per person'}</span>
                       </div>
                     </div>
                     <p className="text-xs sm:text-sm text-amber-100 max-w-sm leading-relaxed">
-                      Paneer Tikka Shashlik, Chaats, Paneer Butter Masala, Amritsari Chole, Dal Makhani, Tandoori Breads &amp; Sweets.
+                      {activePunjabi.priceNote || 'Paneer Tikka Shashlik, Chaats, Paneer Butter Masala, Amritsari Chole, Dal Makhani, Tandoori Breads & Sweets.'}
                     </p>
                   </div>
 
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={() => {
-                        setSelectedPackageForModal('Punjabi Menu (Option 9)');
+                        setSelectedPackageForModal(activePunjabi.title || 'Punjabi Menu (Option 9)');
                         setIsMenuOrderModalOpen(true);
                       }}
                       className="px-6 py-3.5 rounded-xl font-bold text-gray-950 bg-amber-300 hover:bg-amber-200 transition-all text-sm shadow-md cursor-pointer flex items-center gap-2"
                     >
-                      <span>Book Punjabi Feast (£13.99/pp)</span>
+                      <span>{activePunjabi.bookBtnText || `Book ${activePunjabi.shortTitle || activePunjabi.title || 'Punjabi Feast'} (£${Number(activePunjabi.pricePerPerson ?? 13.99).toFixed(2)}/pp)`}</span>
                       <span>→</span>
                     </button>
                   </div>
@@ -3016,12 +3093,12 @@ export default function HomePage() {
                       <span>Starters &amp; Chaats</span>
                     </h4>
                     <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
-                      {PUNJABI_OPTION_9.categories.starters.length} Varieties
+                      {(activePunjabi.categories?.starters || PUNJABI_OPTION_9.categories.starters).length} Varieties
                     </span>
                   </div>
                   <ul className="space-y-2 text-sm text-gray-800 font-medium">
-                    {PUNJABI_OPTION_9.categories.starters.map(s => (
-                      <li key={s} className="flex items-start gap-2.5 leading-snug">
+                    {(activePunjabi.categories?.starters || PUNJABI_OPTION_9.categories.starters).map((s: string, idx: number) => (
+                      <li key={s + '-' + idx} className="flex items-start gap-2.5 leading-snug">
                         <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0 mt-1.5" />
                         <span>{s}</span>
                       </li>
@@ -3037,12 +3114,12 @@ export default function HomePage() {
                       <span>Royal Subjies</span>
                     </h4>
                     <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
-                      {PUNJABI_OPTION_9.categories.subjies.length} Specialties
+                      {(activePunjabi.categories?.subjies || PUNJABI_OPTION_9.categories.subjies).length} Specialties
                     </span>
                   </div>
                   <ul className="space-y-2 text-sm text-gray-800 font-medium">
-                    {PUNJABI_OPTION_9.categories.subjies.map(s => (
-                      <li key={s} className="flex items-start gap-2.5 leading-snug">
+                    {(activePunjabi.categories?.subjies || PUNJABI_OPTION_9.categories.subjies).map((s: string, idx: number) => (
+                      <li key={s + '-' + idx} className="flex items-start gap-2.5 leading-snug">
                         <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0 mt-1.5" />
                         <span>{s}</span>
                       </li>
@@ -3062,19 +3139,19 @@ export default function HomePage() {
                     <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200/70 space-y-1">
                       <div className="text-xs font-extrabold uppercase tracking-wide text-amber-950">🥣 Dal Specialties</div>
                       <p className="font-semibold text-gray-900 leading-relaxed text-sm">
-                        {PUNJABI_OPTION_9.categories.dal.join(', ')}
+                        {(activePunjabi.categories?.dal || PUNJABI_OPTION_9.categories.dal).join(', ')}
                       </p>
                     </div>
                     <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200/70 space-y-1">
                       <div className="text-xs font-extrabold uppercase tracking-wide text-amber-950">🍞 Tandoori &amp; Tawa Breads</div>
                       <p className="font-semibold text-gray-900 leading-relaxed text-sm">
-                        {PUNJABI_OPTION_9.categories.breads.join(', ')}
+                        {(activePunjabi.categories?.breads || PUNJABI_OPTION_9.categories.breads).join(', ')}
                       </p>
                     </div>
                     <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200/70 space-y-1">
                       <div className="text-xs font-extrabold uppercase tracking-wide text-amber-950">🍮 Mithai &amp; Desserts</div>
                       <p className="font-semibold text-gray-900 leading-relaxed text-sm">
-                        {PUNJABI_OPTION_9.categories.mithai.join(', ')}
+                        {(activePunjabi.categories?.mithai || PUNJABI_OPTION_9.categories.mithai).join(', ')}
                       </p>
                     </div>
                   </div>
@@ -3209,6 +3286,9 @@ export default function HomePage() {
                 </div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">Request Received!</h3>
                 <p className="text-gray-500 mb-2">We'll contact you within 24 hours to confirm your booking.</p>
+                <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200/80 rounded-xl px-3 py-2 max-w-md mx-auto mb-3">
+                  ✉️ A confirmation has been sent to your email. (Please check your <strong>Spam / Junk</strong> folder if not seen shortly).
+                </p>
                 {submittedBookingId && (
                   <div className="bg-white border border-amber-200 rounded-xl p-3 inline-block max-w-full text-left mt-1 mb-4 shadow-2xs">
                     <span className="text-xs text-gray-400 block uppercase font-semibold">Booking Reference</span>

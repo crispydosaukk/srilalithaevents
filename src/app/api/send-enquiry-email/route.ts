@@ -73,11 +73,13 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 5. Create Nodemailer Transporter
+    // 5. Create Nodemailer Transporter with connection pooling
     const transporter = nodemailer.createTransport({
       host: smtp.host || 'mail.vegchennaisrilalitha.co.uk',
       port: smtp.port || 465,
       secure: smtp.secure !== false,
+      pool: true,
+      maxConnections: 3,
       auth: {
         user: smtp.user,
         pass: smtp.pass,
@@ -96,159 +98,325 @@ export async function POST(req: NextRequest) {
 
     const adminHtml = `
 <!DOCTYPE html>
-<html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
   <title>New Booking Enquiry</title>
+  <style type="text/css">
+    :root { color-scheme: light dark; supported-color-schemes: light dark; }
+    html, body { margin: 0 !important; padding: 0 !important; width: 100% !important; height: 100% !important; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+    table, td { mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important; }
+    table { border-collapse: collapse !important; table-layout: fixed !important; margin: 0 auto !important; }
+    img { -ms-interpolation-mode: bicubic; }
+    a { text-decoration: none; }
+    @media only screen and (max-width: 600px) {
+      .email-container { width: 100% !important; max-width: 100% !important; border-radius: 0 !important; }
+      .mobile-padding { padding: 18px 14px !important; }
+      .mobile-card-padding { padding: 14px !important; }
+      .mobile-btn-cell { display: block !important; width: 100% !important; padding: 0 0 8px 0 !important; box-sizing: border-box !important; }
+      .mobile-spec-col { display: block !important; width: 100% !important; padding-right: 0 !important; padding-left: 0 !important; padding-bottom: 12px !important; box-sizing: border-box !important; }
+    }
+  </style>
 </head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #F8F9FA; margin: 0; padding: 24px; color: #1F2937;">
-  <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.06); border: 1px solid #E5E7EB;">
-    <!-- Header -->
-    <div style="background: linear-gradient(135deg, #111827 0%, #1F2937 100%); padding: 32px 24px; text-align: center; border-bottom: 3px solid #C8860A;">
-      <span style="background: rgba(200, 134, 10, 0.2); color: #F59E0B; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; padding: 4px 12px; border-radius: 9999px; display: inline-block; margin-bottom: 12px; border: 1px solid rgba(245, 158, 11, 0.3);">
-        New Website Enquiry
-      </span>
-      <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800;">
-        SriLalitha Events &amp; Catering
-      </h1>
-      <p style="color: #9CA3AF; font-size: 13px; margin: 6px 0 0 0;">
-        Enquiry Reference: ${bookingId ? `#${bookingId}` : 'Web Lead'}
-      </p>
-    </div>
-
-    <!-- Main Content -->
-    <div style="padding: 28px 24px;">
-      ${isWaitlist ? `
-      <div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 12px; padding: 14px; margin-bottom: 20px;">
-        <p style="margin: 0; color: #92400E; font-size: 13px; font-weight: 700;">
-          ⚠️ Waitlist / Full-Capacity Slot Requested
-        </p>
-        <p style="margin: 4px 0 0 0; color: #B45309; font-size: 12px;">
-          This customer requested a slot that is at or exceeding normal capacity. Check schedule availability.
-        </p>
-      </div>` : ''}
-
-      <!-- Customer Overview Card -->
-      <div style="background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 12px; padding: 18px; margin-bottom: 20px;">
-        <h3 style="margin: 0 0 12px 0; font-size: 13px; font-weight: 700; text-transform: uppercase; color: #C8860A; letter-spacing: 0.5px;">
-          👤 Customer Details
-        </h3>
-        <table style="width: 100%; font-size: 14px; border-collapse: collapse;">
+<body style="margin: 0; padding: 0; background-color: #0F172A;">
+  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #0F172A;">
+    <tr>
+      <td align="center" style="padding: 20px 8px;">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="email-container" style="max-width: 600px; background-color: #FFFFFF; border-radius: 18px; overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,0.28); border: 1px solid #1E293B;">
+          
+          <!-- Header Banner -->
           <tr>
-            <td style="padding: 6px 0; color: #6B7280; width: 35%;">Name:</td>
-            <td style="padding: 6px 0; font-weight: 700; color: #111827;">${name || 'N/A'}</td>
-          </tr>
-          <tr>
-            <td style="padding: 6px 0; color: #6B7280;">Phone / WhatsApp:</td>
-            <td style="padding: 6px 0; font-weight: 600;">
-              <a href="tel:${phone}" style="color: #111827; text-decoration: none;">${phone || 'N/A'}</a>
-              ${whatsappLink ? `&nbsp; <a href="${whatsappLink}" style="display: inline-block; background: #25D366; color: #ffffff; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 6px; text-decoration: none;">WhatsApp 💬</a>` : ''}
+            <td style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); padding: 30px 20px; text-align: center; border-bottom: 3px solid #C8860A;">
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td align="center">
+                    <span style="display: inline-block; background: rgba(200, 134, 10, 0.2); color: #F59E0B; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; padding: 4px 14px; border-radius: 9999px; border: 1px solid rgba(245, 158, 11, 0.35); margin-bottom: 10px;">
+                      ✨ NEW WEBSITE ENQUIRY
+                    </span>
+                    <h1 style="color: #FFFFFF; margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 0.3px; line-height: 1.25;">
+                      SriLalitha Events &amp; Catering
+                    </h1>
+                    <p style="color: #F59E0B; font-size: 12px; font-weight: 600; margin: 5px 0 0 0; letter-spacing: 0.5px;">
+                      Authentic Pure Vegetarian Indian Catering • London
+                    </p>
+                    <div style="margin-top: 12px;">
+                      <span style="display: inline-block; background: #1E293B; border: 1px solid #334155; color: #94A3B8; font-size: 11px; font-family: monospace; font-weight: 700; padding: 3px 10px; border-radius: 6px;">
+                        REF: ${bookingId ? '#' + bookingId : 'WEB-LEAD'}
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
+
+          <!-- Main Content -->
           <tr>
-            <td style="padding: 6px 0; color: #6B7280;">Email:</td>
-            <td style="padding: 6px 0;">
-              <a href="mailto:${email}" style="color: #2563EB; text-decoration: none; font-weight: 600;">${email || 'N/A'}</a>
-              ${email ? `&nbsp; <a href="mailto:${email}?subject=${encodeURIComponent(`SriLalitha Events: Follow-up on Your ${eventType || 'Catering'} Enquiry (#${bookingId || 'Web'})`)}&body=${encodeURIComponent(`Hi ${name || 'Customer'},\n\nThank you for reaching out to SriLalitha Events regarding your ${eventType || 'event'} on ${date || 'your requested date'}.\n\nWe would be delighted to assist you. Could you please confirm your preferred timings and estimated guest count?\n\nWarm regards,\nSriLalitha Events & Catering\n+44 7700 900000`)}" style="display: inline-block; background: #2563EB; color: #ffffff; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 6px; text-decoration: none;">Email ✉️</a>` : ''}
+            <td class="mobile-padding" style="padding: 24px 20px; background-color: #FFFFFF;">
+
+              ${isWaitlist ? `
+              <!-- Waitlist Alert Banner -->
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #FFFBEB; border: 1px solid #FDE68A; border-radius: 12px; margin-bottom: 18px;">
+                <tr>
+                  <td style="padding: 12px 14px;">
+                    <div style="font-size: 12px; font-weight: 800; color: #92400E; margin-bottom: 2px;">
+                      ⚠️ High-Demand / Waitlist Slot Requested
+                    </div>
+                    <div style="font-size: 12px; color: #B45309; line-height: 1.4;">
+                      This requested time slot is at or near standard capacity. Please review kitchen availability and contact the customer promptly.
+                    </div>
+                  </td>
+                </tr>
+              </table>` : ''}
+
+              <!-- CARD 1: CUSTOMER CONTACT DETAILS -->
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 14px; margin-bottom: 18px; overflow: hidden;">
+                <!-- Header -->
+                <tr>
+                  <td style="padding: 12px 16px; background-color: #F1F5F9; border-bottom: 1px solid #E2E8F0;">
+                    <span style="font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: #B45309;">
+                      👤 Customer Contact Details
+                    </span>
+                  </td>
+                </tr>
+                <!-- Body Items (Full 100% width stacked - never squishes!) -->
+                <tr>
+                  <td class="mobile-card-padding" style="padding: 16px;">
+
+                    <!-- Name -->
+                    <div style="padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid #E2E8F0;">
+                      <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #64748B; margin-bottom: 2px;">
+                        Full Name
+                      </div>
+                      <div style="font-size: 15px; font-weight: 800; color: #0F172A; line-height: 1.3;">
+                        ${name || 'Not Provided'}
+                      </div>
+                    </div>
+
+                    <!-- Phone -->
+                    <div style="padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid #E2E8F0;">
+                      <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #64748B; margin-bottom: 2px;">
+                        Phone / WhatsApp
+                      </div>
+                      <div style="font-size: 15px; font-weight: 700; color: #0F172A; line-height: 1.3;">
+                        <a href="tel:${phone}" style="color: #0F172A; text-decoration: none;">${phone || 'Not Provided'}</a>
+                      </div>
+                    </div>
+
+                    <!-- Email (100% width, break-all, NEVER cuts off!) -->
+                    <div style="padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid #E2E8F0;">
+                      <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #64748B; margin-bottom: 2px;">
+                        Email Address
+                      </div>
+                      <div style="font-size: 14px; font-weight: 700; color: #2563EB; line-height: 1.4; word-break: break-all; word-wrap: break-word; overflow-wrap: break-word;">
+                        <a href="mailto:${email}" style="color: #2563EB; text-decoration: none;">${email || 'Not Provided'}</a>
+                      </div>
+                    </div>
+
+                    <!-- Location -->
+                    <div>
+                      <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #64748B; margin-bottom: 2px;">
+                        Event Location &amp; Distance
+                      </div>
+                      <div style="font-size: 14px; font-weight: 700; color: #0F172A; line-height: 1.4; word-break: break-word;">
+                        ${location || 'To be confirmed'}
+                      </div>
+                      ${distanceMiles ? `
+                      <div style="margin-top: 6px;">
+                        <span style="display: inline-block; background-color: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 6px;">
+                          📍 ${distanceMiles} miles from Kitchen
+                        </span>
+                      </div>` : ''}
+                    </div>
+
+                  </td>
+                </tr>
+
+                <!-- Dedicated Action Buttons Bar -->
+                <tr>
+                  <td style="background-color: #F1F5F9; padding: 12px 16px; border-top: 1px solid #E2E8F0;">
+                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                      <tr>
+                        ${whatsappLink ? `
+                        <td class="mobile-btn-cell" width="50%" style="padding-right: 5px;">
+                          <a href="${whatsappLink}" target="_blank" style="display: block; background-color: #16A34A; color: #FFFFFF; text-align: center; font-size: 12px; font-weight: 800; padding: 10px 14px; border-radius: 8px; text-decoration: none; box-shadow: 0 2px 4px rgba(22, 163, 74, 0.25);">
+                            💬 Chat WhatsApp
+                          </a>
+                        </td>` : ''}
+                        <td class="mobile-btn-cell" width="${whatsappLink ? '50%' : '100%'}" style="padding-left: ${whatsappLink ? '5px' : '0'};">
+                          <a href="mailto:${email}?subject=${encodeURIComponent(`SriLalitha Events: Follow-up on Your ${eventType || 'Catering'} Enquiry (#${bookingId || 'Web'})`)}&body=${encodeURIComponent(`Hi ${name || 'Customer'},\n\nThank you for reaching out to SriLalitha Events regarding your ${eventType || 'event'} on ${date || 'your requested date'}.\n\nWe would be delighted to assist you. Could you please confirm your preferred timings and estimated guest count?\n\nWarm regards,\nSriLalitha Events & Catering\nLondon, United Kingdom`)}" style="display: block; background-color: #2563EB; color: #FFFFFF; text-align: center; font-size: 12px; font-weight: 800; padding: 10px 14px; border-radius: 8px; text-decoration: none; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.25);">
+                            ✉️ Reply by Email
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- CARD 2: EVENT & CATERING REQUIREMENTS -->
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 14px; margin-bottom: 18px; overflow: hidden;">
+                <!-- Header -->
+                <tr>
+                  <td style="padding: 12px 16px; background-color: #F1F5F9; border-bottom: 1px solid #E2E8F0;">
+                    <span style="font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: #B45309;">
+                      📅 Event &amp; Catering Requirements
+                    </span>
+                  </td>
+                </tr>
+                <!-- Body -->
+                <tr>
+                  <td class="mobile-card-padding" style="padding: 16px;">
+
+                    <!-- 2-Column Responsive Specs Grid -->
+                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                      <tr>
+                        <!-- Event Type -->
+                        <td class="mobile-spec-col" width="50%" style="vertical-align: top; padding-right: 6px; padding-bottom: 12px;">
+                          <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748B; margin-bottom: 3px;">Event Type</div>
+                          <span style="display: inline-block; background-color: #EEF2FF; color: #4338CA; border: 1px solid #C7D2FE; font-size: 13px; font-weight: 800; padding: 4px 10px; border-radius: 6px;">
+                            ${eventType || 'Not Specified'}
+                          </span>
+                        </td>
+                        <!-- Event Date -->
+                        <td class="mobile-spec-col" width="50%" style="vertical-align: top; padding-left: 6px; padding-bottom: 12px;">
+                          <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748B; margin-bottom: 3px;">Event Date</div>
+                          <span style="display: inline-block; background-color: #FEF2F2; color: #DC2626; border: 1px solid #FECACA; font-size: 13px; font-weight: 800; padding: 4px 10px; border-radius: 6px;">
+                            📅 ${date || 'To be confirmed'}
+                          </span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <!-- Time Slot -->
+                        <td class="mobile-spec-col" width="50%" style="vertical-align: top; padding-right: 6px; padding-bottom: 12px;">
+                          <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748B; margin-bottom: 3px;">Serving Time</div>
+                          <span style="display: inline-block; background-color: #F1F5F9; color: #1E293B; border: 1px solid #CBD5E1; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 6px;">
+                            ⏰ ${timeOfDay || 'Flexible'}
+                          </span>
+                        </td>
+                        <!-- Guest Count -->
+                        <td class="mobile-spec-col" width="50%" style="vertical-align: top; padding-left: 6px; padding-bottom: 12px;">
+                          <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748B; margin-bottom: 3px;">Guest Count</div>
+                          <span style="display: inline-block; background-color: #ECFDF5; color: #065F46; border: 1px solid #A7F3D0; font-size: 13px; font-weight: 800; padding: 4px 10px; border-radius: 6px;">
+                            👥 ${guests ? guests + ' Guests' : 'To be confirmed'}
+                          </span>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- Package Highlight Box -->
+                    <div style="background-color: #FEF3C7; border: 1px solid #FDE68A; border-radius: 10px; padding: 12px 14px; margin-top: 2px;">
+                      <div style="font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #92400E; margin-bottom: 3px;">
+                        🍽️ Selected Catering Package
+                      </div>
+                      <div style="font-size: 14px; font-weight: 800; color: #78350F; line-height: 1.4; word-break: break-word;">
+                        ${selectedPackage || 'Custom Menu Enquiry'}
+                      </div>
+                    </div>
+
+                    ${(totalEstimatedAmount || deposit || deliveryCharge) ? `
+                    <!-- Financial Summary Breakdown -->
+                    <div style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed #CBD5E1;">
+                      <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="font-size: 13px;">
+                        ${totalEstimatedAmount ? `
+                        <tr>
+                          <td style="padding: 4px 0; color: #64748B;">Estimated Total:</td>
+                          <td align="right" style="padding: 4px 0; font-weight: 800; color: #0F172A; font-size: 14px;">£${Number(totalEstimatedAmount).toFixed(2)}</td>
+                        </tr>` : ''}
+                        ${deposit ? `
+                        <tr>
+                          <td style="padding: 4px 0; color: #64748B;">Deposit Payable:</td>
+                          <td align="right" style="padding: 4px 0; font-weight: 800; color: #059669; font-size: 14px;">£${Number(deposit).toFixed(2)}</td>
+                        </tr>` : ''}
+                        ${deliveryCharge ? `
+                        <tr>
+                          <td style="padding: 4px 0; color: #64748B;">Delivery Fee:</td>
+                          <td align="right" style="padding: 4px 0; font-weight: 700; color: #475569;">£${Number(deliveryCharge).toFixed(2)}</td>
+                        </tr>` : ''}
+                      </table>
+                    </div>` : ''}
+
+                  </td>
+                </tr>
+              </table>
+
+              <!-- CARD 3: SPECIAL REQUIREMENTS / MESSAGE (IF ANY) -->
+              ${message ? `
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #FFFBEB; border: 1px solid #FEF3C7; border-radius: 14px; margin-bottom: 20px; overflow: hidden;">
+                <tr>
+                  <td style="padding: 14px 16px;">
+                    <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #92400E; margin-bottom: 4px;">
+                      📝 Customer Notes / Dietary Requests
+                    </div>
+                    <div style="font-size: 13px; color: #78350F; line-height: 1.5; white-space: pre-line; word-break: break-word;">
+                      ${message}
+                    </div>
+                  </td>
+                </tr>
+              </table>` : ''}
+
+              <!-- CARD 4: CUSTOM DYNAMIC FIELDS (IF ANY) -->
+              ${customFields && Object.keys(customFields).length > 0 ? `
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 14px; margin-bottom: 20px; overflow: hidden;">
+                <tr>
+                  <td style="padding: 10px 16px; background-color: #F1F5F9; border-bottom: 1px solid #E2E8F0;">
+                    <span style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: #475569;">
+                      Additional Information
+                    </span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 14px 16px;">
+                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="font-size: 13px;">
+                      ${Object.entries(customFields).map(([k, v]) => `
+                        <tr>
+                          <td style="padding: 4px 0; color: #64748B; text-transform: capitalize; width: 40%;">${k.replace(/_/g, ' ')}:</td>
+                          <td style="padding: 4px 0; font-weight: 700; color: #0F172A; word-break: break-word;">${String(v)}</td>
+                        </tr>
+                      `).join('')}
+                    </table>
+                  </td>
+                </tr>
+              </table>` : ''}
+
+              <!-- PRIMARY ACTION BUTTON -->
+              <div style="text-align: center; margin: 26px 0 14px 0;">
+                <a href="https://vegchennaisrilalitha.events/admin" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #C8860A 0%, #E69D24 100%); color: #FFFFFF; font-size: 14px; font-weight: 800; padding: 14px 28px; border-radius: 10px; text-decoration: none; box-shadow: 0 4px 12px rgba(200, 134, 10, 0.3); letter-spacing: 0.3px;">
+                  Open Admin Dashboard to Manage →
+                </a>
+              </div>
+
             </td>
           </tr>
-          ${location ? `
+
+          <!-- Footer Area -->
           <tr>
-            <td style="padding: 6px 0; color: #6B7280;">Venue Location:</td>
-            <td style="padding: 6px 0; color: #111827;">${location} ${distanceMiles ? `(${distanceMiles} miles)` : ''}</td>
-          </tr>` : ''}
+            <td style="background-color: #F8FAFC; padding: 20px; text-align: center; border-top: 1px solid #E2E8F0; font-size: 11px; color: #64748B; line-height: 1.5;">
+              <div style="font-weight: 800; color: #0F172A; font-size: 12px; margin-bottom: 4px;">
+                SriLalitha Events &amp; Catering London
+              </div>
+              <div style="color: #94A3B8; margin-bottom: 6px;">
+                This automated notification was dispatched to registered administrators.
+              </div>
+              <div style="color: #94A3B8;">
+                London, United Kingdom • <a href="https://vegchennaisrilalitha.events" style="color: #C8860A; text-decoration: none; font-weight: 700;">vegchennaisrilalitha.events</a>
+              </div>
+            </td>
+          </tr>
+
         </table>
-      </div>
-
-      <!-- Event Specifications Card -->
-      <div style="background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 12px; padding: 18px; margin-bottom: 20px;">
-        <h3 style="margin: 0 0 12px 0; font-size: 13px; font-weight: 700; text-transform: uppercase; color: #C8860A; letter-spacing: 0.5px;">
-          📅 Event &amp; Catering Requirements
-        </h3>
-        <table style="width: 100%; font-size: 14px; border-collapse: collapse;">
-          <tr>
-            <td style="padding: 6px 0; color: #6B7280; width: 35%;">Event Type:</td>
-            <td style="padding: 6px 0; font-weight: 700; color: #111827;">${eventType || 'Not Specified'}</td>
-          </tr>
-          <tr>
-            <td style="padding: 6px 0; color: #6B7280;">Event Date:</td>
-            <td style="padding: 6px 0; font-weight: 700; color: #DC2626;">${date || 'TBD'}</td>
-          </tr>
-          <tr>
-            <td style="padding: 6px 0; color: #6B7280;">Time of Day:</td>
-            <td style="padding: 6px 0; font-weight: 600; color: #111827;">${timeOfDay || 'Flexible'}</td>
-          </tr>
-          <tr>
-            <td style="padding: 6px 0; color: #6B7280;">Guest Count:</td>
-            <td style="padding: 6px 0; font-weight: 700; color: #111827;">${guests ? `${guests} Guests` : 'To be confirmed'}</td>
-          </tr>
-          <tr>
-            <td style="padding: 6px 0; color: #6B7280;">Selected Package:</td>
-            <td style="padding: 6px 0; font-weight: 600; color: #C8860A;">${selectedPackage || 'Custom Enquiry'}</td>
-          </tr>
-          ${totalEstimatedAmount ? `
-          <tr>
-            <td style="padding: 6px 0; color: #6B7280;">Estimated Total:</td>
-            <td style="padding: 6px 0; font-weight: 800; color: #111827;">£${Number(totalEstimatedAmount).toFixed(2)}</td>
-          </tr>` : ''}
-          ${deposit ? `
-          <tr>
-            <td style="padding: 6px 0; color: #6B7280;">Deposit Required:</td>
-            <td style="padding: 6px 0; font-weight: 700; color: #059669;">£${Number(deposit).toFixed(2)}</td>
-          </tr>` : ''}
-          ${deliveryCharge ? `
-          <tr>
-            <td style="padding: 6px 0; color: #6B7280;">Delivery Charge:</td>
-            <td style="padding: 6px 0; color: #4B5563;">£${Number(deliveryCharge).toFixed(2)}</td>
-          </tr>` : ''}
-        </table>
-      </div>
-
-      <!-- Notes / Dietary Requirements -->
-      ${message ? `
-      <div style="background: #FFFBEB; border: 1px solid #FEF3C7; border-radius: 12px; padding: 18px; margin-bottom: 24px;">
-        <h4 style="margin: 0 0 6px 0; font-size: 12px; font-weight: 700; text-transform: uppercase; color: #92400E;">
-          📝 Customer Message / Dietary Requirements:
-        </h4>
-        <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #78350F; white-space: pre-line;">${message}</p>
-      </div>` : ''}
-
-      <!-- Custom Dynamic Fields if any -->
-      ${customFields && Object.keys(customFields).length > 0 ? `
-      <div style="background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 12px; padding: 18px; margin-bottom: 24px;">
-        <h4 style="margin: 0 0 8px 0; font-size: 12px; font-weight: 700; text-transform: uppercase; color: #6B7280;">
-          Additional Form Fields:
-        </h4>
-        <table style="width: 100%; font-size: 13px;">
-          ${Object.entries(customFields).map(([k, v]) => `
-            <tr>
-              <td style="padding: 3px 0; color: #6B7280; text-transform: capitalize;">${k.replace(/_/g, ' ')}:</td>
-              <td style="padding: 3px 0; font-weight: 600; color: #111827;">${String(v)}</td>
-            </tr>
-          `).join('')}
-        </table>
-      </div>` : ''}
-
-      <!-- Direct Action Button -->
-      <div style="text-align: center; margin: 32px 0 16px 0;">
-        <a href="https://vegchennaisrilalitha.events/admin" style="background: linear-gradient(135deg, #C8860A, #E69D24); color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 12px; font-weight: 700; font-size: 14px; display: inline-block; box-shadow: 0 4px 12px rgba(200, 134, 10, 0.3);">
-          Open Admin Dashboard to Manage Enquiry →
-        </a>
-      </div>
-    </div>
-
-    <!-- Footer -->
-    <div style="background: #F3F4F6; padding: 18px 24px; text-align: center; font-size: 12px; color: #6B7280; border-top: 1px solid #E5E7EB;">
-      <p style="margin: 0;">Sent automatically by SriLalitha Events Website Notification System</p>
-      <p style="margin: 4px 0 0 0; color: #9CA3AF;">Recipients: ${activeRecipients.join(', ')}</p>
-    </div>
-  </div>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>
     `;
 
-    // 7. Dispatch Email to Admin Recipients
+    // 7. Prepare Mail Options
     const adminMailOptions = {
       from: sender,
       to: activeRecipients.join(', '),
@@ -257,75 +425,172 @@ export async function POST(req: NextRequest) {
       replyTo: email && email.includes('@') ? email : undefined,
     };
 
-    const adminInfo = await transporter.sendMail(adminMailOptions);
-
-    // 8. Optionally Send Customer Confirmation Email
-    let customerSent = false;
+    // 8. Optionally Prepare Customer Confirmation Email
+    let customerMailOptions: any = null;
     if (emailConfig.sendCustomerConfirmation && email && email.includes('@')) {
-      try {
-        const customerSubject = `Thank You for Your Enquiry - SriLalitha Events & Catering`;
-        const customerHtml = `
+      const customerSubject = `Thank You for Your Enquiry - SriLalitha Events & Catering`;
+      const customerHtml = `
 <!DOCTYPE html>
-<html>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #F8F9FA; margin: 0; padding: 24px; color: #1F2937;">
-  <div style="max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.06); border: 1px solid #E5E7EB;">
-    <div style="background: linear-gradient(135deg, #111827 0%, #1F2937 100%); padding: 32px 24px; text-align: center; border-bottom: 3px solid #C8860A;">
-      <h1 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 800;">
-        SriLalitha Events &amp; Catering
-      </h1>
-      <p style="color: #F59E0B; font-size: 13px; font-weight: 600; margin: 6px 0 0 0;">
-        Authentic Pure Vegetarian Indian Catering
-      </p>
-    </div>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <title>Thank You for Your Enquiry</title>
+  <style type="text/css">
+    :root { color-scheme: light dark; supported-color-schemes: light dark; }
+    html, body { margin: 0 !important; padding: 0 !important; width: 100% !important; height: 100% !important; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+    table, td { mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important; }
+    table { border-collapse: collapse !important; table-layout: fixed !important; margin: 0 auto !important; }
+    img { -ms-interpolation-mode: bicubic; }
+    a { text-decoration: none; }
+    @media only screen and (max-width: 600px) {
+      .email-container { width: 100% !important; max-width: 100% !important; border-radius: 0 !important; }
+      .mobile-padding { padding: 18px 14px !important; }
+      .mobile-spec-col { display: block !important; width: 100% !important; padding-right: 0 !important; padding-left: 0 !important; padding-bottom: 10px !important; box-sizing: border-box !important; }
+    }
+  </style>
+</head>
+<body style="margin: 0; padding: 0; background-color: #0F172A;">
+  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #0F172A;">
+    <tr>
+      <td align="center" style="padding: 20px 8px;">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="email-container" style="max-width: 580px; background-color: #FFFFFF; border-radius: 18px; overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,0.28); border: 1px solid #1E293B;">
+          
+          <!-- Header Banner -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); padding: 30px 20px; text-align: center; border-bottom: 3px solid #C8860A;">
+              <span style="display: inline-block; background: rgba(200, 134, 10, 0.2); color: #F59E0B; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; padding: 4px 14px; border-radius: 9999px; border: 1px solid rgba(245, 158, 11, 0.35); margin-bottom: 10px;">
+                CATERING ENQUIRY RECEIVED
+              </span>
+              <h1 style="color: #FFFFFF; margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 0.3px;">
+                SriLalitha Events &amp; Catering
+              </h1>
+              <p style="color: #F59E0B; font-size: 12px; font-weight: 600; margin: 5px 0 0 0;">
+                Authentic Pure Vegetarian Indian Catering • London
+              </p>
+            </td>
+          </tr>
 
-    <div style="padding: 28px 24px;">
-      <h2 style="font-size: 18px; color: #111827; margin: 0 0 12px 0;">Hello ${name || 'there'},</h2>
-      <p style="font-size: 14px; line-height: 1.6; color: #4B5563; margin: 0 0 18px 0;">
-        Thank you for choosing SriLalitha Events! We have successfully received your booking enquiry. Our catering specialist is reviewing your details and will get back to you within <strong>24 hours</strong> with a full proposal.
-      </p>
+          <!-- Main Content Area -->
+          <tr>
+            <td class="mobile-padding" style="padding: 24px 20px; background-color: #FFFFFF;">
+              
+              <h2 style="font-size: 17px; font-weight: 800; color: #0F172A; margin: 0 0 10px 0;">
+                Hello ${name || 'there'},
+              </h2>
+              
+              <p style="font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 18px 0;">
+                Thank you for choosing SriLalitha Events! We have successfully received your catering enquiry. Our senior event coordinator is reviewing your details and will get in touch within <strong>24 hours</strong> with your tailored proposal.
+              </p>
 
-      <div style="background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
-        <h3 style="margin: 0 0 10px 0; font-size: 12px; font-weight: 700; text-transform: uppercase; color: #C8860A;">
-          Your Enquiry Summary
-        </h3>
-        <p style="margin: 4px 0; font-size: 13px; color: #374151;"><strong>Event:</strong> ${eventType || 'Catering'}</p>
-        <p style="margin: 4px 0; font-size: 13px; color: #374151;"><strong>Requested Date:</strong> ${date || 'To be confirmed'}</p>
-        <p style="margin: 4px 0; font-size: 13px; color: #374151;"><strong>Time:</strong> ${timeOfDay || 'Flexible'}</p>
-        <p style="margin: 4px 0; font-size: 13px; color: #374151;"><strong>Guests:</strong> ${guests || 'N/A'}</p>
-        <p style="margin: 4px 0; font-size: 13px; color: #374151;"><strong>Package:</strong> ${selectedPackage || 'Custom'}</p>
-      </div>
+              <!-- Summary Card -->
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 14px; margin-bottom: 20px; overflow: hidden;">
+                <tr>
+                  <td style="padding: 12px 16px; background-color: #F1F5F9; border-bottom: 1px solid #E2E8F0;">
+                    <span style="font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #B45309;">
+                      📋 Your Enquiry Summary
+                    </span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 16px;">
+                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                      <tr>
+                        <td class="mobile-spec-col" width="50%" style="vertical-align: top; padding-right: 6px; padding-bottom: 10px;">
+                          <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748B; margin-bottom: 2px;">Event</div>
+                          <div style="font-size: 13px; font-weight: 700; color: #0F172A;">${eventType || 'Catering'}</div>
+                        </td>
+                        <td class="mobile-spec-col" width="50%" style="vertical-align: top; padding-left: 6px; padding-bottom: 10px;">
+                          <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748B; margin-bottom: 2px;">Requested Date</div>
+                          <div style="font-size: 13px; font-weight: 700; color: #DC2626;">📅 ${date || 'To be confirmed'}</div>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td class="mobile-spec-col" width="50%" style="vertical-align: top; padding-right: 6px; padding-bottom: 10px;">
+                          <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748B; margin-bottom: 2px;">Service Time</div>
+                          <div style="font-size: 13px; font-weight: 700; color: #0F172A;">⏰ ${timeOfDay || 'Flexible'}</div>
+                        </td>
+                        <td class="mobile-spec-col" width="50%" style="vertical-align: top; padding-left: 6px; padding-bottom: 10px;">
+                          <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748B; margin-bottom: 2px;">Estimated Guests</div>
+                          <div style="font-size: 13px; font-weight: 700; color: #0F172A;">👥 ${guests || 'N/A'}</div>
+                        </td>
+                      </tr>
+                    </table>
 
-      <p style="font-size: 13px; line-height: 1.5; color: #6B7280; margin: 0 0 20px 0;">
-        If you have any urgent questions or need to make immediate adjustments to your booking, feel free to reply to this email or reach us on WhatsApp.
-      </p>
+                    <div style="background-color: #FEF3C7; border: 1px solid #FDE68A; border-radius: 8px; padding: 10px 12px; margin-top: 4px;">
+                      <div style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: #92400E; margin-bottom: 2px;">Package</div>
+                      <div style="font-size: 13px; font-weight: 800; color: #78350F; word-break: break-word;">
+                        ${selectedPackage || 'Custom Menu Enquiry'}
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </table>
 
-      <div style="border-top: 1px solid #E5E7EB; padding-top: 16px;">
-        <p style="margin: 0; font-size: 13px; font-weight: 700; color: #111827;">SriLalitha Events Team</p>
-        <p style="margin: 2px 0 0 0; font-size: 12px; color: #6B7280;">London, United Kingdom</p>
-      </div>
-    </div>
-  </div>
+              <!-- Help / Contact Box -->
+              <p style="font-size: 13px; line-height: 1.5; color: #64748B; margin: 0 0 16px 0;">
+                Need to add specific dishes or make immediate changes to your date? Feel free to reply directly to this email or speak with us on WhatsApp.
+              </p>
+
+              <!-- Direct WhatsApp Button for Customer -->
+              <div style="text-align: center; margin-bottom: 20px;">
+                <a href="https://wa.me/447700900000?text=${encodeURIComponent(`Hi SriLalitha Events, I submitted an enquiry for ${date || 'my event'}. Could we discuss my package?`)}" target="_blank" style="display: inline-block; background-color: #16A34A; color: #FFFFFF; font-size: 13px; font-weight: 800; padding: 11px 22px; border-radius: 8px; text-decoration: none; box-shadow: 0 2px 6px rgba(22, 163, 74, 0.25);">
+                  💬 Chat with Our Event Planner on WhatsApp
+                </a>
+              </div>
+
+              <!-- Sign-off -->
+              <div style="border-top: 1px solid #E2E8F0; padding-top: 14px;">
+                <p style="margin: 0; font-size: 13px; font-weight: 800; color: #0F172A;">SriLalitha Events &amp; Catering Team</p>
+                <p style="margin: 2px 0 0 0; font-size: 12px; color: #64748B;">London, United Kingdom • <a href="https://vegchennaisrilalitha.events" style="color: #C8860A; text-decoration: none; font-weight: 700;">vegchennaisrilalitha.events</a></p>
+              </div>
+
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>
-        `;
+      `;
+      customerMailOptions = {
+        from: sender,
+        to: email.trim(),
+        subject: customerSubject,
+        html: customerHtml,
+      };
+    }
 
-        await transporter.sendMail({
-          from: sender,
-          to: email.trim(),
-          subject: customerSubject,
-          html: customerHtml,
-        });
-        customerSent = true;
-      } catch (custErr) {
-        console.warn('Could not send customer confirmation email:', custErr);
-      }
+    // 9. Dispatch concurrently to avoid timeouts and dropped requests
+    const tasks: Promise<any>[] = [transporter.sendMail(adminMailOptions)];
+    if (customerMailOptions) {
+      tasks.push(transporter.sendMail(customerMailOptions));
+    }
+
+    const [adminResult, customerResult] = await Promise.allSettled(tasks);
+
+    const adminSent = adminResult.status === 'fulfilled';
+    const adminMessageId = adminSent ? (adminResult.value as any)?.messageId : null;
+    const customerSent = customerResult && customerResult.status === 'fulfilled';
+
+    if (adminResult.status === 'rejected') {
+      console.error('Failed to deliver admin notification email:', adminResult.reason);
+    }
+    if (customerResult && customerResult.status === 'rejected') {
+      console.warn('Failed to deliver customer confirmation email:', customerResult.reason);
     }
 
     return NextResponse.json({
-      success: true,
-      messageId: adminInfo.messageId,
+      success: adminSent || customerSent,
+      messageId: adminMessageId,
       recipients: activeRecipients,
       customerNotified: customerSent,
+      adminSent,
     });
   } catch (err: any) {
     console.error('Error in send-enquiry-email API route:', err);

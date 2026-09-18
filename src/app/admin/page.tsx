@@ -1221,8 +1221,34 @@ export default function AdminPage() {
     });
     return () => unsubscribe();
   }, []);
-  const [calendarMonth, setCalendarMonth] = useState(4);
-  const [calendarYear] = useState(2026);
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date().getMonth());
+  const [calendarYear, setCalendarYear] = useState(() => new Date().getFullYear());
+
+  const handlePrevCalendarMonth = () => {
+    setCalendarMonth(m => {
+      if (m === 0) {
+        setCalendarYear(y => y - 1);
+        return 11;
+      }
+      return m - 1;
+    });
+  };
+
+  const handleNextCalendarMonth = () => {
+    setCalendarMonth(m => {
+      if (m === 11) {
+        setCalendarYear(y => y + 1);
+        return 0;
+      }
+      return m + 1;
+    });
+  };
+
+  const handleTodayCalendar = () => {
+    const now = new Date();
+    setCalendarMonth(now.getMonth());
+    setCalendarYear(now.getFullYear());
+  };
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -1236,6 +1262,14 @@ export default function AdminPage() {
   const [showMenuPanel, setShowMenuPanel] = useState(false);
   const [historySearch, setHistorySearch] = useState('');
   const [customAlert, setCustomAlert] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    type?: 'danger' | 'warning' | 'info';
+    onConfirm: () => void;
+  } | null>(null);
   const [bookingToDelete, setBookingToDelete] = useState<{ id: string; name: string } | null>(null);
   const [isUploadingProof, setIsUploadingProof] = useState(false);
   const [isUploadingFinalProof, setIsUploadingFinalProof] = useState(false);
@@ -1263,9 +1297,9 @@ export default function AdminPage() {
       if (docSnap.exists()) {
         const data = docSnap.data();
         setBankDetails({
-          accountName: data.accountName || 'SriLalitha Events Ltd',
-          sortCode: data.sortCode || '20-00-00',
-          accountNumber: data.accountNumber || '12345678'
+          accountName: data.accountName !== undefined ? data.accountName : 'SriLalitha Events Ltd',
+          sortCode: data.sortCode !== undefined ? data.sortCode : '20-00-00',
+          accountNumber: data.accountNumber !== undefined ? data.accountNumber : '12345678'
         });
       }
     });
@@ -1369,24 +1403,232 @@ export default function AdminPage() {
     }))
   );
 
+  interface LiveDosaState {
+    id: string;
+    title: string;
+    tagline: string;
+    subtitle: string;
+    durationHours: number;
+    serviceDuration: string;
+    dishesBadge?: string;
+    badge?: string;
+    extraBadge?: string;
+    bookBtnText?: string;
+    switchBtnText?: string;
+    description: string;
+    pricing: {
+      weekday: {
+        days: string;
+        pricePerPerson: number | string;
+        minGuests: number | string;
+        minCallOutCharge: number | string;
+        description?: string;
+        minGuestsNote?: string;
+        minCallOutNote?: string;
+      };
+      weekend: {
+        days: string;
+        pricePerPerson: number | string;
+        minGuests: number | string;
+        minCallOutCharge: number | string;
+        description?: string;
+        minGuestsNote?: string;
+        minCallOutNote?: string;
+      };
+      disclaimer: string;
+    };
+    inclusions?: string[];
+    items: Array<{
+      name: string;
+      description: string;
+      isLive?: boolean;
+      tags?: string[];
+    }>;
+  }
+
+  interface ThaliOptionState {
+    id?: string;
+    title: string;
+    shortTitle?: string;
+    tagline: string;
+    subtitle?: string;
+    description?: string;
+    badge1?: string;
+    badge2?: string;
+    priceLabel?: string;
+    pricePerPerson: number | string;
+    priceUnit?: string;
+    inclusionsSubtitle?: string;
+    priceNote?: string;
+    bookBtnText?: string;
+    customizeBtnText?: string;
+    coreDishes: Array<{ name: string; description: string }>;
+    variantOptions: {
+      sambarOptions: string[];
+      rasamOptions: string[];
+      koottuOptions: string[];
+      poriyalOptions: string[];
+      kaarakolambuOptions: string[];
+      sweetOptions: string[];
+    };
+    additions: Array<{ name: string; price: number }>;
+  }
+
+  interface TailorOptionState {
+    id?: string;
+    title: string;
+    shortTitle?: string;
+    tagline?: string;
+    subtitle?: string;
+    description?: string;
+    badge1?: string;
+    badge2?: string;
+    pricingHeading?: string;
+    priceLabel?: string;
+    depositNote?: string;
+    bookBtnText?: string;
+    chooseStationsBtnText?: string;
+    liveStationsFeatured: Array<{ name: string; icon: string; description: string }>;
+    whatWeBring: string[];
+    whatWeNeedFromYou: string[];
+    depositPolicy: {
+      depositPercentage: number;
+      terms: string;
+    };
+  }
+
+  interface DosaFestivalOptionState {
+    id?: string;
+    title: string;
+    shortTitle?: string;
+    tagline?: string;
+    subtitle?: string;
+    description?: string;
+    badge1?: string;
+    badge2?: string;
+    priceLabel?: string;
+    pricePerPerson: number | string;
+    priceUnit?: string;
+    priceNote?: string;
+    bookBtnText?: string;
+    viewVarietiesBtnText?: string;
+    heritageBadge?: string;
+    inclusions?: string;
+    dosaVarieties: string[];
+  }
+
+  interface CanapeOptionState {
+    id?: string;
+    title: string;
+    shortTitle?: string;
+    tagline?: string;
+    subtitle?: string;
+    description?: string;
+    badge1?: string;
+    priceLabel?: string;
+    pricePerPerson: number | string;
+    priceUnit?: string;
+    priceNote?: string;
+    bookBtnText?: string;
+    suggestedItems: string[];
+  }
+
+  interface NorthIndianOptionState {
+    id?: string;
+    title: string;
+    shortTitle?: string;
+    tagline?: string;
+    subtitle?: string;
+    description?: string;
+    badge1?: string;
+    badge2?: string;
+    minGuests?: number | string;
+    priceLabel?: string;
+    pricePerPerson: number | string;
+    priceUnit?: string;
+    priceNote?: string;
+    bookBtnText?: string;
+    inclusions: string[];
+    breadOptions: string[];
+    subjiOptions: string[];
+    dalOptions: string[];
+    riceOptions: string[];
+  }
+
+  interface GujaratiOptionState {
+    id?: string;
+    title: string;
+    shortTitle?: string;
+    tagline?: string;
+    subtitle?: string;
+    description?: string;
+    badge1?: string;
+    priceLabel?: string;
+    pricePerPerson: number | string;
+    priceUnit?: string;
+    priceNote?: string;
+    bookBtnText?: string;
+    categories: {
+      mithai: string[];
+      farsan: string[];
+      shaak: string[];
+      dal: string[];
+      breads: string[];
+      rice: string[];
+      condiments: string[];
+    };
+  }
+
+  interface PunjabiOptionState {
+    id?: string;
+    title: string;
+    shortTitle?: string;
+    tagline?: string;
+    subtitle?: string;
+    description?: string;
+    badge1?: string;
+    priceLabel?: string;
+    pricePerPerson: number | string;
+    priceUnit?: string;
+    priceNote?: string;
+    bookBtnText?: string;
+    categories: {
+      starters: string[];
+      subjies: string[];
+      dal: string[];
+      mithai: string[];
+      breads: string[];
+      rice: string[];
+      condiments: string[];
+    };
+  }
+
   // Editable Live Dosa Option 1
-  const [editableLiveDosa1, setEditableLiveDosa1] = useState({
+  const [editableLiveDosa1, setEditableLiveDosa1] = useState<LiveDosaState>(() => ({
     ...LIVE_DOSA_OPTION_1,
     pricing: { ...LIVE_DOSA_OPTION_1.pricing },
     items: LIVE_DOSA_OPTION_1.items.map(item => ({ ...item, tags: [...(item.tags || [])] })),
-  });
+  }));
 
   // Editable Live Dosa Option 2
-  const [editableLiveDosa2, setEditableLiveDosa2] = useState({
+  const [editableLiveDosa2, setEditableLiveDosa2] = useState<LiveDosaState>(() => ({
     ...LIVE_DOSA_OPTION_2,
     pricing: { ...LIVE_DOSA_OPTION_2.pricing },
     inclusions: [...LIVE_DOSA_OPTION_2.inclusions],
     items: LIVE_DOSA_OPTION_2.items.map(item => ({ ...item, tags: [...(item.tags || [])] })),
-  });
+  }));
 
   // Editable Madras Thali Option 3
-  const [editableMadrasThali, setEditableMadrasThali] = useState({
+  const [editableMadrasThali, setEditableMadrasThali] = useState<ThaliOptionState>(() => ({
     ...MADRAS_THALI_OPTION_3,
+    badge1: '🍲 Option 3 South Indian Traditional',
+    badge2: '12 Core Dishes Included',
+    priceLabel: 'Per Person Rate',
+    priceUnit: '/ per person',
+    inclusionsSubtitle: '12 Traditional Core Dishes Included (Standard for every plate):',
+    priceNote: 'Served with hot steamed rice, poori/chapati, traditional sambar, rasam, and dessert.',
+    bookBtnText: 'Book Madras Thali (£10.99/pp)',
+    customizeBtnText: 'Choose Sambar, Rasam & Sweet Options ↓',
     coreDishes: MADRAS_THALI_OPTION_3.coreDishes.map(d => ({ ...d })),
     variantOptions: {
       sambarOptions: [...MADRAS_THALI_OPTION_3.variantOptions.sambarOptions],
@@ -1397,42 +1639,73 @@ export default function AdminPage() {
       sweetOptions: [...MADRAS_THALI_OPTION_3.variantOptions.sweetOptions],
     },
     additions: MADRAS_THALI_OPTION_3.additions.map(a => ({ ...a })),
-  });
+  }));
 
   // Editable Tailor Your Own Menu Option 4
-  const [editableTailorMenu4, setEditableTailorMenu4] = useState({
+  const [editableTailorMenu4, setEditableTailorMenu4] = useState<TailorOptionState>(() => ({
     ...TAILOR_MENU_OPTION_4,
+    badge1: '🎨 Option 4 Bespoke Station Experience',
+    badge2: '100% Fully Customisable',
+    pricingHeading: 'Transparent Custom Pricing',
+    priceLabel: 'Live Stations from £8.50/pp · Upgrades & Canapés Available',
+    depositNote: 'A simple deposit reserves your date. Detailed item selection finalised closer to your event.',
+    bookBtnText: 'Enquire for Custom Station Package →',
+    chooseStationsBtnText: 'Choose Live Stations Below ↓',
     liveStationsFeatured: TAILOR_MENU_OPTION_4.liveStationsFeatured.map(s => ({ ...s })),
     whatWeBring: [...TAILOR_MENU_OPTION_4.whatWeBring],
     whatWeNeedFromYou: [...TAILOR_MENU_OPTION_4.whatWeNeedFromYou],
     depositPolicy: { ...TAILOR_MENU_OPTION_4.depositPolicy },
-  });
+  }));
 
   // Editable Dosa Festival Option 5
-  const [editableDosaFestival5, setEditableDosaFestival5] = useState({
+  const [editableDosaFestival5, setEditableDosaFestival5] = useState<DosaFestivalOptionState>(() => ({
     ...DOSA_FESTIVAL_OPTION_5,
+    badge1: '🎪 Option 5 Unlimited Station Experience',
+    badge2: '34+ Varieties on Live Tawa',
+    priceLabel: 'Package Rate',
+    priceUnit: '/ per person',
+    priceNote: 'Unlimited fresh dosas prepared on live tawas with 3 signature chutneys and hot Madras sambar.',
+    bookBtnText: 'Book Dosa Festival (£12.99/pp)',
+    viewVarietiesBtnText: 'Explore All 34+ Varieties ↓',
     dosaVarieties: [...DOSA_FESTIVAL_OPTION_5.dosaVarieties],
-  });
+  }));
 
   // Editable Canapé Service Option 6
-  const [editableCanape6, setEditableCanape6] = useState({
+  const [editableCanape6, setEditableCanape6] = useState<CanapeOptionState>(() => ({
     ...CANAPE_OPTION_6,
+    badge1: '🍸 Option 6 Cocktail Catering',
+    priceLabel: 'Starting Price',
+    priceUnit: '/ per person',
+    priceNote: 'Passed canapés & interactive cocktail table setups for weddings, receptions, and birthday bashes.',
+    bookBtnText: 'Book Canapé Service',
     suggestedItems: [...CANAPE_OPTION_6.suggestedItems],
-  });
+  }));
 
   // Editable North Indian Option 7
-  const [editableNorthIndian7, setEditableNorthIndian7] = useState({
+  const [editableNorthIndian7, setEditableNorthIndian7] = useState<NorthIndianOptionState>(() => ({
     ...NORTH_INDIAN_OPTION_7,
+    badge1: '🍛 Option 7 North Indian Standard Menu',
+    badge2: `Min ${NORTH_INDIAN_OPTION_7.minGuests || 25} People`,
+    minGuests: NORTH_INDIAN_OPTION_7.minGuests || 25,
+    priceLabel: 'Fixed Package Price',
+    priceUnit: '/ per person',
+    priceNote: 'Includes 1 Tava Roti or Nan, 2 North Indian/Punjabi Subjies, Dal, Veg Biryani/Pulao, Salad, Pappad and Pickle.',
+    bookBtnText: `Book ${NORTH_INDIAN_OPTION_7.shortTitle || NORTH_INDIAN_OPTION_7.title} (£${Number(NORTH_INDIAN_OPTION_7.pricePerPerson ?? 12).toFixed(0)}/pp)`,
     inclusions: [...NORTH_INDIAN_OPTION_7.inclusions],
     breadOptions: [...NORTH_INDIAN_OPTION_7.breadOptions],
     subjiOptions: [...NORTH_INDIAN_OPTION_7.subjiOptions],
     dalOptions: [...NORTH_INDIAN_OPTION_7.dalOptions],
     riceOptions: [...NORTH_INDIAN_OPTION_7.riceOptions],
-  });
+  }));
 
   // Editable Gujarati Option 8
-  const [editableGujarati8, setEditableGujarati8] = useState({
+  const [editableGujarati8, setEditableGujarati8] = useState<GujaratiOptionState>(() => ({
     ...GUJARATI_OPTION_8,
+    badge1: '✨ Option 8 Gujarati Menu',
+    priceLabel: 'Package Price',
+    priceUnit: '/ per person',
+    priceNote: '40+ Mithai, 20+ Farsan, 30+ Shaak including Undhiyu, Bharelu Ringan Bateta, Kadhi, Gujarati Dal & Fresh Rotlis.',
+    bookBtnText: `Book ${GUJARATI_OPTION_8.shortTitle || GUJARATI_OPTION_8.title} (£${Number(GUJARATI_OPTION_8.pricePerPerson ?? 14.99).toFixed(2)}/pp)`,
     categories: {
       mithai: [...GUJARATI_OPTION_8.categories.mithai],
       farsan: [...GUJARATI_OPTION_8.categories.farsan],
@@ -1442,11 +1715,16 @@ export default function AdminPage() {
       rice: [...GUJARATI_OPTION_8.categories.rice],
       condiments: [...GUJARATI_OPTION_8.categories.condiments],
     },
-  });
+  }));
 
   // Editable Punjabi Option 9
-  const [editablePunjabi9, setEditablePunjabi9] = useState({
+  const [editablePunjabi9, setEditablePunjabi9] = useState<PunjabiOptionState>(() => ({
     ...PUNJABI_OPTION_9,
+    badge1: '👑 Option 9 Punjabi Feast',
+    priceLabel: 'Package Price',
+    priceUnit: '/ per person',
+    priceNote: 'Paneer Tikka Shashlik, Chaats, Paneer Butter Masala, Amritsari Chole, Dal Makhani, Tandoori Breads & Sweets.',
+    bookBtnText: `Book ${PUNJABI_OPTION_9.shortTitle || PUNJABI_OPTION_9.title} (£${Number(PUNJABI_OPTION_9.pricePerPerson ?? 13.99).toFixed(2)}/pp)`,
     categories: {
       starters: [...PUNJABI_OPTION_9.categories.starters],
       subjies: [...PUNJABI_OPTION_9.categories.subjies],
@@ -1456,7 +1734,7 @@ export default function AdminPage() {
       rice: [...PUNJABI_OPTION_9.categories.rice],
       condiments: [...PUNJABI_OPTION_9.categories.condiments],
     },
-  });
+  }));
 
   // Editable Live Dosa Menu (alias)
   const editableLiveDosaMenu = editableLiveDosa1;
@@ -1527,46 +1805,114 @@ export default function AdminPage() {
         if (data.LIVE_DOSA_OPTION_1 || data.LIVE_DOSA_MENU) {
           const d1 = data.LIVE_DOSA_OPTION_1 || data.LIVE_DOSA_MENU;
           setEditableLiveDosa1({
+            ...LIVE_DOSA_OPTION_1,
             ...d1,
-            pricing: d1.pricing || LIVE_DOSA_OPTION_1.pricing,
+            pricing: {
+              ...LIVE_DOSA_OPTION_1.pricing,
+              ...(d1.pricing || {}),
+              weekday: {
+                ...LIVE_DOSA_OPTION_1.pricing.weekday,
+                ...(d1.pricing?.weekday || {}),
+              },
+              weekend: {
+                ...LIVE_DOSA_OPTION_1.pricing.weekend,
+                ...(d1.pricing?.weekend || {}),
+              },
+            },
             items: (d1.items || LIVE_DOSA_OPTION_1.items).map((i: any) => ({ ...i, tags: [...(i.tags || [])] })),
           });
         }
         if (data.LIVE_DOSA_OPTION_2) {
           const d2 = data.LIVE_DOSA_OPTION_2;
           setEditableLiveDosa2({
+            ...LIVE_DOSA_OPTION_2,
             ...d2,
-            pricing: d2.pricing || LIVE_DOSA_OPTION_2.pricing,
+            pricing: {
+              ...LIVE_DOSA_OPTION_2.pricing,
+              ...(d2.pricing || {}),
+              weekday: {
+                ...LIVE_DOSA_OPTION_2.pricing.weekday,
+                ...(d2.pricing?.weekday || {}),
+              },
+              weekend: {
+                ...LIVE_DOSA_OPTION_2.pricing.weekend,
+                ...(d2.pricing?.weekend || {}),
+              },
+            },
             inclusions: d2.inclusions || [...LIVE_DOSA_OPTION_2.inclusions],
             items: (d2.items || LIVE_DOSA_OPTION_2.items).map((i: any) => ({ ...i, tags: [...(i.tags || [])] })),
           });
         }
         if (data.MADRAS_THALI_OPTION_3) {
           const d3 = data.MADRAS_THALI_OPTION_3;
-          setEditableMadrasThali({
+          setEditableMadrasThali((prev: ThaliOptionState) => ({
+            ...prev,
             ...d3,
-            coreDishes: (d3.coreDishes || MADRAS_THALI_OPTION_3.coreDishes).map((i: any) => ({ ...i })),
-            variantOptions: d3.variantOptions || MADRAS_THALI_OPTION_3.variantOptions,
-            additions: (d3.additions || MADRAS_THALI_OPTION_3.additions).map((i: any) => ({ ...i })),
-          });
+            coreDishes: (d3.coreDishes || prev.coreDishes).map((i: any) => ({ ...i })),
+            variantOptions: d3.variantOptions || prev.variantOptions,
+            additions: (d3.additions || prev.additions).map((i: any) => ({ ...i })),
+          }));
         }
         if (data.TAILOR_MENU_OPTION_4) {
-          setEditableTailorMenu4(data.TAILOR_MENU_OPTION_4);
+          const d4 = data.TAILOR_MENU_OPTION_4;
+          setEditableTailorMenu4((prev: TailorOptionState) => ({
+            ...prev,
+            ...d4,
+            liveStationsFeatured: (d4.liveStationsFeatured || prev.liveStationsFeatured).map((s: any) => ({ ...s })),
+            whatWeBring: d4.whatWeBring || prev.whatWeBring,
+            whatWeNeedFromYou: d4.whatWeNeedFromYou || prev.whatWeNeedFromYou,
+            depositPolicy: d4.depositPolicy || prev.depositPolicy,
+          }));
         }
         if (data.DOSA_FESTIVAL_OPTION_5) {
-          setEditableDosaFestival5(data.DOSA_FESTIVAL_OPTION_5);
+          const d5 = data.DOSA_FESTIVAL_OPTION_5;
+          setEditableDosaFestival5((prev: DosaFestivalOptionState) => ({
+            ...prev,
+            ...d5,
+            dosaVarieties: d5.dosaVarieties || prev.dosaVarieties,
+          }));
         }
         if (data.CANAPE_OPTION_6) {
-          setEditableCanape6(data.CANAPE_OPTION_6);
+          const d6 = data.CANAPE_OPTION_6;
+          setEditableCanape6((prev: CanapeOptionState) => ({
+            ...prev,
+            ...d6,
+            suggestedItems: d6.suggestedItems || prev.suggestedItems,
+          }));
         }
         if (data.NORTH_INDIAN_OPTION_7) {
-          setEditableNorthIndian7(data.NORTH_INDIAN_OPTION_7);
+          const d7 = data.NORTH_INDIAN_OPTION_7;
+          setEditableNorthIndian7((prev: NorthIndianOptionState) => ({
+            ...prev,
+            ...d7,
+            inclusions: d7.inclusions || prev.inclusions,
+            breadOptions: d7.breadOptions || prev.breadOptions,
+            subjiOptions: d7.subjiOptions || prev.subjiOptions,
+            dalOptions: d7.dalOptions || prev.dalOptions,
+            riceOptions: d7.riceOptions || prev.riceOptions,
+          }));
         }
         if (data.GUJARATI_OPTION_8) {
-          setEditableGujarati8(data.GUJARATI_OPTION_8);
+          const d8 = data.GUJARATI_OPTION_8;
+          setEditableGujarati8((prev: GujaratiOptionState) => ({
+            ...prev,
+            ...d8,
+            categories: {
+              ...prev.categories,
+              ...(d8.categories || {}),
+            },
+          }));
         }
         if (data.PUNJABI_OPTION_9) {
-          setEditablePunjabi9(data.PUNJABI_OPTION_9);
+          const d9 = data.PUNJABI_OPTION_9;
+          setEditablePunjabi9((prev: PunjabiOptionState) => ({
+            ...prev,
+            ...d9,
+            categories: {
+              ...prev.categories,
+              ...(d9.categories || {}),
+            },
+          }));
         }
         if (data.MENU_UPGRADES) {
           setEditableUpgrades(data.MENU_UPGRADES);
@@ -1588,18 +1934,80 @@ export default function AdminPage() {
   const saveAllMenusToDatabase = async () => {
     setIsSavingMenus(true);
     try {
+      const cleanDosa1 = {
+        ...editableLiveDosa1,
+        pricing: {
+          ...editableLiveDosa1.pricing,
+          weekday: {
+            ...editableLiveDosa1.pricing?.weekday,
+            pricePerPerson: Number(editableLiveDosa1.pricing?.weekday?.pricePerPerson ?? 11),
+            minGuests: Number(editableLiveDosa1.pricing?.weekday?.minGuests ?? 35),
+            minCallOutCharge: Number(editableLiveDosa1.pricing?.weekday?.minCallOutCharge ?? 385),
+          },
+          weekend: {
+            ...editableLiveDosa1.pricing?.weekend,
+            pricePerPerson: Number(editableLiveDosa1.pricing?.weekend?.pricePerPerson ?? 12),
+            minGuests: Number(editableLiveDosa1.pricing?.weekend?.minGuests ?? 40),
+            minCallOutCharge: Number(editableLiveDosa1.pricing?.weekend?.minCallOutCharge ?? 480),
+          },
+        },
+      };
+      const cleanDosa2 = {
+        ...editableLiveDosa2,
+        pricing: {
+          ...editableLiveDosa2.pricing,
+          weekday: {
+            ...editableLiveDosa2.pricing?.weekday,
+            pricePerPerson: Number(editableLiveDosa2.pricing?.weekday?.pricePerPerson ?? 16.5),
+            minGuests: Number(editableLiveDosa2.pricing?.weekday?.minGuests ?? 35),
+            minCallOutCharge: Number(editableLiveDosa2.pricing?.weekday?.minCallOutCharge ?? 577.5),
+          },
+          weekend: {
+            ...editableLiveDosa2.pricing?.weekend,
+            pricePerPerson: Number(editableLiveDosa2.pricing?.weekend?.pricePerPerson ?? 17.5),
+            minGuests: Number(editableLiveDosa2.pricing?.weekend?.minGuests ?? 40),
+            minCallOutCharge: Number(editableLiveDosa2.pricing?.weekend?.minCallOutCharge ?? 700),
+          },
+        },
+      };
+      const cleanThali = {
+        ...editableMadrasThali,
+        pricePerPerson: Number(editableMadrasThali.pricePerPerson ?? 10.99),
+      };
+      const cleanDosaFestival = {
+        ...editableDosaFestival5,
+        pricePerPerson: Number(editableDosaFestival5.pricePerPerson ?? 12.99),
+      };
+      const cleanCanape = {
+        ...editableCanape6,
+        pricePerPerson: Number(editableCanape6.pricePerPerson ?? 8.99),
+      };
+      const cleanNorthIndian = {
+        ...editableNorthIndian7,
+        pricePerPerson: Number(editableNorthIndian7.pricePerPerson ?? 12.00),
+        minGuests: Number(editableNorthIndian7.minGuests ?? 25),
+      };
+      const cleanGujarati = {
+        ...editableGujarati8,
+        pricePerPerson: Number(editableGujarati8.pricePerPerson ?? 14.99),
+      };
+      const cleanPunjabi = {
+        ...editablePunjabi9,
+        pricePerPerson: Number(editablePunjabi9.pricePerPerson ?? 13.99),
+      };
+
       await setDoc(doc(db, 'site_data', 'menus'), {
         MENU_CATEGORIES: editableMenuCategories,
-        LIVE_DOSA_OPTION_1: editableLiveDosa1,
-        LIVE_DOSA_OPTION_2: editableLiveDosa2,
-        LIVE_DOSA_MENU: editableLiveDosa1,
-        MADRAS_THALI_OPTION_3: editableMadrasThali,
+        LIVE_DOSA_OPTION_1: cleanDosa1,
+        LIVE_DOSA_OPTION_2: cleanDosa2,
+        LIVE_DOSA_MENU: cleanDosa1,
+        MADRAS_THALI_OPTION_3: cleanThali,
         TAILOR_MENU_OPTION_4: editableTailorMenu4,
-        DOSA_FESTIVAL_OPTION_5: editableDosaFestival5,
-        CANAPE_OPTION_6: editableCanape6,
-        NORTH_INDIAN_OPTION_7: editableNorthIndian7,
-        GUJARATI_OPTION_8: editableGujarati8,
-        PUNJABI_OPTION_9: editablePunjabi9,
+        DOSA_FESTIVAL_OPTION_5: cleanDosaFestival,
+        CANAPE_OPTION_6: cleanCanape,
+        NORTH_INDIAN_OPTION_7: cleanNorthIndian,
+        GUJARATI_OPTION_8: cleanGujarati,
+        PUNJABI_OPTION_9: cleanPunjabi,
         MENU_UPGRADES: editableUpgrades,
         SOUTH_INDIAN_BUFFET: editableSouthIndianBuffet,
         BANQUET_PACKAGES: editableBanquetPackages,
@@ -2186,7 +2594,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
           adults,
           0,
           isOption2 ? 'live-dosa-2' : 'live-dosa-1',
-          isOption2 ? editableLiveDosa2.pricing : editableLiveDosa1.pricing
+          (isOption2 ? editableLiveDosa2.pricing : editableLiveDosa1.pricing) as any
         );
         baseAmount = liveCalc.finalSubtotal;
       } else if (selectedPkg) {
@@ -2796,13 +3204,18 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     }
   };
 
-  const updateBankDetail = async (field: string, value: string) => {
-    const updated = { ...bankDetails, [field]: value };
-    setBankDetails(updated);
+  const [isSavingBankDetails, setIsSavingBankDetails] = useState(false);
+
+  const saveBankDetails = async () => {
+    setIsSavingBankDetails(true);
     try {
-      await setDoc(doc(db, 'site_data', 'bank_details'), updated, { merge: true });
-    } catch (error) {
+      await setDoc(doc(db, 'site_data', 'bank_details'), bankDetails, { merge: true });
+      setCustomAlert({ message: 'Bank account details successfully updated on the website!', type: 'success' });
+    } catch (error: any) {
       console.error('Error saving bank details:', error);
+      setCustomAlert({ message: `Error saving bank details: ${error?.message || 'Unknown error'}`, type: 'error' });
+    } finally {
+      setIsSavingBankDetails(false);
     }
   };
 
@@ -4378,13 +4791,22 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
           {activeTab === 'calendar' && (
             <div className="space-y-4">
               <div className="bg-white rounded-xl border border-gray-200 p-4">
-                <div className="flex items-center justify-between mb-4">
-                  <button onClick={() => setCalendarMonth(m => m === 0 ? 11 : m - 1)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                    <Icon name="ChevronLeftIcon" size={18} className="text-gray-500" />
-                  </button>
-                  <h2 className="font-semibold text-gray-900">{MONTHS[calendarMonth]} {calendarYear}</h2>
-                  <button onClick={() => setCalendarMonth(m => m === 11 ? 0 : m + 1)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                    <Icon name="ChevronRightIcon" size={18} className="text-gray-500" />
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <button onClick={handlePrevCalendarMonth} className="p-2 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer" title="Previous Month">
+                      <Icon name="ChevronLeftIcon" size={18} className="text-gray-500" />
+                    </button>
+                    <h2 className="font-semibold text-gray-900 text-base sm:text-lg">{MONTHS[calendarMonth]} {calendarYear}</h2>
+                    <button onClick={handleNextCalendarMonth} className="p-2 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer" title="Next Month">
+                      <Icon name="ChevronRightIcon" size={18} className="text-gray-500" />
+                    </button>
+                  </div>
+                  <button
+                    onClick={handleTodayCalendar}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                  >
+                    <Icon name="CalendarDaysIcon" size={14} className="text-[#C8860A]" />
+                    <span>Current Month</span>
                   </button>
                 </div>
                 <div className="grid grid-cols-7 mb-2">
@@ -4911,7 +5333,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           {editableLiveDosa1.items?.length || 0} Dishes Total
                         </span>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                         <div>
                           <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
                             Menu Title
@@ -4948,6 +5370,18 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             placeholder="2 Hours Live Station"
                           />
                         </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Dishes Count Badge
+                          </label>
+                          <input
+                            type="text"
+                            value={editableLiveDosa1.dishesBadge || ''}
+                            onChange={(e) => setEditableLiveDosa1(prev => ({ ...prev, dishesBadge: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                            placeholder="12 Live Dishes"
+                          />
+                        </div>
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
@@ -4959,6 +5393,44 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           onChange={(e) => setEditableLiveDosa1(prev => ({ ...prev, description: e.target.value }))}
                           className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none resize-none"
                           placeholder="Our master chefs prepare fresh, crispy, golden dosas, live meduvada, and fluffy uthappams..."
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Book Button Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableLiveDosa1.bookBtnText || ''}
+                            onChange={(e) => setEditableLiveDosa1(prev => ({ ...prev, bookBtnText: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                            placeholder="Book Live Dosa Option 1"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Switch to Option 2 Button Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableLiveDosa1.switchBtnText || ''}
+                            onChange={(e) => setEditableLiveDosa1(prev => ({ ...prev, switchBtnText: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                            placeholder="👑 View Option 2 (3 Hours + Main + Dessert) →"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                          Inclusions Section Subtitle
+                        </label>
+                        <input
+                          type="text"
+                          value={editableLiveDosa1.subtitle || ''}
+                          onChange={(e) => setEditableLiveDosa1(prev => ({ ...prev, subtitle: e.target.value }))}
+                          className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                          placeholder="Every item is prepared live to order with authentic chutneys and piping hot sambar"
                         />
                       </div>
                       <div>
@@ -4986,7 +5458,19 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       {/* Weekday Pricing */}
                       <div className="bg-white p-3.5 rounded-xl border border-amber-200 space-y-2.5 shadow-2xs">
                         <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
-                          <span className="text-xs font-bold text-gray-900">📅 Weekdays (Monday to Friday)</span>
+                          <input
+                            type="text"
+                            value={editableLiveDosa1.pricing?.weekday?.days || ''}
+                            onChange={(e) => setEditableLiveDosa1(prev => ({
+                              ...prev,
+                              pricing: {
+                                ...prev.pricing,
+                                weekday: { ...prev.pricing?.weekday, days: e.target.value }
+                              }
+                            }))}
+                            placeholder="📅 Week days (Mon – Fri)"
+                            className="font-bold text-xs text-gray-900 border border-gray-200 rounded px-2 py-0.5 focus:ring-1 focus:ring-[#C8860A] focus:outline-none w-2/3"
+                          />
                           <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-amber-100 text-amber-900">Standard Tier</span>
                         </div>
                         <div className="grid grid-cols-3 gap-2 text-xs">
@@ -4995,39 +5479,40 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             <div className="flex items-center">
                               <span className="text-gray-500 text-xs mr-1">£</span>
                               <input
-                                type="number"
-                                step="0.5"
-                                value={editableLiveDosa1.pricing?.weekday?.pricePerPerson ?? 11}
+                                type="text"
+                                value={editableLiveDosa1.pricing?.weekday?.pricePerPerson !== undefined ? editableLiveDosa1.pricing.weekday.pricePerPerson : ''}
                                 onChange={(e) => {
-                                  const val = parseFloat(e.target.value) || 0;
+                                  const raw = e.target.value;
                                   setEditableLiveDosa1(prev => ({
                                     ...prev,
                                     pricing: {
                                       ...prev.pricing,
-                                      weekday: { ...prev.pricing.weekday, pricePerPerson: val }
+                                      weekday: { ...prev.pricing?.weekday, pricePerPerson: raw === '' ? '' : (isNaN(Number(raw)) ? raw : Number(raw)) }
                                     }
                                   }));
                                 }}
                                 className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                                placeholder="11.00"
                               />
                             </div>
                           </div>
                           <div>
                             <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Min Guests</label>
                             <input
-                              type="number"
-                              value={editableLiveDosa1.pricing?.weekday?.minGuests ?? 35}
+                              type="text"
+                              value={editableLiveDosa1.pricing?.weekday?.minGuests !== undefined ? editableLiveDosa1.pricing.weekday.minGuests : ''}
                               onChange={(e) => {
-                                const val = parseInt(e.target.value) || 0;
+                                const raw = e.target.value;
                                 setEditableLiveDosa1(prev => ({
                                   ...prev,
                                   pricing: {
                                     ...prev.pricing,
-                                    weekday: { ...prev.pricing.weekday, minGuests: val }
+                                    weekday: { ...prev.pricing?.weekday, minGuests: raw === '' ? '' : (isNaN(Number(raw)) ? raw : Number(raw)) }
                                   }
                                 }));
                               }}
                               className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                              placeholder="35"
                             />
                           </div>
                           <div>
@@ -5035,19 +5520,20 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             <div className="flex items-center">
                               <span className="text-gray-500 text-xs mr-1">£</span>
                               <input
-                                type="number"
-                                value={editableLiveDosa1.pricing?.weekday?.minCallOutCharge ?? 385}
+                                type="text"
+                                value={editableLiveDosa1.pricing?.weekday?.minCallOutCharge !== undefined ? editableLiveDosa1.pricing.weekday.minCallOutCharge : ''}
                                 onChange={(e) => {
-                                  const val = parseFloat(e.target.value) || 0;
+                                  const raw = e.target.value;
                                   setEditableLiveDosa1(prev => ({
                                     ...prev,
                                     pricing: {
                                       ...prev.pricing,
-                                      weekday: { ...prev.pricing.weekday, minCallOutCharge: val }
+                                      weekday: { ...prev.pricing?.weekday, minCallOutCharge: raw === '' ? '' : (isNaN(Number(raw)) ? raw : Number(raw)) }
                                     }
                                   }));
                                 }}
                                 className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                                placeholder="385"
                               />
                             </div>
                           </div>
@@ -5057,7 +5543,19 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       {/* Weekend Pricing */}
                       <div className="bg-white p-3.5 rounded-xl border border-amber-200 space-y-2.5 shadow-2xs">
                         <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
-                          <span className="text-xs font-bold text-gray-900">🌟 Weekends &amp; Bank Holidays</span>
+                          <input
+                            type="text"
+                            value={editableLiveDosa1.pricing?.weekend?.days || ''}
+                            onChange={(e) => setEditableLiveDosa1(prev => ({
+                              ...prev,
+                              pricing: {
+                                ...prev.pricing,
+                                weekend: { ...prev.pricing?.weekend, days: e.target.value }
+                              }
+                            }))}
+                            placeholder="🌟 Week Ends & Bank Holidays"
+                            className="font-bold text-xs text-gray-900 border border-gray-200 rounded px-2 py-0.5 focus:ring-1 focus:ring-[#C8860A] focus:outline-none w-2/3"
+                          />
                           <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-purple-100 text-purple-900">Peak Tier</span>
                         </div>
                         <div className="grid grid-cols-3 gap-2 text-xs">
@@ -5066,39 +5564,40 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             <div className="flex items-center">
                               <span className="text-gray-500 text-xs mr-1">£</span>
                               <input
-                                type="number"
-                                step="0.5"
-                                value={editableLiveDosa1.pricing?.weekend?.pricePerPerson ?? 12}
+                                type="text"
+                                value={editableLiveDosa1.pricing?.weekend?.pricePerPerson !== undefined ? editableLiveDosa1.pricing.weekend.pricePerPerson : ''}
                                 onChange={(e) => {
-                                  const val = parseFloat(e.target.value) || 0;
+                                  const raw = e.target.value;
                                   setEditableLiveDosa1(prev => ({
                                     ...prev,
                                     pricing: {
                                       ...prev.pricing,
-                                      weekend: { ...prev.pricing.weekend, pricePerPerson: val }
+                                      weekend: { ...prev.pricing?.weekend, pricePerPerson: raw === '' ? '' : (isNaN(Number(raw)) ? raw : Number(raw)) }
                                     }
                                   }));
                                 }}
                                 className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                                placeholder="12.00"
                               />
                             </div>
                           </div>
                           <div>
                             <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Min Guests</label>
                             <input
-                              type="number"
-                              value={editableLiveDosa1.pricing?.weekend?.minGuests ?? 40}
+                              type="text"
+                              value={editableLiveDosa1.pricing?.weekend?.minGuests !== undefined ? editableLiveDosa1.pricing.weekend.minGuests : ''}
                               onChange={(e) => {
-                                const val = parseInt(e.target.value) || 0;
+                                const raw = e.target.value;
                                 setEditableLiveDosa1(prev => ({
                                   ...prev,
                                   pricing: {
                                     ...prev.pricing,
-                                    weekend: { ...prev.pricing.weekend, minGuests: val }
+                                    weekend: { ...prev.pricing?.weekend, minGuests: raw === '' ? '' : (isNaN(Number(raw)) ? raw : Number(raw)) }
                                   }
                                 }));
                               }}
                               className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                              placeholder="40"
                             />
                           </div>
                           <div>
@@ -5106,19 +5605,20 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             <div className="flex items-center">
                               <span className="text-gray-500 text-xs mr-1">£</span>
                               <input
-                                type="number"
-                                value={editableLiveDosa1.pricing?.weekend?.minCallOutCharge ?? 480}
+                                type="text"
+                                value={editableLiveDosa1.pricing?.weekend?.minCallOutCharge !== undefined ? editableLiveDosa1.pricing.weekend.minCallOutCharge : ''}
                                 onChange={(e) => {
-                                  const val = parseFloat(e.target.value) || 0;
+                                  const raw = e.target.value;
                                   setEditableLiveDosa1(prev => ({
                                     ...prev,
                                     pricing: {
                                       ...prev.pricing,
-                                      weekend: { ...prev.pricing.weekend, minCallOutCharge: val }
+                                      weekend: { ...prev.pricing?.weekend, minCallOutCharge: raw === '' ? '' : (isNaN(Number(raw)) ? raw : Number(raw)) }
                                     }
                                   }));
                                 }}
                                 className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                                placeholder="480"
                               />
                             </div>
                           </div>
@@ -5292,7 +5792,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           {editableLiveDosa2.items?.length || 0} Dishes Total
                         </span>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                         <div>
                           <label className="block text-[10px] font-bold text-purple-900 uppercase tracking-wider mb-1">
                             Menu Title
@@ -5341,6 +5841,18 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             placeholder="⏱️ 3 Hours Service Duration"
                           />
                         </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-purple-900 uppercase tracking-wider mb-1">
+                            Inclusions 3rd Badge
+                          </label>
+                          <input
+                            type="text"
+                            value={editableLiveDosa2.extraBadge || ''}
+                            onChange={(e) => setEditableLiveDosa2(prev => ({ ...prev, extraBadge: e.target.value }))}
+                            className="w-full text-xs bg-white border border-purple-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-purple-600 focus:outline-none"
+                            placeholder="+ 1 Main Course + 1 Dessert"
+                          />
+                        </div>
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold text-purple-900 uppercase tracking-wider mb-1">
@@ -5353,6 +5865,32 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           className="w-full text-xs bg-white border border-purple-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-purple-600 focus:outline-none resize-none"
                           placeholder="The ultimate live dining spectacle. Includes the full standard 12 live dishes..."
                         />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-purple-900 uppercase tracking-wider mb-1">
+                            Book Button Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableLiveDosa2.bookBtnText || ''}
+                            onChange={(e) => setEditableLiveDosa2(prev => ({ ...prev, bookBtnText: e.target.value }))}
+                            className="w-full text-xs bg-white border border-purple-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-purple-600 focus:outline-none"
+                            placeholder="Book Live Dosa Option 2"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-purple-900 uppercase tracking-wider mb-1">
+                            Switch to Option 1 Button Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableLiveDosa2.switchBtnText || ''}
+                            onChange={(e) => setEditableLiveDosa2(prev => ({ ...prev, switchBtnText: e.target.value }))}
+                            className="w-full text-xs bg-white border border-purple-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-purple-600 focus:outline-none"
+                            placeholder="← Switch to Option 1 (£11 / £12)"
+                          />
+                        </div>
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold text-purple-900 uppercase tracking-wider mb-1">
@@ -5379,7 +5917,19 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       {/* Weekday Pricing */}
                       <div className="bg-white p-3.5 rounded-xl border border-purple-200 space-y-2.5 shadow-2xs">
                         <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
-                          <span className="text-xs font-bold text-gray-900">📅 Weekdays (Monday to Friday)</span>
+                          <input
+                            type="text"
+                            value={editableLiveDosa2.pricing?.weekday?.days || ''}
+                            onChange={(e) => setEditableLiveDosa2(prev => ({
+                              ...prev,
+                              pricing: {
+                                ...prev.pricing,
+                                weekday: { ...prev.pricing?.weekday, days: e.target.value }
+                              }
+                            }))}
+                            placeholder="📅 Week days (Mon – Fri)"
+                            className="font-bold text-xs text-gray-900 border border-gray-200 rounded px-2 py-0.5 focus:ring-1 focus:ring-purple-500 focus:outline-none w-2/3"
+                          />
                           <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-purple-100 text-purple-900">Option 2 Weekday</span>
                         </div>
                         <div className="grid grid-cols-3 gap-2 text-xs">
@@ -5388,39 +5938,40 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             <div className="flex items-center">
                               <span className="text-gray-500 text-xs mr-1">£</span>
                               <input
-                                type="number"
-                                step="0.5"
-                                value={editableLiveDosa2.pricing?.weekday?.pricePerPerson ?? 16.50}
+                                type="text"
+                                value={editableLiveDosa2.pricing?.weekday?.pricePerPerson !== undefined ? editableLiveDosa2.pricing.weekday.pricePerPerson : ''}
                                 onChange={(e) => {
-                                  const val = parseFloat(e.target.value) || 0;
+                                  const raw = e.target.value;
                                   setEditableLiveDosa2(prev => ({
                                     ...prev,
                                     pricing: {
                                       ...prev.pricing,
-                                      weekday: { ...prev.pricing.weekday, pricePerPerson: val }
+                                      weekday: { ...prev.pricing?.weekday, pricePerPerson: raw === '' ? '' : (isNaN(Number(raw)) ? raw : Number(raw)) }
                                     }
                                   }));
                                 }}
                                 className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                                placeholder="16.50"
                               />
                             </div>
                           </div>
                           <div>
                             <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Min Guests</label>
                             <input
-                              type="number"
-                              value={editableLiveDosa2.pricing?.weekday?.minGuests ?? 35}
+                              type="text"
+                              value={editableLiveDosa2.pricing?.weekday?.minGuests !== undefined ? editableLiveDosa2.pricing.weekday.minGuests : ''}
                               onChange={(e) => {
-                                const val = parseInt(e.target.value) || 0;
+                                const raw = e.target.value;
                                 setEditableLiveDosa2(prev => ({
                                   ...prev,
                                   pricing: {
                                     ...prev.pricing,
-                                    weekday: { ...prev.pricing.weekday, minGuests: val }
+                                    weekday: { ...prev.pricing?.weekday, minGuests: raw === '' ? '' : (isNaN(Number(raw)) ? raw : Number(raw)) }
                                   }
                                 }));
                               }}
                               className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                              placeholder="35"
                             />
                           </div>
                           <div>
@@ -5428,19 +5979,20 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             <div className="flex items-center">
                               <span className="text-gray-500 text-xs mr-1">£</span>
                               <input
-                                type="number"
-                                value={editableLiveDosa2.pricing?.weekday?.minCallOutCharge ?? 577.50}
+                                type="text"
+                                value={editableLiveDosa2.pricing?.weekday?.minCallOutCharge !== undefined ? editableLiveDosa2.pricing.weekday.minCallOutCharge : ''}
                                 onChange={(e) => {
-                                  const val = parseFloat(e.target.value) || 0;
+                                  const raw = e.target.value;
                                   setEditableLiveDosa2(prev => ({
                                     ...prev,
                                     pricing: {
                                       ...prev.pricing,
-                                      weekday: { ...prev.pricing.weekday, minCallOutCharge: val }
+                                      weekday: { ...prev.pricing?.weekday, minCallOutCharge: raw === '' ? '' : (isNaN(Number(raw)) ? raw : Number(raw)) }
                                     }
                                   }));
                                 }}
                                 className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                                placeholder="577.50"
                               />
                             </div>
                           </div>
@@ -5450,7 +6002,19 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       {/* Weekend Pricing */}
                       <div className="bg-white p-3.5 rounded-xl border border-purple-200 space-y-2.5 shadow-2xs">
                         <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
-                          <span className="text-xs font-bold text-gray-900">🌟 Weekends &amp; Bank Holidays</span>
+                          <input
+                            type="text"
+                            value={editableLiveDosa2.pricing?.weekend?.days || ''}
+                            onChange={(e) => setEditableLiveDosa2(prev => ({
+                              ...prev,
+                              pricing: {
+                                ...prev.pricing,
+                                weekend: { ...prev.pricing?.weekend, days: e.target.value }
+                              }
+                            }))}
+                            placeholder="🌟 Week Ends & Bank Holidays"
+                            className="font-bold text-xs text-gray-900 border border-gray-200 rounded px-2 py-0.5 focus:ring-1 focus:ring-purple-500 focus:outline-none w-2/3"
+                          />
                           <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-purple-200 text-purple-950">Option 2 Weekend</span>
                         </div>
                         <div className="grid grid-cols-3 gap-2 text-xs">
@@ -5459,39 +6023,40 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             <div className="flex items-center">
                               <span className="text-gray-500 text-xs mr-1">£</span>
                               <input
-                                type="number"
-                                step="0.5"
-                                value={editableLiveDosa2.pricing?.weekend?.pricePerPerson ?? 17.50}
+                                type="text"
+                                value={editableLiveDosa2.pricing?.weekend?.pricePerPerson !== undefined ? editableLiveDosa2.pricing.weekend.pricePerPerson : ''}
                                 onChange={(e) => {
-                                  const val = parseFloat(e.target.value) || 0;
+                                  const raw = e.target.value;
                                   setEditableLiveDosa2(prev => ({
                                     ...prev,
                                     pricing: {
                                       ...prev.pricing,
-                                      weekend: { ...prev.pricing.weekend, pricePerPerson: val }
+                                      weekend: { ...prev.pricing?.weekend, pricePerPerson: raw === '' ? '' : (isNaN(Number(raw)) ? raw : Number(raw)) }
                                     }
                                   }));
                                 }}
                                 className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                                placeholder="17.50"
                               />
                             </div>
                           </div>
                           <div>
                             <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Min Guests</label>
                             <input
-                              type="number"
-                              value={editableLiveDosa2.pricing?.weekend?.minGuests ?? 40}
+                              type="text"
+                              value={editableLiveDosa2.pricing?.weekend?.minGuests !== undefined ? editableLiveDosa2.pricing.weekend.minGuests : ''}
                               onChange={(e) => {
-                                const val = parseInt(e.target.value) || 0;
+                                const raw = e.target.value;
                                 setEditableLiveDosa2(prev => ({
                                   ...prev,
                                   pricing: {
                                     ...prev.pricing,
-                                    weekend: { ...prev.pricing.weekend, minGuests: val }
+                                    weekend: { ...prev.pricing?.weekend, minGuests: raw === '' ? '' : (isNaN(Number(raw)) ? raw : Number(raw)) }
                                   }
                                 }));
                               }}
                               className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                              placeholder="40"
                             />
                           </div>
                           <div>
@@ -5499,19 +6064,20 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             <div className="flex items-center">
                               <span className="text-gray-500 text-xs mr-1">£</span>
                               <input
-                                type="number"
-                                value={editableLiveDosa2.pricing?.weekend?.minCallOutCharge ?? 700}
+                                type="text"
+                                value={editableLiveDosa2.pricing?.weekend?.minCallOutCharge !== undefined ? editableLiveDosa2.pricing.weekend.minCallOutCharge : ''}
                                 onChange={(e) => {
-                                  const val = parseFloat(e.target.value) || 0;
+                                  const raw = e.target.value;
                                   setEditableLiveDosa2(prev => ({
                                     ...prev,
                                     pricing: {
                                       ...prev.pricing,
-                                      weekend: { ...prev.pricing.weekend, minCallOutCharge: val }
+                                      weekend: { ...prev.pricing?.weekend, minCallOutCharge: raw === '' ? '' : (isNaN(Number(raw)) ? raw : Number(raw)) }
                                     }
                                   }));
                                 }}
                                 className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                                placeholder="700"
                               />
                             </div>
                           </div>
@@ -5674,25 +6240,181 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   </div>
 
                   <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-5">
-                    {/* Header & Price per person */}
-                    <div className="border-b border-gray-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div>
-                        <h3 className="text-base font-bold text-gray-900">{editableMadrasThali.title}</h3>
-                        <p className="text-xs text-gray-500">12 Traditional Core Dishes + 6 Flavour Preparations + Additions</p>
+                    {/* Option 3 Hero Card & Header Settings (User Side) */}
+                    <div className="bg-amber-50/60 rounded-2xl p-4 border border-amber-200 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
+                          <span>✨</span>
+                          <span>Option 3 Hero &amp; Header Settings (User Side)</span>
+                        </span>
+                        <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-200 text-amber-900">
+                          {editableMadrasThali.coreDishes?.length || 0} Core Dishes
+                        </span>
                       </div>
-                      <div className="flex items-center gap-2 bg-amber-50 p-2.5 rounded-xl border border-amber-200">
-                        <label className="text-xs font-bold text-amber-900 whitespace-nowrap">Price / Person:</label>
-                        <div className="flex items-center">
-                          <span className="text-gray-600 font-bold mr-1">£</span>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Menu Title
+                          </label>
                           <input
-                            type="number"
-                            step="0.01"
-                            value={editableMadrasThali.pricePerPerson}
-                            onChange={(e) => {
-                              const val = parseFloat(e.target.value) || 0;
-                              setEditableMadrasThali(prev => ({ ...prev, pricePerPerson: val }));
-                            }}
-                            className="w-20 font-extrabold text-sm text-gray-900 bg-white border border-amber-300 rounded px-2 py-1"
+                            type="text"
+                            value={editableMadrasThali.title || ''}
+                            onChange={(e) => setEditableMadrasThali(prev => ({ ...prev, title: e.target.value }))}
+                            className="w-full font-bold text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                            placeholder="Madras Thali or South Indian Meals..."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Tagline / Subtitle
+                          </label>
+                          <input
+                            type="text"
+                            value={editableMadrasThali.tagline || ''}
+                            onChange={(e) => setEditableMadrasThali(prev => ({ ...prev, tagline: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                            placeholder="Traditional South Indian full meals..."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Badge 1 Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableMadrasThali.badge1 || ''}
+                            onChange={(e) => setEditableMadrasThali(prev => ({ ...prev, badge1: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                            placeholder="🍲 Option 3 South Indian Traditional"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Badge 2 Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableMadrasThali.badge2 || ''}
+                            onChange={(e) => setEditableMadrasThali(prev => ({ ...prev, badge2: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                            placeholder="12 Core Dishes Included"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                          Hero Card Description
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={editableMadrasThali.description || ''}
+                          onChange={(e) => setEditableMadrasThali(prev => ({ ...prev, description: e.target.value }))}
+                          className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none resize-none"
+                          placeholder="Traditional South Indian full meals with authentic accompaniments..."
+                        />
+                      </div>
+
+                      {/* Pricing Bar Settings */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Price Heading / Label
+                          </label>
+                          <input
+                            type="text"
+                            value={editableMadrasThali.priceLabel || ''}
+                            onChange={(e) => setEditableMadrasThali(prev => ({ ...prev, priceLabel: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                            placeholder="Per Person Rate"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Price Per Person (£)
+                          </label>
+                          <div className="flex items-center">
+                            <span className="text-gray-500 text-xs mr-1.5 font-bold">£</span>
+                            <input
+                              type="text"
+                              value={editableMadrasThali.pricePerPerson !== undefined ? editableMadrasThali.pricePerPerson : ''}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                setEditableMadrasThali(prev => ({
+                                  ...prev,
+                                  pricePerPerson: raw === '' ? '' : (isNaN(Number(raw)) ? raw : Number(raw))
+                                }));
+                              }}
+                              className="w-full font-bold text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                              placeholder="10.99"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Price Unit Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableMadrasThali.priceUnit || ''}
+                            onChange={(e) => setEditableMadrasThali(prev => ({ ...prev, priceUnit: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                            placeholder="/ per person"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Price Note / Inclusions Summary
+                          </label>
+                          <input
+                            type="text"
+                            value={editableMadrasThali.priceNote || ''}
+                            onChange={(e) => setEditableMadrasThali(prev => ({ ...prev, priceNote: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                            placeholder="Served with hot steamed rice, poori/chapati, traditional sambar, rasam, and dessert."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Inclusions Section Subtitle
+                          </label>
+                          <input
+                            type="text"
+                            value={editableMadrasThali.inclusionsSubtitle || ''}
+                            onChange={(e) => setEditableMadrasThali(prev => ({ ...prev, inclusionsSubtitle: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                            placeholder="12 Traditional Core Dishes Included (Standard for every plate):"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Book Button Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableMadrasThali.bookBtnText || ''}
+                            onChange={(e) => setEditableMadrasThali(prev => ({ ...prev, bookBtnText: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                            placeholder="Book Madras Thali (£10.99/pp)"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Customize Varieties Button Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableMadrasThali.customizeBtnText || ''}
+                            onChange={(e) => setEditableMadrasThali(prev => ({ ...prev, customizeBtnText: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                            placeholder="Choose Sambar, Rasam & Sweet Options ↓"
                           />
                         </div>
                       </div>
@@ -6022,14 +6744,148 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   </div>
 
                   <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-5">
-                    <div className="border-b border-gray-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div>
-                        <h3 className="text-base font-bold text-gray-900">{editableTailorMenu4.title}</h3>
-                        <p className="text-xs text-gray-500">4 Signature Live Stations • Logistics &amp; Equipment Requirements</p>
+                    {/* Option 4 Hero Card & Header Settings (User Side) */}
+                    <div className="bg-amber-50/60 rounded-2xl p-4 border border-amber-200 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
+                          <span>✨</span>
+                          <span>Option 4 Hero &amp; Header Settings (User Side)</span>
+                        </span>
+                        <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-200 text-amber-900">
+                          {editableTailorMenu4.liveStationsFeatured?.length || 0} Live Stations
+                        </span>
                       </div>
-                      <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
-                        50% Deposit Policy
-                      </span>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Menu Title
+                          </label>
+                          <input
+                            type="text"
+                            value={editableTailorMenu4.title || ''}
+                            onChange={(e) => setEditableTailorMenu4(prev => ({ ...prev, title: e.target.value }))}
+                            className="w-full font-bold text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                            placeholder="Tailor Your Own Menu"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Tagline / Subtitle
+                          </label>
+                          <input
+                            type="text"
+                            value={editableTailorMenu4.subtitle || ''}
+                            onChange={(e) => setEditableTailorMenu4(prev => ({ ...prev, subtitle: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                            placeholder="Create a completely unique live catering experience..."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Badge 1 Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableTailorMenu4.badge1 || ''}
+                            onChange={(e) => setEditableTailorMenu4(prev => ({ ...prev, badge1: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                            placeholder="🎨 Option 4 Bespoke Station Experience"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Badge 2 Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableTailorMenu4.badge2 || ''}
+                            onChange={(e) => setEditableTailorMenu4(prev => ({ ...prev, badge2: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                            placeholder="100% Fully Customisable"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                          Hero Card Description
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={editableTailorMenu4.description || ''}
+                          onChange={(e) => setEditableTailorMenu4(prev => ({ ...prev, description: e.target.value }))}
+                          className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none resize-none"
+                          placeholder="Tailor Your Own Menu from the List Mentioned Below with Signature Live Stations..."
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Pricing Bar Heading
+                          </label>
+                          <input
+                            type="text"
+                            value={editableTailorMenu4.pricingHeading || ''}
+                            onChange={(e) => setEditableTailorMenu4(prev => ({ ...prev, pricingHeading: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                            placeholder="Transparent Custom Pricing"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Price Rate / Summary Label
+                          </label>
+                          <input
+                            type="text"
+                            value={editableTailorMenu4.priceLabel || ''}
+                            onChange={(e) => setEditableTailorMenu4(prev => ({ ...prev, priceLabel: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                            placeholder="Live Stations from £8.50/pp · Upgrades & Canapés Available"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                          Deposit Policy Note
+                        </label>
+                        <input
+                          type="text"
+                          value={editableTailorMenu4.depositNote || ''}
+                          onChange={(e) => setEditableTailorMenu4(prev => ({ ...prev, depositNote: e.target.value }))}
+                          className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                          placeholder="A simple deposit reserves your date. Detailed item selection finalised closer to your event."
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Book Button Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableTailorMenu4.bookBtnText || ''}
+                            onChange={(e) => setEditableTailorMenu4(prev => ({ ...prev, bookBtnText: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                            placeholder="Enquire for Custom Station Package →"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Choose Stations Button Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableTailorMenu4.chooseStationsBtnText || ''}
+                            onChange={(e) => setEditableTailorMenu4(prev => ({ ...prev, chooseStationsBtnText: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                            placeholder="Choose Live Stations Below ↓"
+                          />
+                        </div>
+                      </div>
                     </div>
 
                     {/* 4 Live Stations Editor */}
@@ -6133,41 +6989,172 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   </div>
 
                   <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-5">
-                    <div className="border-b border-gray-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div>
-                        <h3 className="text-base font-bold text-gray-900">{editableDosaFestival5.title}</h3>
-                        <p className="text-xs text-gray-500">16 Years Quality &amp; Trust in London • 34+ Signature Dosa Varieties</p>
+                    {/* Option 5 Hero Card & Header Settings (User Side) */}
+                    <div className="bg-orange-50/60 rounded-2xl p-4 border border-orange-200 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-orange-950 uppercase tracking-wider flex items-center gap-1.5">
+                          <span>✨</span>
+                          <span>Option 5 Hero &amp; Header Settings (User Side)</span>
+                        </span>
+                        <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-orange-200 text-orange-900">
+                          {editableDosaFestival5.dosaVarieties?.length || 0} Dosa Varieties
+                        </span>
                       </div>
-                      <div className="flex items-center gap-2 bg-orange-50 p-2.5 rounded-xl border border-orange-200">
-                        <label className="text-xs font-bold text-orange-950 whitespace-nowrap">Price / Person:</label>
-                        <div className="flex items-center">
-                          <span className="text-gray-600 font-bold mr-1">£</span>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-orange-900 uppercase tracking-wider mb-1">
+                            Menu Title
+                          </label>
                           <input
-                            type="number"
-                            step="0.5"
-                            value={editableDosaFestival5.pricePerPerson}
-                            onChange={(e) => {
-                              const val = parseFloat(e.target.value) || 0;
-                              setEditableDosaFestival5(prev => ({ ...prev, pricePerPerson: val }));
-                            }}
-                            className="w-20 font-extrabold text-sm text-gray-900 bg-white border border-orange-300 rounded px-2 py-1"
+                            type="text"
+                            value={editableDosaFestival5.title || ''}
+                            onChange={(e) => setEditableDosaFestival5(prev => ({ ...prev, title: e.target.value }))}
+                            className="w-full font-bold text-xs bg-white border border-orange-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                            placeholder="Dosa Festival At Your Home"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-orange-900 uppercase tracking-wider mb-1">
+                            Tagline / Subtitle
+                          </label>
+                          <input
+                            type="text"
+                            value={editableDosaFestival5.tagline || ''}
+                            onChange={(e) => setEditableDosaFestival5(prev => ({ ...prev, tagline: e.target.value }))}
+                            className="w-full text-xs bg-white border border-orange-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                            placeholder="First Time in London Dosa Festival At Your Home..."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-orange-900 uppercase tracking-wider mb-1">
+                            Badge 1 Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableDosaFestival5.badge1 || ''}
+                            onChange={(e) => setEditableDosaFestival5(prev => ({ ...prev, badge1: e.target.value }))}
+                            className="w-full text-xs bg-white border border-orange-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                            placeholder="🎪 Option 5 Unlimited Station Experience"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-orange-900 uppercase tracking-wider mb-1">
+                            Badge 2 Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableDosaFestival5.badge2 || ''}
+                            onChange={(e) => setEditableDosaFestival5(prev => ({ ...prev, badge2: e.target.value }))}
+                            className="w-full text-xs bg-white border border-orange-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                            placeholder="34+ Varieties on Live Tawa"
                           />
                         </div>
                       </div>
-                    </div>
 
-                    {/* Inclusions Text */}
-                    <div className="p-3.5 rounded-xl border border-orange-200 bg-orange-50/40 space-y-1">
-                      <label className="block text-xs font-bold text-orange-950">Inclusions &amp; Sides Text:</label>
-                      <input
-                        type="text"
-                        value={editableDosaFestival5.inclusions}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setEditableDosaFestival5(prev => ({ ...prev, inclusions: val }));
-                        }}
-                        className="w-full text-xs font-medium bg-white border border-gray-200 rounded p-2 text-gray-900"
-                      />
+                      <div>
+                        <label className="block text-[10px] font-bold text-orange-900 uppercase tracking-wider mb-1">
+                          Hero Card Description
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={editableDosaFestival5.description || ''}
+                          onChange={(e) => setEditableDosaFestival5(prev => ({ ...prev, description: e.target.value }))}
+                          className="w-full text-xs bg-white border border-orange-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-orange-500 focus:outline-none resize-none"
+                          placeholder="An epic live festival where your guests can order any of 34+ unique dosa varieties..."
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-orange-900 uppercase tracking-wider mb-1">
+                            Price Rate Label
+                          </label>
+                          <input
+                            type="text"
+                            value={editableDosaFestival5.priceLabel || ''}
+                            onChange={(e) => setEditableDosaFestival5(prev => ({ ...prev, priceLabel: e.target.value }))}
+                            className="w-full text-xs bg-white border border-orange-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                            placeholder="Package Rate"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-orange-900 uppercase tracking-wider mb-1">
+                            Price Per Person (£)
+                          </label>
+                          <div className="flex items-center">
+                            <span className="text-gray-500 text-xs mr-1.5 font-bold">£</span>
+                            <input
+                              type="text"
+                              value={editableDosaFestival5.pricePerPerson !== undefined ? editableDosaFestival5.pricePerPerson : ''}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                setEditableDosaFestival5(prev => ({
+                                  ...prev,
+                                  pricePerPerson: raw === '' ? '' : (isNaN(Number(raw)) ? raw : Number(raw))
+                                }));
+                              }}
+                              className="w-full font-bold text-xs bg-white border border-orange-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                              placeholder="12.99"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-orange-900 uppercase tracking-wider mb-1">
+                            Price Unit Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableDosaFestival5.priceUnit || ''}
+                            onChange={(e) => setEditableDosaFestival5(prev => ({ ...prev, priceUnit: e.target.value }))}
+                            className="w-full text-xs bg-white border border-orange-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                            placeholder="/ per person"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-orange-900 uppercase tracking-wider mb-1">
+                          Inclusions &amp; Sides Note
+                        </label>
+                        <input
+                          type="text"
+                          value={editableDosaFestival5.inclusions || editableDosaFestival5.priceNote || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setEditableDosaFestival5(prev => ({ ...prev, inclusions: val, priceNote: val }));
+                          }}
+                          className="w-full text-xs bg-white border border-orange-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                          placeholder="All dosas prepared live on hot tawas with fresh Coconut Chutney, Tomato & Onion Chutney, Mint Chutney, and Hot Sambar"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-orange-900 uppercase tracking-wider mb-1">
+                            Book Button Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableDosaFestival5.bookBtnText || ''}
+                            onChange={(e) => setEditableDosaFestival5(prev => ({ ...prev, bookBtnText: e.target.value }))}
+                            className="w-full text-xs bg-white border border-orange-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                            placeholder="Book Dosa Festival (£12.99/pp)"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-orange-900 uppercase tracking-wider mb-1">
+                            View Varieties Button Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableDosaFestival5.viewVarietiesBtnText || ''}
+                            onChange={(e) => setEditableDosaFestival5(prev => ({ ...prev, viewVarietiesBtnText: e.target.value }))}
+                            className="w-full text-xs bg-white border border-orange-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                            placeholder="Explore All 34+ Varieties ↓"
+                          />
+                        </div>
+                      </div>
                     </div>
 
                     {/* 34+ Dosa Varieties Grid */}
@@ -6258,21 +7245,141 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   </div>
 
                   <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-                      <div>
-                        <h3 className="text-base font-bold text-gray-900">{editableCanape6.title}</h3>
-                        <p className="text-xs text-gray-500">{editableCanape6.subtitle}</p>
+                    {/* Option 6 Hero Card & Header Settings (User Side) */}
+                    <div className="bg-rose-50/60 rounded-2xl p-4 border border-rose-200 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-rose-950 uppercase tracking-wider flex items-center gap-1.5">
+                          <span>✨</span>
+                          <span>Option 6 Hero &amp; Header Settings (User Side)</span>
+                        </span>
+                        <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-rose-200 text-rose-900">
+                          {editableCanape6.suggestedItems?.length || 0} Suggested Canapés
+                        </span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <label className="text-xs font-bold text-gray-700">Base Rate:</label>
-                        <div className="flex items-center">
-                          <span className="text-xs font-bold mr-1">£</span>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-rose-900 uppercase tracking-wider mb-1">
+                            Menu Title
+                          </label>
                           <input
-                            type="number"
-                            step="0.5"
-                            value={editableCanape6.pricePerPerson}
-                            onChange={(e) => setEditableCanape6(prev => ({ ...prev, pricePerPerson: parseFloat(e.target.value) || 0 }))}
-                            className="w-20 font-bold text-xs bg-white border border-gray-200 rounded p-1"
+                            type="text"
+                            value={editableCanape6.title || ''}
+                            onChange={(e) => setEditableCanape6(prev => ({ ...prev, title: e.target.value }))}
+                            className="w-full font-bold text-xs bg-white border border-rose-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                            placeholder="Canapé Service"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-rose-900 uppercase tracking-wider mb-1">
+                            Tagline / Subtitle
+                          </label>
+                          <input
+                            type="text"
+                            value={editableCanape6.tagline || ''}
+                            onChange={(e) => setEditableCanape6(prev => ({ ...prev, tagline: e.target.value }))}
+                            className="w-full text-xs bg-white border border-rose-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                            placeholder="CANAPE – We can provide canape service for a variety of our menu"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-rose-900 uppercase tracking-wider mb-1">
+                            Badge 1 Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableCanape6.badge1 || ''}
+                            onChange={(e) => setEditableCanape6(prev => ({ ...prev, badge1: e.target.value }))}
+                            className="w-full text-xs bg-white border border-rose-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                            placeholder="🍸 Option 6 Cocktail Catering"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-rose-900 uppercase tracking-wider mb-1">
+                          Hero Card Description
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={editableCanape6.description || ''}
+                          onChange={(e) => setEditableCanape6(prev => ({ ...prev, description: e.target.value }))}
+                          className="w-full text-xs bg-white border border-rose-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-rose-500 focus:outline-none resize-none"
+                          placeholder="We can provide canape service for a variety of our menu. A few suggestions are like Chilli Paneer..."
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-rose-900 uppercase tracking-wider mb-1">
+                            Starting Price Label
+                          </label>
+                          <input
+                            type="text"
+                            value={editableCanape6.priceLabel || ''}
+                            onChange={(e) => setEditableCanape6(prev => ({ ...prev, priceLabel: e.target.value }))}
+                            className="w-full text-xs bg-white border border-rose-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                            placeholder="Starting Price"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-rose-900 uppercase tracking-wider mb-1">
+                            Price Per Person (£)
+                          </label>
+                          <div className="flex items-center">
+                            <span className="text-gray-500 text-xs mr-1.5 font-bold">£</span>
+                            <input
+                              type="text"
+                              value={editableCanape6.pricePerPerson !== undefined ? editableCanape6.pricePerPerson : ''}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                setEditableCanape6(prev => ({
+                                  ...prev,
+                                  pricePerPerson: raw === '' ? '' : (isNaN(Number(raw)) ? raw : Number(raw))
+                                }));
+                              }}
+                              className="w-full font-bold text-xs bg-white border border-rose-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                              placeholder="8.99"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-rose-900 uppercase tracking-wider mb-1">
+                            Price Unit Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableCanape6.priceUnit || ''}
+                            onChange={(e) => setEditableCanape6(prev => ({ ...prev, priceUnit: e.target.value }))}
+                            className="w-full text-xs bg-white border border-rose-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                            placeholder="/ per person"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-rose-900 uppercase tracking-wider mb-1">
+                            Price Note / Subtitle Detail
+                          </label>
+                          <input
+                            type="text"
+                            value={editableCanape6.priceNote || ''}
+                            onChange={(e) => setEditableCanape6(prev => ({ ...prev, priceNote: e.target.value }))}
+                            className="w-full text-xs bg-white border border-rose-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                            placeholder="Passed canapés & interactive cocktail table setups for weddings, receptions, and birthday bashes."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-rose-900 uppercase tracking-wider mb-1">
+                            Book Button Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableCanape6.bookBtnText || ''}
+                            onChange={(e) => setEditableCanape6(prev => ({ ...prev, bookBtnText: e.target.value }))}
+                            className="w-full text-xs bg-white border border-rose-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                            placeholder="Book Canapé Service"
                           />
                         </div>
                       </div>
@@ -6356,21 +7463,158 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   </div>
 
                   <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-                      <div>
-                        <h3 className="text-base font-bold text-gray-900">{editableNorthIndian7.title}</h3>
-                        <p className="text-xs text-gray-500">Min 25 Guests • Complete Comfort Feast</p>
+                    {/* Option 7 Hero Card & Header Settings (User Side) */}
+                    <div className="bg-indigo-50/60 rounded-2xl p-4 border border-indigo-200 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-indigo-950 uppercase tracking-wider flex items-center gap-1.5">
+                          <span>✨</span>
+                          <span>Option 7 Hero &amp; Header Settings (User Side)</span>
+                        </span>
+                        <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-indigo-200 text-indigo-900">
+                          {editableNorthIndian7.inclusions?.length || 7} Inclusions
+                        </span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <label className="text-xs font-bold text-gray-700">Price / Person:</label>
-                        <div className="flex items-center">
-                          <span className="text-xs font-bold mr-1">£</span>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-indigo-900 uppercase tracking-wider mb-1">
+                            Menu Title
+                          </label>
                           <input
-                            type="number"
-                            step="0.5"
-                            value={editableNorthIndian7.pricePerPerson}
-                            onChange={(e) => setEditableNorthIndian7(prev => ({ ...prev, pricePerPerson: parseFloat(e.target.value) || 0 }))}
-                            className="w-20 font-bold text-xs bg-white border border-gray-200 rounded p-1"
+                            type="text"
+                            value={editableNorthIndian7.title || ''}
+                            onChange={(e) => setEditableNorthIndian7(prev => ({ ...prev, title: e.target.value }))}
+                            className="w-full font-bold text-xs bg-white border border-indigo-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                            placeholder="North Indian Standard Menu"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-indigo-900 uppercase tracking-wider mb-1">
+                            Tagline / Subtitle
+                          </label>
+                          <input
+                            type="text"
+                            value={editableNorthIndian7.subtitle || ''}
+                            onChange={(e) => setEditableNorthIndian7(prev => ({ ...prev, subtitle: e.target.value }))}
+                            className="w-full text-xs bg-white border border-indigo-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                            placeholder="One Tava Roti or Nan, Two Subjies..."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-indigo-900 uppercase tracking-wider mb-1">
+                            Badge 1 Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableNorthIndian7.badge1 || ''}
+                            onChange={(e) => setEditableNorthIndian7(prev => ({ ...prev, badge1: e.target.value }))}
+                            className="w-full text-xs bg-white border border-indigo-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                            placeholder="🍛 Option 7 North Indian Standard Menu"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-indigo-900 uppercase tracking-wider mb-1">
+                            Badge 2 Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableNorthIndian7.badge2 || ''}
+                            onChange={(e) => setEditableNorthIndian7(prev => ({ ...prev, badge2: e.target.value }))}
+                            className="w-full text-xs bg-white border border-indigo-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                            placeholder="Min 25 People"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-indigo-900 uppercase tracking-wider mb-1">
+                            Min Guests
+                          </label>
+                          <input
+                            type="text"
+                            value={editableNorthIndian7.minGuests !== undefined ? editableNorthIndian7.minGuests : ''}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              setEditableNorthIndian7(prev => ({
+                                ...prev,
+                                minGuests: raw === '' ? '' : (isNaN(Number(raw)) ? raw : Number(raw))
+                              }));
+                            }}
+                            className="w-full text-xs bg-white border border-indigo-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                            placeholder="25"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-indigo-900 uppercase tracking-wider mb-1">
+                            Price Heading / Label
+                          </label>
+                          <input
+                            type="text"
+                            value={editableNorthIndian7.priceLabel || ''}
+                            onChange={(e) => setEditableNorthIndian7(prev => ({ ...prev, priceLabel: e.target.value }))}
+                            className="w-full text-xs bg-white border border-indigo-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                            placeholder="Fixed Package Price"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-indigo-900 uppercase tracking-wider mb-1">
+                            Price Per Person (£)
+                          </label>
+                          <div className="flex items-center">
+                            <span className="text-gray-500 text-xs mr-1.5 font-bold">£</span>
+                            <input
+                              type="text"
+                              value={editableNorthIndian7.pricePerPerson !== undefined ? editableNorthIndian7.pricePerPerson : ''}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                setEditableNorthIndian7(prev => ({
+                                  ...prev,
+                                  pricePerPerson: raw === '' ? '' : (isNaN(Number(raw)) ? raw : Number(raw))
+                                }));
+                              }}
+                              className="w-full font-bold text-xs bg-white border border-indigo-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                              placeholder="12.00"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-indigo-900 uppercase tracking-wider mb-1">
+                            Price Unit Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableNorthIndian7.priceUnit || ''}
+                            onChange={(e) => setEditableNorthIndian7(prev => ({ ...prev, priceUnit: e.target.value }))}
+                            className="w-full text-xs bg-white border border-indigo-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                            placeholder="/ per person"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-indigo-900 uppercase tracking-wider mb-1">
+                            Price Note / Inclusions Summary
+                          </label>
+                          <input
+                            type="text"
+                            value={editableNorthIndian7.priceNote || ''}
+                            onChange={(e) => setEditableNorthIndian7(prev => ({ ...prev, priceNote: e.target.value }))}
+                            className="w-full text-xs bg-white border border-indigo-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                            placeholder="Includes 1 Tava Roti or Nan, 2 North Indian/Punjabi Subjies, Dal, Veg Biryani/Pulao..."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-indigo-900 uppercase tracking-wider mb-1">
+                            Book Button Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableNorthIndian7.bookBtnText || ''}
+                            onChange={(e) => setEditableNorthIndian7(prev => ({ ...prev, bookBtnText: e.target.value }))}
+                            className="w-full text-xs bg-white border border-indigo-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                            placeholder="Book North Indian Menu (£12/pp)"
                           />
                         </div>
                       </div>
@@ -6457,21 +7701,128 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   </div>
 
                   <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-                      <div>
-                        <h3 className="text-base font-bold text-gray-900">{editableGujarati8.title}</h3>
-                        <p className="text-xs text-gray-500">Mithai (40+), Farsan (20+), Shaak (30+), Dal, Breads &amp; Rice</p>
+                    {/* Option 8 Hero Card & Header Settings (User Side) */}
+                    <div className="bg-teal-50/60 rounded-2xl p-4 border border-teal-200 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-teal-950 uppercase tracking-wider flex items-center gap-1.5">
+                          <span>✨</span>
+                          <span>Option 8 Hero &amp; Header Settings (User Side)</span>
+                        </span>
+                        <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-teal-200 text-teal-900">
+                          7 Traditional Categories
+                        </span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <label className="text-xs font-bold text-gray-700">Price / Person:</label>
-                        <div className="flex items-center">
-                          <span className="text-xs font-bold mr-1">£</span>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-teal-900 uppercase tracking-wider mb-1">
+                            Menu Title
+                          </label>
                           <input
-                            type="number"
-                            step="0.5"
-                            value={editableGujarati8.pricePerPerson}
-                            onChange={(e) => setEditableGujarati8(prev => ({ ...prev, pricePerPerson: parseFloat(e.target.value) || 0 }))}
-                            className="w-20 font-bold text-xs bg-white border border-gray-200 rounded p-1"
+                            type="text"
+                            value={editableGujarati8.title || ''}
+                            onChange={(e) => setEditableGujarati8(prev => ({ ...prev, title: e.target.value }))}
+                            className="w-full font-bold text-xs bg-white border border-teal-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                            placeholder="Gujarati Menu"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-teal-900 uppercase tracking-wider mb-1">
+                            Tagline / Subtitle
+                          </label>
+                          <input
+                            type="text"
+                            value={editableGujarati8.subtitle || ''}
+                            onChange={(e) => setEditableGujarati8(prev => ({ ...prev, subtitle: e.target.value }))}
+                            className="w-full text-xs bg-white border border-teal-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                            placeholder="Traditional Mithai, Crispy Farsan, Classic Shaak..."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-teal-900 uppercase tracking-wider mb-1">
+                            Badge 1 Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableGujarati8.badge1 || ''}
+                            onChange={(e) => setEditableGujarati8(prev => ({ ...prev, badge1: e.target.value }))}
+                            className="w-full text-xs bg-white border border-teal-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                            placeholder="✨ Option 8 Gujarati Menu"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-teal-900 uppercase tracking-wider mb-1">
+                            Price Heading / Label
+                          </label>
+                          <input
+                            type="text"
+                            value={editableGujarati8.priceLabel || ''}
+                            onChange={(e) => setEditableGujarati8(prev => ({ ...prev, priceLabel: e.target.value }))}
+                            className="w-full text-xs bg-white border border-teal-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                            placeholder="Package Price"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-teal-900 uppercase tracking-wider mb-1">
+                            Price Per Person (£)
+                          </label>
+                          <div className="flex items-center">
+                            <span className="text-gray-500 text-xs mr-1.5 font-bold">£</span>
+                            <input
+                              type="text"
+                              value={editableGujarati8.pricePerPerson !== undefined ? editableGujarati8.pricePerPerson : ''}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                setEditableGujarati8(prev => ({
+                                  ...prev,
+                                  pricePerPerson: raw === '' ? '' : (isNaN(Number(raw)) ? raw : Number(raw))
+                                }));
+                              }}
+                              className="w-full font-bold text-xs bg-white border border-teal-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                              placeholder="14.99"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-teal-900 uppercase tracking-wider mb-1">
+                            Price Unit Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableGujarati8.priceUnit || ''}
+                            onChange={(e) => setEditableGujarati8(prev => ({ ...prev, priceUnit: e.target.value }))}
+                            className="w-full text-xs bg-white border border-teal-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                            placeholder="/ per person"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-teal-900 uppercase tracking-wider mb-1">
+                            Price Note / Highlights
+                          </label>
+                          <input
+                            type="text"
+                            value={editableGujarati8.priceNote || ''}
+                            onChange={(e) => setEditableGujarati8(prev => ({ ...prev, priceNote: e.target.value }))}
+                            className="w-full text-xs bg-white border border-teal-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                            placeholder="40+ Mithai, 20+ Farsan, 30+ Shaak including Undhiyu..."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-teal-900 uppercase tracking-wider mb-1">
+                            Book Button Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editableGujarati8.bookBtnText || ''}
+                            onChange={(e) => setEditableGujarati8(prev => ({ ...prev, bookBtnText: e.target.value }))}
+                            className="w-full text-xs bg-white border border-teal-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                            placeholder="Book Gujarati Menu (£14.99/pp)"
                           />
                         </div>
                       </div>
@@ -6565,21 +7916,128 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   </div>
 
                   <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-                      <div>
-                        <h3 className="text-base font-bold text-gray-900">{editablePunjabi9.title}</h3>
-                        <p className="text-xs text-gray-500">Royal Punjabi Feast: Chaats, Subjies, Dal Makhani &amp; Breads</p>
+                    {/* Option 9 Hero Card & Header Settings (User Side) */}
+                    <div className="bg-amber-50/60 rounded-2xl p-4 border border-amber-200 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
+                          <span>✨</span>
+                          <span>Option 9 Hero &amp; Header Settings (User Side)</span>
+                        </span>
+                        <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-200 text-amber-900">
+                          Royal Banquet Spread
+                        </span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <label className="text-xs font-bold text-gray-700">Price / Person:</label>
-                        <div className="flex items-center">
-                          <span className="text-xs font-bold mr-1">£</span>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Menu Title
+                          </label>
                           <input
-                            type="number"
-                            step="0.5"
-                            value={editablePunjabi9.pricePerPerson}
-                            onChange={(e) => setEditablePunjabi9(prev => ({ ...prev, pricePerPerson: parseFloat(e.target.value) || 0 }))}
-                            className="w-20 font-bold text-xs bg-white border border-gray-200 rounded p-1"
+                            type="text"
+                            value={editablePunjabi9.title || ''}
+                            onChange={(e) => setEditablePunjabi9(prev => ({ ...prev, title: e.target.value }))}
+                            className="w-full font-bold text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                            placeholder="Punjabi Menu"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Tagline / Subtitle
+                          </label>
+                          <input
+                            type="text"
+                            value={editablePunjabi9.subtitle || ''}
+                            onChange={(e) => setEditablePunjabi9(prev => ({ ...prev, subtitle: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                            placeholder="Signature Chaats, Tandoori Starters, Royal Subjies..."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Badge 1 Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editablePunjabi9.badge1 || ''}
+                            onChange={(e) => setEditablePunjabi9(prev => ({ ...prev, badge1: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                            placeholder="👑 Option 9 Punjabi Feast"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Price Heading / Label
+                          </label>
+                          <input
+                            type="text"
+                            value={editablePunjabi9.priceLabel || ''}
+                            onChange={(e) => setEditablePunjabi9(prev => ({ ...prev, priceLabel: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                            placeholder="Package Price"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Price Per Person (£)
+                          </label>
+                          <div className="flex items-center">
+                            <span className="text-gray-500 text-xs mr-1.5 font-bold">£</span>
+                            <input
+                              type="text"
+                              value={editablePunjabi9.pricePerPerson !== undefined ? editablePunjabi9.pricePerPerson : ''}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                setEditablePunjabi9(prev => ({
+                                  ...prev,
+                                  pricePerPerson: raw === '' ? '' : (isNaN(Number(raw)) ? raw : Number(raw))
+                                }));
+                              }}
+                              className="w-full font-bold text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                              placeholder="13.99"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Price Unit Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editablePunjabi9.priceUnit || ''}
+                            onChange={(e) => setEditablePunjabi9(prev => ({ ...prev, priceUnit: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                            placeholder="/ per person"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Price Note / Highlights
+                          </label>
+                          <input
+                            type="text"
+                            value={editablePunjabi9.priceNote || ''}
+                            onChange={(e) => setEditablePunjabi9(prev => ({ ...prev, priceNote: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                            placeholder="Paneer Tikka Shashlik, Chaats, Paneer Butter Masala, Amritsari Chole..."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Book Button Text
+                          </label>
+                          <input
+                            type="text"
+                            value={editablePunjabi9.bookBtnText || ''}
+                            onChange={(e) => setEditablePunjabi9(prev => ({ ...prev, bookBtnText: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                            placeholder="Book Punjabi Feast (£13.99/pp)"
                           />
                         </div>
                       </div>
@@ -6839,13 +8297,20 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               onSave={saveWebsiteContentToDatabase}
               isSaving={isSavingWebsiteContent}
               onReset={() => {
-                if (confirm('Reset all website content back to default values?')) {
-                  setEditableWebsiteContent(DEFAULT_WEBSITE_CONTENT);
-                  setCustomAlert({
-                    message: 'Reset to default in editor. Click "Save Website Content" to publish to the homepage.',
-                    type: 'success',
-                  });
-                }
+                setConfirmDialog({
+                  title: 'Reset Website Content',
+                  message: 'Are you sure you want to reset all website content back to default values? Any unsaved edits will be lost.',
+                  confirmText: 'Reset Defaults',
+                  cancelText: 'Cancel',
+                  type: 'warning',
+                  onConfirm: () => {
+                    setEditableWebsiteContent(DEFAULT_WEBSITE_CONTENT);
+                    setCustomAlert({
+                      message: 'Reset to default in editor. Click "Save Website Content" to publish to the homepage.',
+                      type: 'success',
+                    });
+                  },
+                });
               }}
             />
           )}
@@ -7161,10 +8626,17 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       <button
                         type="button"
                         onClick={() => {
-                          if (confirm('Reset form fields to standard SriLalitha default configuration?')) {
-                            setEditableFormConfig(DEFAULT_FORM_CONFIG);
-                            setCustomAlert({ message: 'Reset to default configuration in editor. Click "Save Form Configuration" to apply.', type: 'success' });
-                          }
+                          setConfirmDialog({
+                            title: 'Reset Form Fields',
+                            message: 'Are you sure you want to reset form fields to standard SriLalitha default configuration?',
+                            confirmText: 'Reset Form',
+                            cancelText: 'Cancel',
+                            type: 'warning',
+                            onConfirm: () => {
+                              setEditableFormConfig(DEFAULT_FORM_CONFIG);
+                              setCustomAlert({ message: 'Reset to default configuration in editor. Click "Save Form Configuration" to apply.', type: 'success' });
+                            },
+                          });
                         }}
                         className="px-3 py-2 rounded-xl text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors flex items-center gap-1 whitespace-nowrap flex-shrink-0"
                         title="Restore original default 9 fields"
@@ -7711,9 +9183,14 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                       <button
                                         type="button"
                                         onClick={() => {
-                                          if (confirm(`Remove field "${field.label}"?`)) {
-                                            handleDeleteField(field.id);
-                                          }
+                                          setConfirmDialog({
+                                            title: 'Remove Form Field',
+                                            message: `Are you sure you want to remove field "${field.label}"?`,
+                                            confirmText: 'Remove Field',
+                                            cancelText: 'Cancel',
+                                            type: 'danger',
+                                            onConfirm: () => handleDeleteField(field.id),
+                                          });
                                         }}
                                         className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 transition-colors"
                                         title="Delete custom field"
@@ -8249,23 +9726,55 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {/* ── SECTION 4: BANK DETAILS ── */}
               {settingsSection === 'bank' && (
                 <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-2xl space-y-4 shadow-sm">
-                  <h3 className="font-bold text-gray-900 flex items-center gap-2 text-base">
-                    <Icon name="CreditCardIcon" size={18} style={{ color: '#C8860A' }} />
-                    Bank Account Details
-                  </h3>
-                  <div className="space-y-3.5">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <h3 className="font-bold text-gray-900 flex items-center gap-2 text-base">
+                      <Icon name="CreditCardIcon" size={18} style={{ color: '#C8860A' }} />
+                      Bank Account Details
+                    </h3>
+                    <span className="text-[11px] font-semibold text-gray-500 bg-gray-100 px-2.5 py-0.5 rounded-full">
+                      Used for Invoices &amp; WhatsApp confirmations
+                    </span>
+                  </div>
+                  <div className="space-y-4">
                     <div>
-                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Account Name</label>
-                      <input type="text" value={bankDetails.accountName} onChange={(e) => updateBankDetail('accountName', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50 font-medium" />
+                      <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5">Account Name</label>
+                      <input
+                        type="text"
+                        value={bankDetails.accountName}
+                        onChange={(e) => setBankDetails(prev => ({ ...prev, accountName: e.target.value }))}
+                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50 font-medium focus:bg-white focus:ring-2 focus:ring-[#C8860A]"
+                        placeholder="Account Name (e.g. SriLalitha Events Ltd)"
+                      />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Sort Code</label>
-                      <input type="text" value={bankDetails.sortCode} onChange={(e) => updateBankDetail('sortCode', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50 font-medium" />
+                      <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5">Sort Code</label>
+                      <input
+                        type="text"
+                        value={bankDetails.sortCode}
+                        onChange={(e) => setBankDetails(prev => ({ ...prev, sortCode: e.target.value }))}
+                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50 font-medium focus:bg-white focus:ring-2 focus:ring-[#C8860A]"
+                        placeholder="Sort Code (e.g. 20-00-00)"
+                      />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Account Number</label>
-                      <input type="text" value={bankDetails.accountNumber} onChange={(e) => updateBankDetail('accountNumber', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50 font-medium" />
+                      <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5">Account Number</label>
+                      <input
+                        type="text"
+                        value={bankDetails.accountNumber}
+                        onChange={(e) => setBankDetails(prev => ({ ...prev, accountNumber: e.target.value }))}
+                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50 font-medium focus:bg-white focus:ring-2 focus:ring-[#C8860A]"
+                        placeholder="Account Number (e.g. 12345678)"
+                      />
                     </div>
+                    <button
+                      onClick={saveBankDetails}
+                      disabled={isSavingBankDetails}
+                      className="text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition-all mt-4 shadow-md active:scale-95 disabled:opacity-50 w-full flex items-center justify-center gap-2 cursor-pointer"
+                      style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                    >
+                      <Icon name="CheckCircleIcon" size={16} />
+                      {isSavingBankDetails ? 'Saving Bank Details...' : 'Save Bank Details'}
+                    </button>
                   </div>
                 </div>
               )}
@@ -8480,13 +9989,20 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   onSave={saveWebsiteContentToDatabase}
                   isSaving={isSavingWebsiteContent}
                   onReset={() => {
-                    if (confirm('Reset all website content back to default values?')) {
-                      setEditableWebsiteContent(DEFAULT_WEBSITE_CONTENT);
-                      setCustomAlert({
-                        message: 'Reset to default in editor. Click "Save Website Content" to publish to the homepage.',
-                        type: 'success',
-                      });
-                    }
+                    setConfirmDialog({
+                      title: 'Reset Website Content',
+                      message: 'Are you sure you want to reset all website content back to default values? Any unsaved edits will be lost.',
+                      confirmText: 'Reset Defaults',
+                      cancelText: 'Cancel',
+                      type: 'warning',
+                      onConfirm: () => {
+                        setEditableWebsiteContent(DEFAULT_WEBSITE_CONTENT);
+                        setCustomAlert({
+                          message: 'Reset to default in editor. Click "Save Website Content" to publish to the homepage.',
+                          type: 'success',
+                        });
+                      },
+                    });
                   }}
                 />
               )}
@@ -8637,9 +10153,14 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                   setCustomAlert({ message: 'At least one recipient inbox must remain configured.', type: 'error' });
                                   return;
                                 }
-                                if (confirm(`Remove ${rec.email} from enquiry notifications?`)) {
-                                  handleDeleteRecipient(rec.id);
-                                }
+                                setConfirmDialog({
+                                  title: 'Remove Recipient',
+                                  message: `Are you sure you want to remove "${rec.email}" from enquiry notifications?`,
+                                  confirmText: 'Remove',
+                                  cancelText: 'Cancel',
+                                  type: 'danger',
+                                  onConfirm: () => handleDeleteRecipient(rec.id),
+                                });
                               }}
                               className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                               title="Delete recipient"
@@ -10171,7 +11692,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               adults,
                               0,
                               isOption2 ? 'live-dosa-2' : 'live-dosa-1',
-                              isOption2 ? editableLiveDosa2.pricing : editableLiveDosa1.pricing
+                              (isOption2 ? editableLiveDosa2.pricing : editableLiveDosa1.pricing) as any
                             );
                             baseAmount = liveCalc.finalSubtotal;
                             pricePerPerson = liveCalc.pricePerPerson;
@@ -12280,6 +13801,60 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             >
               OK
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── CENTERED CONFIRMATION MODAL ─── */}
+      {confirmDialog && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-7 w-full max-w-sm border border-gray-100 flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 shadow-inner ${
+              confirmDialog.type === 'warning'
+                ? 'bg-amber-50 text-amber-600 border border-amber-200'
+                : confirmDialog.type === 'info'
+                ? 'bg-blue-50 text-blue-600 border border-blue-200'
+                : 'bg-rose-50 text-rose-600 border border-rose-200'
+            }`}>
+              <Icon
+                name={
+                  confirmDialog.type === 'warning'
+                    ? 'ExclamationTriangleIcon'
+                    : confirmDialog.type === 'info'
+                    ? 'InformationCircleIcon'
+                    : 'TrashIcon'
+                }
+                size={26}
+              />
+            </div>
+            <h3 className="text-base font-bold text-gray-900 mb-1.5">{confirmDialog.title}</h3>
+            <p className="text-xs text-gray-500 mb-6 leading-relaxed">{confirmDialog.message}</p>
+            <div className="flex gap-3 w-full">
+              <button
+                type="button"
+                onClick={() => setConfirmDialog(null)}
+                className="flex-1 px-4 py-2.5 rounded-xl text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-all active:scale-95 cursor-pointer"
+              >
+                {confirmDialog.cancelText || 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const action = confirmDialog.onConfirm;
+                  setConfirmDialog(null);
+                  action();
+                }}
+                className={`flex-1 px-4 py-2.5 rounded-xl text-xs font-bold text-white shadow-sm transition-all active:scale-95 cursor-pointer ${
+                  confirmDialog.type === 'warning'
+                    ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-500/20'
+                    : confirmDialog.type === 'info'
+                    ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'
+                    : 'bg-rose-600 hover:bg-rose-700 shadow-rose-500/20'
+                }`}
+              >
+                {confirmDialog.confirmText || 'Confirm'}
+              </button>
+            </div>
           </div>
         </div>
       )}
