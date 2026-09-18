@@ -149,7 +149,10 @@ export default function InteractiveMenuOrderModal({
   });
 
   const [cuisineType, setCuisineType] = useState<'indian' | 'srilankan'>('indian');
-  const [guests, setGuests] = useState<number>(50);
+  const [adults, setAdults] = useState<number>(50);
+  const [kids, setKids] = useState<number>(0);
+  const [toddlers, setToddlers] = useState<number>(0);
+  const guests = Math.max(1, adults + kids + toddlers);
   const [eventDate, setEventDate] = useState<string>('');
 
   // Structured Time of Day State: (A) Lunch, (B) Dinner, (C) Custom
@@ -459,56 +462,96 @@ export default function InteractiveMenuOrderModal({
       }, 0)
     : 0;
 
+  // Check if selected package is a custom package
+  const customPackageObj = (dynamicMenus?.CUSTOM_PACKAGES || []).find((p: any) => p.id === selectedPackageId);
+
+  // Dynamic Adult Package Rate
+  const packageRatePerPerson = useMemo(() => {
+    if (isLiveDosa) {
+      const customPricing = isLiveDosa2
+        ? (dynamicMenus?.LIVE_DOSA_OPTION_2?.pricing || LIVE_DOSA_OPTION_2.pricing)
+        : (dynamicMenus?.LIVE_DOSA_OPTION_1?.pricing || LIVE_DOSA_OPTION_1.pricing);
+      const isWeekend = eventDate ? isWeekendOrBankHoliday(eventDate) : false;
+      return isWeekend ? customPricing.weekend.pricePerPerson : customPricing.weekday.pricePerPerson;
+    }
+    if (isThali) return Number(dynamicMenus?.MADRAS_THALI_OPTION_3?.pricePerPerson ?? MADRAS_THALI_OPTION_3.pricePerPerson);
+    if (isTailorMenu) return Number(dynamicMenus?.TAILOR_MENU_OPTION_4?.basePrice ?? 15.00) + (tailorSelectedDishes.length * 2.50);
+    if (isDosaFestival) return Number(dynamicMenus?.DOSA_FESTIVAL_OPTION_5?.pricePerPerson ?? DOSA_FESTIVAL_OPTION_5.pricePerPerson);
+    if (isCanape) return Number(dynamicMenus?.CANAPE_OPTION_6?.basePrice ?? 8.99) + (selectedCanapes.length > 4 ? (selectedCanapes.length - 4) * 1.50 : 0);
+    if (isNorthIndian) return Number(dynamicMenus?.NORTH_INDIAN_OPTION_7?.pricePerPerson ?? 12.00);
+    if (isGujarati) return Number(dynamicMenus?.GUJARATI_OPTION_8?.pricePerPerson ?? 14.99);
+    if (isPunjabi) return Number(dynamicMenus?.PUNJABI_OPTION_9?.pricePerPerson ?? 13.99);
+    if (customPackageObj) {
+      if (customPackageObj.pricingType === 'tiered') {
+        const isWeekend = eventDate ? isWeekendOrBankHoliday(eventDate) : false;
+        return Number(isWeekend ? (customPackageObj.pricing?.weekend?.pricePerPerson ?? 16) : (customPackageObj.pricing?.weekday?.pricePerPerson ?? 14.50));
+      }
+      return Number(customPackageObj.pricePerPerson ?? 14.50);
+    }
+    return Number(activePackage.pricePerPerson || 0);
+  }, [
+    selectedPackageId,
+    isLiveDosa,
+    isLiveDosa2,
+    isThali,
+    isTailorMenu,
+    tailorSelectedDishes.length,
+    isDosaFestival,
+    isCanape,
+    selectedCanapes.length,
+    isNorthIndian,
+    isGujarati,
+    isPunjabi,
+    customPackageObj,
+    dynamicMenus,
+    eventDate,
+    activePackage.pricePerPerson,
+  ]);
+
+  // Dynamic Child Rate (Ages 3-10): 50% of the adult package price
+  const childRatePerPerson = useMemo(() => {
+    return Math.round((packageRatePerPerson * 0.5) * 100) / 100;
+  }, [packageRatePerPerson]);
+
   // Live Dosa Calculation
   const liveDosaCalc = useMemo(() => {
     const customPricing = isLiveDosa2
       ? (dynamicMenus?.LIVE_DOSA_OPTION_2?.pricing || LIVE_DOSA_OPTION_2.pricing)
       : (dynamicMenus?.LIVE_DOSA_OPTION_1?.pricing || LIVE_DOSA_OPTION_1.pricing);
-    return calculateLiveDosaPrice(
+    const baseCalc = calculateLiveDosaPrice(
       eventDate || 'weekday',
-      guests,
+      adults,
       upgradesTotal,
       isLiveDosa2 ? 'live-dosa-2' : 'live-dosa-1',
       customPricing
     );
-  }, [eventDate, guests, upgradesTotal, isLiveDosa2, dynamicMenus]);
+    const adultsTotal = adults * baseCalc.pricePerPerson;
+    const kidsTotal = kids * (baseCalc.pricePerPerson * 0.5);
+    const peopleTotal = adultsTotal + kidsTotal;
+    const subtotalBeforeFloor = peopleTotal + upgradesTotal;
+    const finalSubtotal = Math.max(baseCalc.minCallOutCharge, subtotalBeforeFloor);
+    const callOutAdjustment = Math.max(0, baseCalc.minCallOutCharge - subtotalBeforeFloor);
 
-  const packageRatePerPerson = isLiveDosa
-    ? liveDosaCalc.pricePerPerson
-    : isThali
-    ? MADRAS_THALI_OPTION_3.pricePerPerson
-    : isTailorMenu
-    ? (15.00 + tailorSelectedDishes.length * 2.50)
-    : isDosaFestival
-    ? DOSA_FESTIVAL_OPTION_5.pricePerPerson
-    : isCanape
-    ? (8.99 + (selectedCanapes.length > 4 ? (selectedCanapes.length - 4) * 1.50 : 0))
-    : isNorthIndian
-    ? 12.00
-    : isGujarati
-    ? 14.99
-    : isPunjabi
-    ? 13.99
-    : (activePackage.pricePerPerson || 0);
+    return {
+      ...baseCalc,
+      adults,
+      kids,
+      toddlers,
+      guests,
+      adultsTotal,
+      kidsTotal,
+      childPrice: Math.round((baseCalc.pricePerPerson * 0.5) * 100) / 100,
+      peopleTotal,
+      subtotalBeforeFloor,
+      callOutAdjustment,
+      finalSubtotal,
+    };
+  }, [eventDate, adults, kids, toddlers, guests, upgradesTotal, isLiveDosa2, dynamicMenus]);
 
   // Overall Financials
-  const packageTotal = isLiveDosa
-    ? liveDosaCalc.peopleTotal
-    : isThali
-    ? (MADRAS_THALI_OPTION_3.pricePerPerson * Math.max(1, guests))
-    : isTailorMenu
-    ? ((15.00 + tailorSelectedDishes.length * 2.50) * Math.max(1, guests))
-    : isDosaFestival
-    ? (DOSA_FESTIVAL_OPTION_5.pricePerPerson * Math.max(1, guests))
-    : isCanape
-    ? ((8.99 + (selectedCanapes.length > 4 ? (selectedCanapes.length - 4) * 1.50 : 0)) * Math.max(1, guests))
-    : isNorthIndian
-    ? (12.00 * Math.max(25, guests))
-    : isGujarati
-    ? (14.99 * Math.max(1, guests))
-    : isPunjabi
-    ? (13.99 * Math.max(1, guests))
-    : ((activePackage.pricePerPerson || 0) * Math.max(1, guests));
+  const adultsTotal = adults * packageRatePerPerson;
+  const kidsTotal = kids * childRatePerPerson;
+  const packageTotal = isLiveDosa ? liveDosaCalc.peopleTotal : (adultsTotal + kidsTotal);
 
   const callOutAdjustment = isLiveDosa ? liveDosaCalc.callOutAdjustment : 0;
   const foodAndUpgradesTotal = isLiveDosa
@@ -830,6 +873,9 @@ export default function InteractiveMenuOrderModal({
           packageName: activePackage.name,
           cuisineType,
           guests: Number(guests),
+          adults: Number(adults),
+          kids4to10: Number(kids),
+          kidsUnder4: Number(toddlers),
           date: eventDate,
           time: eventTime,
           timeOfDay: eventTime,
@@ -881,6 +927,9 @@ export default function InteractiveMenuOrderModal({
           customerPhone,
           packageName: activePackage.name,
           guests: Number(guests),
+          adults: Number(adults),
+          kids4to10: Number(kids),
+          kidsUnder4: Number(toddlers),
           eventDate,
           eventTime,
           location: venueAddress,
@@ -1314,24 +1363,94 @@ export default function InteractiveMenuOrderModal({
 
               {/* Schedule & Contact Details Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">
-                    Number of Guests *
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="2000"
-                    value={guests}
-                    onChange={(e) => {
-                      setGuests(Math.max(1, parseInt(e.target.value) || 1));
-                      setErrorMessage(null);
-                    }}
-                    className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-white"
-                  />
+                {/* Guest Breakdown (Adults & Children) */}
+                <div className="sm:col-span-2 bg-gradient-to-r from-amber-500/5 via-amber-400/10 to-transparent border border-amber-200/80 rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div>
+                      <span className="text-xs font-extrabold text-gray-900 block flex items-center gap-1.5">
+                        <span>👥</span>
+                        <span>Guest Count &amp; Age Breakdown:</span>
+                      </span>
+                      <span className="text-[10px] text-gray-500">
+                        Prices adjust dynamically according to your selected package: <strong>{activePackage.name}</strong>
+                      </span>
+                    </div>
+                    <span className="px-3 py-1 rounded-full text-xs font-black bg-amber-100 text-amber-950 border border-amber-300 shadow-2xs">
+                      Total: {guests} Guests
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Adults */}
+                    <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-2xs space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold text-gray-800">🧑 Adults (11+ yrs) *</label>
+                        <span className="text-[10px] font-extrabold text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                          £{packageRatePerPerson.toFixed(2)}/pp
+                        </span>
+                      </div>
+                      <input
+                        type="number"
+                        min="1"
+                        max="2000"
+                        value={adults}
+                        onChange={(e) => {
+                          setAdults(Math.max(1, parseInt(e.target.value) || 0));
+                          setErrorMessage(null);
+                        }}
+                        className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#C8860A] bg-gray-50/50"
+                      />
+                      <span className="text-[9px] text-gray-400 block">Standard adult catering portion</span>
+                    </div>
+
+                    {/* Children 3-10 */}
+                    <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-2xs space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold text-gray-800">🧒 Children (3–10 yrs)</label>
+                        <span className="text-[10px] font-extrabold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                          £{childRatePerPerson.toFixed(2)}/child
+                        </span>
+                      </div>
+                      <input
+                        type="number"
+                        min="0"
+                        max="1000"
+                        value={kids}
+                        onChange={(e) => {
+                          setKids(Math.max(0, parseInt(e.target.value) || 0));
+                          setErrorMessage(null);
+                        }}
+                        className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#C8860A] bg-gray-50/50"
+                      />
+                      <span className="text-[9px] text-emerald-700 font-semibold block">50% discount per child</span>
+                    </div>
+
+                    {/* Toddlers Under 3 */}
+                    <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-2xs space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold text-gray-800">👶 Toddlers (Under 3)</label>
+                        <span className="text-[10px] font-extrabold text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                          FREE (£0)
+                        </span>
+                      </div>
+                      <input
+                        type="number"
+                        min="0"
+                        max="500"
+                        value={toddlers}
+                        onChange={(e) => {
+                          setToddlers(Math.max(0, parseInt(e.target.value) || 0));
+                          setErrorMessage(null);
+                        }}
+                        className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#C8860A] bg-gray-50/50"
+                      />
+                      <span className="text-[9px] text-blue-700 font-semibold block">Complimentary food/portion</span>
+                    </div>
+                  </div>
+
                   {isLiveDosa && guests < liveDosaCalc.minGuests && (
-                    <span className="text-[10px] text-amber-700 font-semibold mt-1 block">
-                      ℹ️ Minimum {liveDosaCalc.minGuests} guests or min callout £{liveDosaCalc.minCallOutCharge} applies
+                    <span className="text-[10px] text-amber-800 font-semibold block bg-amber-100/60 p-2 rounded-lg border border-amber-200">
+                      ℹ️ Minimum {liveDosaCalc.minGuests} guests guarantee or min callout £{liveDosaCalc.minCallOutCharge.toFixed(2)} applies.
                     </span>
                   )}
                 </div>
@@ -3323,11 +3442,36 @@ export default function InteractiveMenuOrderModal({
                   <span className="text-[10px] text-gray-500 font-normal">All figures in GBP (£)</span>
                 </div>
                 <div className="p-4 space-y-2.5">
-                  <div className="flex justify-between text-gray-600">
-                    <span>
-                      {activePackage.name} (£{packageRatePerPerson.toFixed(2)} × {guests} guests)
-                    </span>
-                    <span className="font-semibold text-gray-900">£{packageTotal.toFixed(2)}</span>
+                  <div className="space-y-1.5 pb-2 border-b border-gray-100">
+                    <div className="flex justify-between text-gray-700 font-medium">
+                      <span>
+                        🧑 Adults (11+ yrs): £{packageRatePerPerson.toFixed(2)} × {adults} {adults === 1 ? 'guest' : 'guests'}
+                      </span>
+                      <span className="font-semibold text-gray-900">£{(adults * packageRatePerPerson).toFixed(2)}</span>
+                    </div>
+
+                    {kids > 0 && (
+                      <div className="flex justify-between text-emerald-800">
+                        <span>
+                          🧒 Children (3–10 yrs): £{childRatePerPerson.toFixed(2)} × {kids} {kids === 1 ? 'child' : 'children'} <span className="text-[10px] font-bold bg-emerald-100 px-1 py-0.5 rounded ml-1">50% Off</span>
+                        </span>
+                        <span className="font-semibold text-emerald-900">£{(kids * childRatePerPerson).toFixed(2)}</span>
+                      </div>
+                    )}
+
+                    {toddlers > 0 && (
+                      <div className="flex justify-between text-blue-800">
+                        <span>
+                          👶 Toddlers (Under 3): Free × {toddlers}
+                        </span>
+                        <span className="font-bold text-blue-900">FREE (£0.00)</span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between text-xs font-bold text-gray-900 pt-1">
+                      <span>{activePackage.name} (Food Total: {guests} guests)</span>
+                      <span>£{packageTotal.toFixed(2)}</span>
+                    </div>
                   </div>
 
                   {/* Minimum Call Out Floor Adjustment (if guest count/menu is under floor) */}

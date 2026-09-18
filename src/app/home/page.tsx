@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -35,6 +35,7 @@ import {
   MenuCategory,
   MenuItem,
   MenuUpgradeItem,
+  CustomPackage,
 } from '@/app/data/menuData';
 import {
   DEFAULT_FORM_CONFIG,
@@ -66,7 +67,7 @@ import {
   sanitizeWebsiteContent,
 } from '@/app/data/websiteContentConfig';
 
-type MenuTab = 'full-menu' | 'live-dosa-1' | 'live-dosa-2' | 'madras-thali' | 'tailor-menu' | 'dosa-festival' | 'canape' | 'north-indian' | 'gujarati' | 'punjabi' | 'live-dosa';
+type MenuTab = 'full-menu' | 'live-dosa-1' | 'live-dosa-2' | 'madras-thali' | 'tailor-menu' | 'dosa-festival' | 'canape' | 'north-indian' | 'gujarati' | 'punjabi' | 'live-dosa' | string;
 
 export default function HomePage() {
   const [isMenuOrderModalOpen, setIsMenuOrderModalOpen] = useState(false);
@@ -94,6 +95,7 @@ export default function HomePage() {
     STANDARD_SETUP: DEFAULT_STANDARD_SETUP,
     TERMS_AND_CONDITIONS: DEFAULT_TERMS_AND_CONDITIONS,
     DRY_HIRE_PRICES: DEFAULT_DRY_HIRE_PRICES,
+    CUSTOM_PACKAGES: [] as CustomPackage[],
   });
 
   const [blockedDates, setBlockedDates] = useState<string[]>([]);
@@ -188,6 +190,7 @@ export default function HomePage() {
           STANDARD_SETUP: data.STANDARD_SETUP || DEFAULT_STANDARD_SETUP,
           TERMS_AND_CONDITIONS: data.TERMS_AND_CONDITIONS || DEFAULT_TERMS_AND_CONDITIONS,
           DRY_HIRE_PRICES: data.DRY_HIRE_PRICES || DEFAULT_DRY_HIRE_PRICES,
+          CUSTOM_PACKAGES: (data.CUSTOM_PACKAGES || []) as CustomPackage[],
         });
       }
     });
@@ -252,6 +255,12 @@ export default function HomePage() {
   const activePunjabi = useMemo(() => {
     return (menus.PUNJABI_OPTION_9 || PUNJABI_OPTION_9) as any;
   }, [menus.PUNJABI_OPTION_9]);
+
+  const activeCustomPackages = useMemo(() => {
+    return ((menus.CUSTOM_PACKAGES || []) as CustomPackage[]).filter(
+      p => p.isActive !== false && !p.isDeleted
+    );
+  }, [menus.CUSTOM_PACKAGES]);
 
   const [timeCategory, setTimeCategory] = useState<'lunch' | 'dinner' | 'custom'>('lunch');
   const [customStartTime, setCustomStartTime] = useState<string>('12:00 PM');
@@ -480,6 +489,72 @@ export default function HomePage() {
   };
   const [submitted, setSubmitted] = useState(false);
   const [activeMenuTab, setActiveMenuTab] = useState<MenuTab>('full-menu');
+
+  const availableMenuTabs = useMemo(() => {
+    const tabs: { id: MenuTab; label: string; count: string }[] = [
+      { id: 'full-menu', label: '📋 Full Menu', count: `${MENU_CATEGORIES.reduce((acc, c) => acc + c.items.length, 0)}+` }
+    ];
+
+    if (activeLiveDosa1.isActive !== false && !activeLiveDosa1.isDeleted) {
+      tabs.push({ id: 'live-dosa-1', label: `🎪 ${activeLiveDosa1.title || 'Live Dosa 1'}`, count: `£${Number(activeLiveDosa1.pricing?.weekday?.pricePerPerson ?? 11).toFixed(0)}/pp` });
+    }
+    if (activeLiveDosa2.isActive !== false && !activeLiveDosa2.isDeleted) {
+      tabs.push({ id: 'live-dosa-2', label: `👑 ${activeLiveDosa2.title || 'Live Dosa 2'}`, count: `£${Number(activeLiveDosa2.pricing?.weekday?.pricePerPerson ?? 16.5).toFixed(2)}/pp` });
+    }
+    if (activeMadrasThali.isActive !== false && !activeMadrasThali.isDeleted) {
+      tabs.push({ id: 'madras-thali', label: `🍲 ${activeMadrasThali.title || 'Option 3: Thali'}`, count: `£${Number(activeMadrasThali.pricePerPerson ?? 10.99).toFixed(2)}/pp` });
+    }
+    if (activeTailorMenu.isActive !== false && !activeTailorMenu.isDeleted) {
+      tabs.push({ id: 'tailor-menu', label: `🎨 ${activeTailorMenu.title || 'Option 4: Tailor'}`, count: `From £${Number(activeTailorMenu.basePrice ?? 15.00).toFixed(0)}` });
+    }
+    if (activeDosaFestival.isActive !== false && !activeDosaFestival.isDeleted) {
+      tabs.push({ id: 'dosa-festival', label: `🥞 ${activeDosaFestival.title || 'Option 5: Festival'}`, count: `£${Number(activeDosaFestival.pricePerPerson ?? 14.99).toFixed(2)}/pp` });
+    }
+    if (activeCanape.isActive !== false && !activeCanape.isDeleted) {
+      tabs.push({ id: 'canape', label: `🍢 ${activeCanape.title || 'Option 6: Canapés'}`, count: `From £${Number(activeCanape.basePrice ?? 8.99).toFixed(2)}` });
+    }
+    if (activeNorthIndian.isActive !== false && !activeNorthIndian.isDeleted) {
+      tabs.push({ id: 'north-indian', label: `🍛 ${activeNorthIndian.title || 'Option 7: North Indian'}`, count: `£${Number(activeNorthIndian.pricePerPerson ?? 12.00).toFixed(2)}/pp` });
+    }
+    if (activeGujarati.isActive !== false && !activeGujarati.isDeleted) {
+      tabs.push({ id: 'gujarati', label: `🪔 ${activeGujarati.title || 'Option 8: Gujarati'}`, count: `£${Number(activeGujarati.pricePerPerson ?? 14.99).toFixed(2)}/pp` });
+    }
+    if (activePunjabi.isActive !== false && !activePunjabi.isDeleted) {
+      tabs.push({ id: 'punjabi', label: `👑 ${activePunjabi.title || 'Option 9: Punjabi'}`, count: `£${Number(activePunjabi.pricePerPerson ?? 13.99).toFixed(2)}/pp` });
+    }
+
+    // Dynamic Custom Packages
+    activeCustomPackages.forEach(pkg => {
+      const priceTag = pkg.pricingType === 'flat'
+        ? `£${Number(pkg.pricePerPerson || 14.5).toFixed(2)}/pp`
+        : `From £${Number(pkg.pricing?.weekday?.pricePerPerson ?? 14).toFixed(2)}/pp`;
+      tabs.push({
+        id: pkg.id,
+        label: `✨ ${pkg.title}`,
+        count: priceTag,
+      });
+    });
+
+    return tabs;
+  }, [
+    activeLiveDosa1,
+    activeLiveDosa2,
+    activeMadrasThali,
+    activeTailorMenu,
+    activeDosaFestival,
+    activeCanape,
+    activeNorthIndian,
+    activeGujarati,
+    activePunjabi,
+    activeCustomPackages,
+  ]);
+
+  // If currently active tab becomes inactive or deleted, fall back to the first available tab
+  useEffect(() => {
+    if (availableMenuTabs.length > 0 && !availableMenuTabs.some(t => t.id === activeMenuTab || (activeMenuTab === 'live-dosa' && t.id === 'live-dosa-1'))) {
+      setActiveMenuTab(availableMenuTabs[0].id);
+    }
+  }, [availableMenuTabs, activeMenuTab]);
   const [selectedCategoryIndex, setSelectedCategoryIndex] = useState<number>(0);
   const [menuSearchQuery, setMenuSearchQuery] = useState<string>('');
   const [dietaryFilter, setDietaryFilter] = useState<'all' | 'V' | 'OJ' | 'M' | 'N'>('all');
@@ -608,6 +683,17 @@ export default function HomePage() {
         else baseAmount = 250.00;
       } else if (selectedExtra) {
         baseAmount = selectedExtra.price;
+      } else {
+        const customPkg = (menus.CUSTOM_PACKAGES || []).find((p: any) => pkgLower.includes(p.title.toLowerCase()));
+        if (customPkg) {
+          if (customPkg.pricingType === 'tiered') {
+            const isWeekend = isWeekendOrBankHoliday(bookingForm.date);
+            const rate = isWeekend ? (customPkg.pricing?.weekend?.pricePerPerson ?? 16) : (customPkg.pricing?.weekday?.pricePerPerson ?? 14.50);
+            baseAmount = rate * guestCount;
+          } else {
+            baseAmount = (customPkg.pricePerPerson || 14.50) * guestCount;
+          }
+        }
       }
 
       const deliveryFee = deliveryResult ? deliveryResult.charge : 0;
@@ -945,28 +1031,67 @@ export default function HomePage() {
           >
             <option value="">{field.placeholder || 'No specific package – help me choose'}</option>
             
-            <optgroup label="── 🎪 Live Dosa Stations ──">
-              <option value="Live Dosa Option 1 (Weekday: Mon-Fri)">{activeLiveDosa1.title || 'Live Dosa Option 1'} (Weekday: Mon-Fri) — £{Number(activeLiveDosa1.pricing?.weekday?.pricePerPerson ?? 11).toFixed(2)}/person (Min {activeLiveDosa1.pricing?.weekday?.minGuests ?? 35} guests)</option>
-              <option value="Live Dosa Option 1 (Weekend & Holidays)">{activeLiveDosa1.title || 'Live Dosa Option 1'} (Weekend &amp; Holidays) — £{Number(activeLiveDosa1.pricing?.weekend?.pricePerPerson ?? 12).toFixed(2)}/person (Min {activeLiveDosa1.pricing?.weekend?.minGuests ?? 40} guests)</option>
-              <option value="Live Dosa Option 2 (Weekday: Mon-Fri)">{activeLiveDosa2.title || 'Live Dosa Option 2'} (Weekday: Mon-Fri) — £{Number(activeLiveDosa2.pricing?.weekday?.pricePerPerson ?? 16.50).toFixed(2)}/person (Min {activeLiveDosa2.pricing?.weekday?.minGuests ?? 35} guests)</option>
-              <option value="Live Dosa Option 2 (Weekend & Holidays)">{activeLiveDosa2.title || 'Live Dosa Option 2'} (Weekend &amp; Holidays) — £{Number(activeLiveDosa2.pricing?.weekend?.pricePerPerson ?? 17.50).toFixed(2)}/person (Min {activeLiveDosa2.pricing?.weekend?.minGuests ?? 40} guests)</option>
-            </optgroup>
+            {((activeLiveDosa1.isActive !== false && !activeLiveDosa1.isDeleted) || (activeLiveDosa2.isActive !== false && !activeLiveDosa2.isDeleted)) && (
+              <optgroup label="── 🎪 Live Dosa Stations ──">
+                {activeLiveDosa1.isActive !== false && !activeLiveDosa1.isDeleted && (
+                  <>
+                    <option value="Live Dosa Option 1 (Weekday: Mon-Fri)">{activeLiveDosa1.title || 'Live Dosa Option 1'} (Weekday: Mon-Fri) — £{Number(activeLiveDosa1.pricing?.weekday?.pricePerPerson ?? 11).toFixed(2)}/person (Min {activeLiveDosa1.pricing?.weekday?.minGuests ?? 35} guests)</option>
+                    <option value="Live Dosa Option 1 (Weekend & Holidays)">{activeLiveDosa1.title || 'Live Dosa Option 1'} (Weekend &amp; Holidays) — £{Number(activeLiveDosa1.pricing?.weekend?.pricePerPerson ?? 12).toFixed(2)}/person (Min {activeLiveDosa1.pricing?.weekend?.minGuests ?? 40} guests)</option>
+                  </>
+                )}
+                {activeLiveDosa2.isActive !== false && !activeLiveDosa2.isDeleted && (
+                  <>
+                    <option value="Live Dosa Option 2 (Weekday: Mon-Fri)">{activeLiveDosa2.title || 'Live Dosa Option 2'} (Weekday: Mon-Fri) — £{Number(activeLiveDosa2.pricing?.weekday?.pricePerPerson ?? 16.50).toFixed(2)}/person (Min {activeLiveDosa2.pricing?.weekday?.minGuests ?? 35} guests)</option>
+                    <option value="Live Dosa Option 2 (Weekend & Holidays)">{activeLiveDosa2.title || 'Live Dosa Option 2'} (Weekend &amp; Holidays) — £{Number(activeLiveDosa2.pricing?.weekend?.pricePerPerson ?? 17.50).toFixed(2)}/person (Min {activeLiveDosa2.pricing?.weekend?.minGuests ?? 40} guests)</option>
+                  </>
+                )}
+              </optgroup>
+            )}
 
-            <optgroup label="── 🍲 Traditional Meals &amp; Thali ──">
-              <option value="Madras Thali (Option 3) — £10.99/pp">Madras Thali / South Indian Meals / Andhra Bhojanam — £10.99/person</option>
-            </optgroup>
+            {activeMadrasThali.isActive !== false && !activeMadrasThali.isDeleted && (
+              <optgroup label="── 🍲 Traditional Meals &amp; Thali ──">
+                <option value={`Madras Thali (Option 3) — £${Number(activeMadrasThali.pricePerPerson ?? 10.99).toFixed(2)}/pp`}>{activeMadrasThali.title || 'Madras Thali'} — £{Number(activeMadrasThali.pricePerPerson ?? 10.99).toFixed(2)}/person</option>
+              </optgroup>
+            )}
 
-            <optgroup label="── 🎨 Bespoke &amp; Festival Experiences ──">
-              <option value="Tailor Your Own Menu (Option 4)">Tailor Your Own Menu (Option 4) — 4 Live Stations</option>
-              <option value="Dosa Festival At Your Home (Option 5)">Dosa Festival At Your Home (Option 5) — 34+ Varieties (£14.99/person)</option>
-            </optgroup>
+            {((activeTailorMenu.isActive !== false && !activeTailorMenu.isDeleted) || (activeDosaFestival.isActive !== false && !activeDosaFestival.isDeleted)) && (
+              <optgroup label="── 🎨 Bespoke &amp; Festival Experiences ──">
+                {activeTailorMenu.isActive !== false && !activeTailorMenu.isDeleted && (
+                  <option value="Tailor Your Own Menu (Option 4)">{activeTailorMenu.title || 'Tailor Your Own Menu (Option 4)'} — 4 Live Stations</option>
+                )}
+                {activeDosaFestival.isActive !== false && !activeDosaFestival.isDeleted && (
+                  <option value={`Dosa Festival At Your Home (Option 5) — £${Number(activeDosaFestival.pricePerPerson ?? 14.99).toFixed(2)}/pp`}>{activeDosaFestival.title || 'Dosa Festival At Your Home (Option 5)'} — 34+ Varieties (£{Number(activeDosaFestival.pricePerPerson ?? 14.99).toFixed(2)}/person)</option>
+                )}
+              </optgroup>
+            )}
 
-            <optgroup label="── 🍢 Cocktail &amp; Regional Feasts ──">
-              <option value="Canapé Service (Option 6)">Canapé Service (Option 6) — Passed Finger Foods (From £8.99/pp)</option>
-              <option value="North Indian Standard Menu (Option 7)">North Indian Standard Menu (Option 7) — £12.00/person (Min 25)</option>
-              <option value="Gujarati Menu (Option 8)">Gujarati Menu (Option 8) — 40+ Mithai &amp; Farsan (£14.99/person)</option>
-              <option value="Punjabi Menu (Option 9)">Punjabi Menu (Option 9) — Royal Feast (£13.99/person)</option>
-            </optgroup>
+            {((activeCanape.isActive !== false && !activeCanape.isDeleted) || (activeNorthIndian.isActive !== false && !activeNorthIndian.isDeleted) || (activeGujarati.isActive !== false && !activeGujarati.isDeleted) || (activePunjabi.isActive !== false && !activePunjabi.isDeleted)) && (
+              <optgroup label="── 🍢 Cocktail &amp; Regional Feasts ──">
+                {activeCanape.isActive !== false && !activeCanape.isDeleted && (
+                  <option value={`Canapé Service (Option 6) — From £${Number(activeCanape.basePrice ?? 8.99).toFixed(2)}/pp`}>{activeCanape.title || 'Canapé Service (Option 6)'} — Passed Finger Foods (From £{Number(activeCanape.basePrice ?? 8.99).toFixed(2)}/pp)</option>
+                )}
+                {activeNorthIndian.isActive !== false && !activeNorthIndian.isDeleted && (
+                  <option value={`North Indian Standard Menu (Option 7) — £${Number(activeNorthIndian.pricePerPerson ?? 12.00).toFixed(2)}/pp`}>{activeNorthIndian.title || 'North Indian Standard Menu (Option 7)'} — £{Number(activeNorthIndian.pricePerPerson ?? 12.00).toFixed(2)}/person (Min 25)</option>
+                )}
+                {activeGujarati.isActive !== false && !activeGujarati.isDeleted && (
+                  <option value={`Gujarati Menu (Option 8) — £${Number(activeGujarati.pricePerPerson ?? 14.99).toFixed(2)}/pp`}>{activeGujarati.title || 'Gujarati Menu (Option 8)'} — 40+ Mithai &amp; Farsan (£{Number(activeGujarati.pricePerPerson ?? 14.99).toFixed(2)}/person)</option>
+                )}
+                {activePunjabi.isActive !== false && !activePunjabi.isDeleted && (
+                  <option value={`Punjabi Menu (Option 9) — £${Number(activePunjabi.pricePerPerson ?? 13.99).toFixed(2)}/pp`}>{activePunjabi.title || 'Punjabi Menu (Option 9)'} — Royal Feast (£{Number(activePunjabi.pricePerPerson ?? 13.99).toFixed(2)}/person)</option>
+                )}
+              </optgroup>
+            )}
+
+            {/* Dynamic Custom Packages */}
+            {activeCustomPackages.length > 0 && (
+              <optgroup label="── 🌟 Special Custom Packages ──">
+                {activeCustomPackages.map(pkg => (
+                  <option key={pkg.id} value={`${pkg.title} (${pkg.pricingType === 'flat' ? `£${Number(pkg.pricePerPerson || 14.5).toFixed(2)}/pp` : `From £${Number(pkg.pricing?.weekday?.pricePerPerson ?? 14).toFixed(2)}/pp`})`}>
+                    {pkg.title} — {pkg.pricingType === 'flat' ? `£${Number(pkg.pricePerPerson || 14.5).toFixed(2)}/person (Min ${pkg.minGuests || 35} guests)` : `Weekday £${Number(pkg.pricing?.weekday?.pricePerPerson ?? 14).toFixed(2)} / Weekend £${Number(pkg.pricing?.weekend?.pricePerPerson ?? 16).toFixed(2)}/pp`}
+                  </option>
+                ))}
+              </optgroup>
+            )}
 
             <optgroup label="── ✨ Premium Upgrades ──">
               <option value="Gazebo Setup — £70">Gazebo Setup — £70.00</option>
@@ -1219,18 +1344,7 @@ export default function HomePage() {
 
           {/* Top Main Navigation Tabs */}
           <div className="flex flex-wrap gap-2 justify-center mb-8">
-            {([
-              { id: 'full-menu', label: '📋 Full Menu', count: `${MENU_CATEGORIES.reduce((acc, c) => acc + c.items.length, 0)}+` },
-              { id: 'live-dosa-1', label: '🎪 Live Dosa 1', count: '£11/pp' },
-              { id: 'live-dosa-2', label: '👑 Live Dosa 2', count: '£16.50/pp' },
-              { id: 'madras-thali', label: '🍲 Option 3: Thali', count: '£10.99/pp' },
-              { id: 'tailor-menu', label: '🎨 Option 4: Tailor', count: '4 Stations' },
-              { id: 'dosa-festival', label: '🥞 Option 5: Festival', count: '34+ Dosas' },
-              { id: 'canape', label: '🍢 Option 6: Canapés', count: 'From £8.99' },
-              { id: 'north-indian', label: '🍛 Option 7: North Indian', count: '£12.00/pp' },
-              { id: 'gujarati', label: '🪔 Option 8: Gujarati', count: '£14.99/pp' },
-              { id: 'punjabi', label: '👑 Option 9: Punjabi', count: '£13.99/pp' },
-            ] as { id: MenuTab; label: string; count: string }[]).map((tab) => {
+            {availableMenuTabs.map((tab) => {
               const isActive = activeMenuTab === tab.id || (activeMenuTab === 'live-dosa' && tab.id === 'live-dosa-1');
               return (
                 <button
@@ -3159,6 +3273,175 @@ export default function HomePage() {
               </div>
             </div>
           )}
+
+          {/* ══════════════════════════════════════════════════════════════
+              DYNAMIC CUSTOM PACKAGES
+              ══════════════════════════════════════════════════════════════ */}
+          {activeCustomPackages.map(pkg => {
+            if (activeMenuTab !== pkg.id) return null;
+            return (
+              <div key={pkg.id} className="space-y-8 animate-in fade-in duration-300">
+                {/* Hero Banner */}
+                <div
+                  className="rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden"
+                  style={{ background: 'linear-gradient(135deg, #2E1B0E 0%, #4A2E18 50%, #C8860A 100%)' }}
+                >
+                  <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none text-9xl">
+                    ✨
+                  </div>
+                  <div className="relative z-10 max-w-3xl">
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {pkg.badge && (
+                        <span className="inline-block text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                          {pkg.badge}
+                        </span>
+                      )}
+                      {pkg.serviceDuration && (
+                        <span className="inline-block text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                          ⏱️ {pkg.serviceDuration}
+                        </span>
+                      )}
+                      {pkg.dishesBadge && (
+                        <span className="inline-block text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-emerald-400/20 text-emerald-300 border border-emerald-400/30">
+                          {pkg.dishesBadge}
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white mb-2">
+                      {pkg.title}
+                    </h3>
+                    {pkg.tagline && (
+                      <p className="text-amber-200 font-medium text-sm sm:text-base mb-3">
+                        {pkg.tagline}
+                      </p>
+                    )}
+                    {pkg.description && (
+                      <p className="text-xs sm:text-sm text-gray-300 leading-relaxed mb-4 whitespace-pre-line">
+                        {pkg.description}
+                      </p>
+                    )}
+
+                    {/* Pricing Display */}
+                    {pkg.pricingType === 'tiered' ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 my-4">
+                        <div className="bg-white/10 backdrop-blur-xs border border-white/20 p-3.5 rounded-2xl text-left">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-bold text-amber-300">{pkg.pricing?.weekday?.days || '📅 Week days (Mon – Fri)'}</span>
+                            <span className="text-sm font-extrabold text-white">£{Number(pkg.pricing?.weekday?.pricePerPerson ?? 14.50).toFixed(2)} <span className="text-[10px] font-normal text-gray-300">/ person</span></span>
+                          </div>
+                          <p className="text-[11px] text-gray-300 mb-1">{pkg.pricing?.weekday?.minGuestsNote || `${pkg.pricing?.weekday?.minGuests ?? 35} people minimum guarantee`}</p>
+                          <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-400/20 text-amber-200 border border-amber-400/30">
+                            {pkg.pricing?.weekday?.minCallOutNote || `Min. call out: £${Number(pkg.pricing?.weekday?.minCallOutCharge ?? 500).toFixed(2)}`}
+                          </span>
+                        </div>
+
+                        <div className="bg-white/10 backdrop-blur-xs border border-white/20 p-3.5 rounded-2xl text-left">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-bold text-amber-300">{pkg.pricing?.weekend?.days || '🌟 Week Ends & Bank Holidays'}</span>
+                            <span className="text-sm font-extrabold text-white">£{Number(pkg.pricing?.weekend?.pricePerPerson ?? 16.00).toFixed(2)} <span className="text-[10px] font-normal text-gray-300">/ person</span></span>
+                          </div>
+                          <p className="text-[11px] text-gray-300 mb-1">{pkg.pricing?.weekend?.minGuestsNote || `${pkg.pricing?.weekend?.minGuests ?? 40} people minimum guarantee`}</p>
+                          <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-400/20 text-amber-200 border border-amber-400/30">
+                            {pkg.pricing?.weekend?.minCallOutNote || `Min. call out: £${Number(pkg.pricing?.weekend?.minCallOutCharge ?? 640).toFixed(2)}`}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5 my-4">
+                        <div>
+                          <span className="text-xs sm:text-sm text-amber-200 font-bold block uppercase tracking-wide">
+                            Package Price
+                          </span>
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="text-3xl sm:text-4xl font-black text-white">
+                              £{Number(pkg.pricePerPerson ?? 14.50).toFixed(2)}
+                            </span>
+                            <span className="text-sm text-gray-200">/ per person</span>
+                          </div>
+                        </div>
+                        <div className="text-right text-xs sm:text-sm text-amber-100">
+                          <p>Min. {pkg.minGuests || 35} Guests</p>
+                          {pkg.minCallOutCharge && <p className="text-xs text-amber-200/80">Min. Call Out: £{pkg.minCallOutCharge}</p>}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-3 mt-4">
+                      <button
+                        onClick={() => {
+                          setSelectedPackageForModal(pkg.title);
+                          setIsMenuOrderModalOpen(true);
+                        }}
+                        className="px-6 py-3 rounded-xl font-bold text-gray-900 bg-amber-400 hover:bg-amber-300 transition-all text-xs sm:text-sm shadow-md cursor-pointer flex items-center gap-2"
+                      >
+                        <span>{pkg.bookBtnText || `Book ${pkg.title}`}</span>
+                        <span>→</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Inclusions & Highlights */}
+                {pkg.inclusions && pkg.inclusions.length > 0 && (
+                  <div className="bg-amber-50/70 border border-amber-200 rounded-3xl p-6">
+                    <h4 className="text-base font-bold text-amber-950 mb-3 flex items-center gap-2">
+                      <span>✨</span> Package Inclusions &amp; Setup:
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {pkg.inclusions.map((inc, i) => (
+                        <div key={i} className="flex items-center gap-2 text-xs font-semibold text-gray-800 bg-white p-2.5 rounded-xl border border-amber-200/60 shadow-2xs">
+                          <span className="text-amber-600 font-bold">✓</span>
+                          <span>{inc}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Dishes Grid */}
+                {pkg.items && pkg.items.length > 0 && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between border-b border-gray-200 pb-3">
+                      <div>
+                        <h4 className="text-xl font-bold text-gray-900">{pkg.items.length} Menu Items Included</h4>
+                        <p className="text-xs text-gray-500">Carefully curated dishes included in {pkg.title}</p>
+                      </div>
+                      <span className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                        {pkg.serviceDuration || 'Live Catering'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {pkg.items.map((item, idx) => (
+                        <div key={idx} className="bg-white p-5 rounded-2xl border border-amber-200/80 shadow-2xs hover:shadow-md transition-all space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <h5 className="font-bold text-gray-900 text-sm flex items-center gap-1.5">
+                              {item.isLive && <span className="text-amber-600 text-xs">🔥</span>}
+                              <span>{item.name}</span>
+                            </h5>
+                            {item.tags && item.tags.length > 0 && (
+                              <div className="flex items-center gap-1">
+                                {item.tags.map((t, ti) => (
+                                  <span key={ti} className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                                    {t}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          {item.description && (
+                            <p className="text-xs text-gray-600 leading-relaxed">
+                              {item.description}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </section>
 

@@ -29,6 +29,8 @@ import {
   calculateLiveDosaPrice,
   isWeekendOrBankHoliday,
   MenuUpgradeItem,
+  CustomPackage,
+  CustomPackageItem,
 } from '@/app/data/menuData';
 import {
   DEFAULT_FORM_CONFIG,
@@ -1391,7 +1393,7 @@ export default function AdminPage() {
 
   // ─── REAL MENU EDITABLE STATE ─────────────────────────────────────────────
   // ─── REAL MENU EDITABLE STATE ─────────────────────────────────────────────
-  type AdminMenuTab = 'categories' | 'live-dosa-1' | 'live-dosa-2' | 'madras-thali' | 'tailor-menu' | 'dosa-festival' | 'canape' | 'north-indian' | 'gujarati' | 'punjabi' | 'upgrades' | 'live-dosa';
+  type AdminMenuTab = 'categories' | 'live-dosa-1' | 'live-dosa-2' | 'madras-thali' | 'tailor-menu' | 'dosa-festival' | 'canape' | 'north-indian' | 'gujarati' | 'punjabi' | 'upgrades' | 'live-dosa' | string;
   const [adminMenuTab, setAdminMenuTab] = useState<AdminMenuTab>('categories');
   const [selectedAdminCategoryIndex, setSelectedAdminCategoryIndex] = useState<number>(0);
 
@@ -1405,6 +1407,8 @@ export default function AdminPage() {
 
   interface LiveDosaState {
     id: string;
+    isActive?: boolean;
+    isDeleted?: boolean;
     title: string;
     tagline: string;
     subtitle: string;
@@ -1448,6 +1452,8 @@ export default function AdminPage() {
 
   interface ThaliOptionState {
     id?: string;
+    isActive?: boolean;
+    isDeleted?: boolean;
     title: string;
     shortTitle?: string;
     tagline: string;
@@ -1476,6 +1482,8 @@ export default function AdminPage() {
 
   interface TailorOptionState {
     id?: string;
+    isActive?: boolean;
+    isDeleted?: boolean;
     title: string;
     shortTitle?: string;
     tagline?: string;
@@ -1499,6 +1507,8 @@ export default function AdminPage() {
 
   interface DosaFestivalOptionState {
     id?: string;
+    isActive?: boolean;
+    isDeleted?: boolean;
     title: string;
     shortTitle?: string;
     tagline?: string;
@@ -1519,6 +1529,8 @@ export default function AdminPage() {
 
   interface CanapeOptionState {
     id?: string;
+    isActive?: boolean;
+    isDeleted?: boolean;
     title: string;
     shortTitle?: string;
     tagline?: string;
@@ -1535,6 +1547,8 @@ export default function AdminPage() {
 
   interface NorthIndianOptionState {
     id?: string;
+    isActive?: boolean;
+    isDeleted?: boolean;
     title: string;
     shortTitle?: string;
     tagline?: string;
@@ -1557,6 +1571,8 @@ export default function AdminPage() {
 
   interface GujaratiOptionState {
     id?: string;
+    isActive?: boolean;
+    isDeleted?: boolean;
     title: string;
     shortTitle?: string;
     tagline?: string;
@@ -1581,6 +1597,8 @@ export default function AdminPage() {
 
   interface PunjabiOptionState {
     id?: string;
+    isActive?: boolean;
+    isDeleted?: boolean;
     title: string;
     shortTitle?: string;
     tagline?: string;
@@ -1795,6 +1813,56 @@ export default function AdminPage() {
   const [newUpgradePrice, setNewUpgradePrice] = useState('');
   const [newUpgradeDesc, setNewUpgradeDesc] = useState('');
 
+  // Editable Custom Complete Packages
+  const [editableCustomPackages, setEditableCustomPackages] = useState<CustomPackage[]>([]);
+  const [isCreatePackageModalOpen, setIsCreatePackageModalOpen] = useState(false);
+  const [newPackageDraft, setNewPackageDraft] = useState<Partial<CustomPackage>>({
+    title: '',
+    tagline: '',
+    badge: 'Special Package',
+    serviceDuration: '3 Hours Live Service',
+    dishesBadge: '10 Dishes Included',
+    description: '',
+    bookBtnText: 'Book This Package',
+    pricingType: 'tiered',
+    isActive: true,
+    pricePerPerson: 14.50,
+    minGuests: 35,
+    minCallOutCharge: 500,
+    minGuestsNote: '',
+    minCallOutNote: '',
+    pricing: {
+      weekday: {
+        days: 'Week days (Monday to Friday)',
+        pricePerPerson: 14.50,
+        minGuests: 35,
+        minCallOutCharge: 500,
+        minGuestsNote: '',
+        minCallOutNote: '',
+      },
+      weekend: {
+        days: 'Week Ends & Bank Holidays',
+        pricePerPerson: 16.00,
+        minGuests: 40,
+        minCallOutCharge: 640,
+        minGuestsNote: '',
+        minCallOutNote: '',
+      },
+      disclaimer: 'Minimum call out charge can be reached by guest count or menu upgrades.',
+    },
+    inclusions: ['Live preparation on site', 'Eco-friendly plates & cutlery', 'Authentic chutneys & piping hot sambar'],
+    items: [
+      { name: 'Chef Special Signature Dish (Live)', description: 'Freshly prepared to order on site with authentic spices', isLive: true, tags: ['V', 'M'] },
+      { name: 'Medu Vada (Live)', description: 'Crisp golden lentil donuts fried fresh on the spot', isLive: true, tags: ['V', 'M'] },
+      { name: 'Chutneys & Piping Hot Sambar', description: 'Fresh coconut chutney, tomato chutney & aromatic sambar', isLive: true, tags: ['V'] },
+    ],
+  });
+  const [newCustomDishName, setNewCustomDishName] = useState('');
+  const [newCustomDishDesc, setNewCustomDishDesc] = useState('');
+  const [newCustomDishLive, setNewCustomDishLive] = useState(true);
+  const [newCustomDishTags, setNewCustomDishTags] = useState('V');
+  const [newInclusionText, setNewInclusionText] = useState('');
+
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'site_data', 'menus'), (docSnap) => {
       if (docSnap.exists()) {
@@ -1925,6 +1993,7 @@ export default function AdminPage() {
         if (data.TABLE_SERVICE) setEditableTableService(data.TABLE_SERVICE);
         if (data.KIDS_PRICING) setEditableKidsPricing(data.KIDS_PRICING);
         if (data.DRY_HIRE_PRICES) setEditableDryHirePrices(data.DRY_HIRE_PRICES);
+        if (data.CUSTOM_PACKAGES && Array.isArray(data.CUSTOM_PACKAGES)) setEditableCustomPackages(data.CUSTOM_PACKAGES);
       }
     });
     return () => unsub();
@@ -1936,6 +2005,8 @@ export default function AdminPage() {
     try {
       const cleanDosa1 = {
         ...editableLiveDosa1,
+        isActive: editableLiveDosa1.isActive !== false,
+        isDeleted: !!editableLiveDosa1.isDeleted,
         pricing: {
           ...editableLiveDosa1.pricing,
           weekday: {
@@ -1943,17 +2014,23 @@ export default function AdminPage() {
             pricePerPerson: Number(editableLiveDosa1.pricing?.weekday?.pricePerPerson ?? 11),
             minGuests: Number(editableLiveDosa1.pricing?.weekday?.minGuests ?? 35),
             minCallOutCharge: Number(editableLiveDosa1.pricing?.weekday?.minCallOutCharge ?? 385),
+            minGuestsNote: editableLiveDosa1.pricing?.weekday?.minGuestsNote ?? '',
+            minCallOutNote: editableLiveDosa1.pricing?.weekday?.minCallOutNote ?? '',
           },
           weekend: {
             ...editableLiveDosa1.pricing?.weekend,
             pricePerPerson: Number(editableLiveDosa1.pricing?.weekend?.pricePerPerson ?? 12),
             minGuests: Number(editableLiveDosa1.pricing?.weekend?.minGuests ?? 40),
             minCallOutCharge: Number(editableLiveDosa1.pricing?.weekend?.minCallOutCharge ?? 480),
+            minGuestsNote: editableLiveDosa1.pricing?.weekend?.minGuestsNote ?? '',
+            minCallOutNote: editableLiveDosa1.pricing?.weekend?.minCallOutNote ?? '',
           },
         },
       };
       const cleanDosa2 = {
         ...editableLiveDosa2,
+        isActive: editableLiveDosa2.isActive !== false,
+        isDeleted: !!editableLiveDosa2.isDeleted,
         pricing: {
           ...editableLiveDosa2.pricing,
           weekday: {
@@ -1961,38 +2038,59 @@ export default function AdminPage() {
             pricePerPerson: Number(editableLiveDosa2.pricing?.weekday?.pricePerPerson ?? 16.5),
             minGuests: Number(editableLiveDosa2.pricing?.weekday?.minGuests ?? 35),
             minCallOutCharge: Number(editableLiveDosa2.pricing?.weekday?.minCallOutCharge ?? 577.5),
+            minGuestsNote: editableLiveDosa2.pricing?.weekday?.minGuestsNote ?? '',
+            minCallOutNote: editableLiveDosa2.pricing?.weekday?.minCallOutNote ?? '',
           },
           weekend: {
             ...editableLiveDosa2.pricing?.weekend,
             pricePerPerson: Number(editableLiveDosa2.pricing?.weekend?.pricePerPerson ?? 17.5),
             minGuests: Number(editableLiveDosa2.pricing?.weekend?.minGuests ?? 40),
             minCallOutCharge: Number(editableLiveDosa2.pricing?.weekend?.minCallOutCharge ?? 700),
+            minGuestsNote: editableLiveDosa2.pricing?.weekend?.minGuestsNote ?? '',
+            minCallOutNote: editableLiveDosa2.pricing?.weekend?.minCallOutNote ?? '',
           },
         },
       };
       const cleanThali = {
         ...editableMadrasThali,
+        isActive: editableMadrasThali.isActive !== false,
+        isDeleted: !!editableMadrasThali.isDeleted,
         pricePerPerson: Number(editableMadrasThali.pricePerPerson ?? 10.99),
+      };
+      const cleanTailor = {
+        ...editableTailorMenu4,
+        isActive: editableTailorMenu4.isActive !== false,
+        isDeleted: !!editableTailorMenu4.isDeleted,
       };
       const cleanDosaFestival = {
         ...editableDosaFestival5,
+        isActive: editableDosaFestival5.isActive !== false,
+        isDeleted: !!editableDosaFestival5.isDeleted,
         pricePerPerson: Number(editableDosaFestival5.pricePerPerson ?? 12.99),
       };
       const cleanCanape = {
         ...editableCanape6,
+        isActive: editableCanape6.isActive !== false,
+        isDeleted: !!editableCanape6.isDeleted,
         pricePerPerson: Number(editableCanape6.pricePerPerson ?? 8.99),
       };
       const cleanNorthIndian = {
         ...editableNorthIndian7,
+        isActive: editableNorthIndian7.isActive !== false,
+        isDeleted: !!editableNorthIndian7.isDeleted,
         pricePerPerson: Number(editableNorthIndian7.pricePerPerson ?? 12.00),
         minGuests: Number(editableNorthIndian7.minGuests ?? 25),
       };
       const cleanGujarati = {
         ...editableGujarati8,
+        isActive: editableGujarati8.isActive !== false,
+        isDeleted: !!editableGujarati8.isDeleted,
         pricePerPerson: Number(editableGujarati8.pricePerPerson ?? 14.99),
       };
       const cleanPunjabi = {
         ...editablePunjabi9,
+        isActive: editablePunjabi9.isActive !== false,
+        isDeleted: !!editablePunjabi9.isDeleted,
         pricePerPerson: Number(editablePunjabi9.pricePerPerson ?? 13.99),
       };
 
@@ -2002,12 +2100,13 @@ export default function AdminPage() {
         LIVE_DOSA_OPTION_2: cleanDosa2,
         LIVE_DOSA_MENU: cleanDosa1,
         MADRAS_THALI_OPTION_3: cleanThali,
-        TAILOR_MENU_OPTION_4: editableTailorMenu4,
+        TAILOR_MENU_OPTION_4: cleanTailor,
         DOSA_FESTIVAL_OPTION_5: cleanDosaFestival,
         CANAPE_OPTION_6: cleanCanape,
         NORTH_INDIAN_OPTION_7: cleanNorthIndian,
         GUJARATI_OPTION_8: cleanGujarati,
         PUNJABI_OPTION_9: cleanPunjabi,
+        CUSTOM_PACKAGES: editableCustomPackages,
         MENU_UPGRADES: editableUpgrades,
         SOUTH_INDIAN_BUFFET: editableSouthIndianBuffet,
         BANQUET_PACKAGES: editableBanquetPackages,
@@ -3896,6 +3995,66 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     return userPermissions.includes(item.requiredPerm);
   });
 
+  const renderPackageControlHeader = (
+    title: string,
+    isActive: boolean,
+    onToggleActive: () => void,
+    onDelete: () => void,
+    isStandard: boolean = true,
+  ) => (
+    <div className="bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-transparent border border-amber-300/70 rounded-2xl p-4 shadow-2xs flex flex-wrap items-center justify-between gap-3 mb-4">
+      <div className="flex items-center gap-3">
+        <div className={`w-3.5 h-3.5 rounded-full flex-shrink-0 ${isActive ? 'bg-emerald-500 ring-4 ring-emerald-100' : 'bg-gray-400 ring-4 ring-gray-200'}`} />
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="font-extrabold text-sm text-gray-900">{title}</span>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isActive ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-gray-100 text-gray-600 border border-gray-300'}`}>
+              {isActive ? '🟢 Active on Website' : '⚪ Inactive (Hidden)'}
+            </span>
+            {isStandard && (
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-100/80 text-amber-900 border border-amber-200">
+                Default Package
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {isActive
+              ? 'This package is currently visible to customers in navigation tabs, booking inquiry dropdowns, and interactive orders.'
+              : 'This package is currently hidden from the customer-facing website.'}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* On / Off Switch */}
+        <button
+          type="button"
+          onClick={onToggleActive}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-2xs ${
+            isActive
+              ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+              : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
+          }`}
+        >
+          <span className="text-sm">{isActive ? '✓' : '✕'}</span>
+          <span>{isActive ? 'Package is ON' : 'Package is OFF'}</span>
+          <span className="text-[10px] font-normal opacity-85">(Click to toggle)</span>
+        </button>
+
+        {/* Delete Package */}
+        <button
+          type="button"
+          onClick={onDelete}
+          className="px-3 py-2 rounded-xl text-xs font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+          title={isStandard ? "Hide and archive this package from the website" : "Permanently delete this custom package"}
+        >
+          <Icon name="TrashIcon" size={14} />
+          <span>{isStandard ? 'Hide / Delete' : 'Delete Package'}</span>
+        </button>
+      </div>
+    </div>
+  );
+
   // ─── AUTHENTICATION LOADING ────────────────────────────────────────────────
   if (loadingAuth) {
     return (
@@ -4287,7 +4446,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     })
                     .map((order) => {
                       const totalAmt = order.totalEstimatedAmount || order.baseAmount || 0;
-                      const paidAmt = order.deposit || order.amountPaidSoFar || (order.depositPaid ? totalAmt : 0);
+                      const paidAmt = order.depositPaid ? (order.amountPaidSoFar || order.deposit || 0) : 0;
                       const remAmt = Math.max(0, totalAmt - paidAmt);
                       const dishes = order.selectedMenuDishes || {};
 
@@ -4457,7 +4616,11 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               </div>
                               <div>
                                 <span className="text-gray-400 block text-[10px] uppercase font-bold">Deposit / Paid</span>
-                                <span className="font-bold text-emerald-700 text-sm">£{paidAmt.toFixed(2)}</span>
+                                {order.depositPaid ? (
+                                  <span className="font-bold text-emerald-700 text-sm">£{paidAmt.toFixed(2)}</span>
+                                ) : (
+                                  <span className="font-bold text-amber-600 text-xs">Awaiting Payment</span>
+                                )}
                               </div>
                               {remAmt > 0 && (
                                 <div>
@@ -5080,27 +5243,94 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 </button>
               </div>
 
-              {/* Menu Sub-tabs */}
-              <div className="flex flex-wrap gap-2">
+              {/* Menu Sub-tabs & Package Management */}
+              <div className="flex flex-wrap items-center gap-2 bg-amber-50/50 p-2.5 rounded-2xl border border-amber-200/80">
                 {([
-                  { id: 'categories', label: '📋 Restaurant Menus' },
-                  { id: 'live-dosa-1', label: '🎪 Option 1: Live Dosa 1' },
-                  { id: 'live-dosa-2', label: '👑 Option 2: Live Dosa 2' },
-                  { id: 'madras-thali', label: '🍲 Option 3: Thali (£10.99)' },
-                  { id: 'tailor-menu', label: '🎨 Option 4: Tailor' },
-                  { id: 'dosa-festival', label: '🥞 Option 5: Festival' },
-                  { id: 'canape', label: '🍢 Option 6: Canapés' },
-                  { id: 'north-indian', label: '🍛 Option 7: North Indian' },
-                  { id: 'gujarati', label: '🪔 Option 8: Gujarati' },
-                  { id: 'punjabi', label: '👑 Option 9: Punjabi' },
-                  { id: 'upgrades', label: '✨ Upgrades' },
-                ] as { id: AdminMenuTab; label: string }[]).map((tab) => (
-                  <button key={tab.id} onClick={() => setAdminMenuTab(tab.id)}
-                    className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${adminMenuTab === tab.id || (adminMenuTab === 'live-dosa' && tab.id === 'live-dosa-1') ? 'text-white shadow-md scale-[1.02]' : 'bg-white border border-gray-200 text-gray-700 hover:border-amber-400 shadow-2xs'}`}
-                    style={adminMenuTab === tab.id || (adminMenuTab === 'live-dosa' && tab.id === 'live-dosa-1') ? { background: 'linear-gradient(135deg, #C8860A, #F0A830)' } : {}}>
-                    {tab.label}
+                  { id: 'categories', label: '📋 Restaurant Menus', isStandard: true, isActive: true, isDeleted: false },
+                  { id: 'live-dosa-1', label: '🎪 Option 1: Live Dosa 1', isStandard: true, isActive: editableLiveDosa1.isActive !== false, isDeleted: !!editableLiveDosa1.isDeleted },
+                  { id: 'live-dosa-2', label: '👑 Option 2: Live Dosa 2', isStandard: true, isActive: editableLiveDosa2.isActive !== false, isDeleted: !!editableLiveDosa2.isDeleted },
+                  { id: 'madras-thali', label: '🍲 Option 3: Thali (£10.99)', isStandard: true, isActive: editableMadrasThali.isActive !== false, isDeleted: !!editableMadrasThali.isDeleted },
+                  { id: 'tailor-menu', label: '🎨 Option 4: Tailor', isStandard: true, isActive: editableTailorMenu4.isActive !== false, isDeleted: !!editableTailorMenu4.isDeleted },
+                  { id: 'dosa-festival', label: '🥞 Option 5: Festival', isStandard: true, isActive: editableDosaFestival5.isActive !== false, isDeleted: !!editableDosaFestival5.isDeleted },
+                  { id: 'canape', label: '🍢 Option 6: Canapés', isStandard: true, isActive: editableCanape6.isActive !== false, isDeleted: !!editableCanape6.isDeleted },
+                  { id: 'north-indian', label: '🍛 Option 7: North Indian', isStandard: true, isActive: editableNorthIndian7.isActive !== false, isDeleted: !!editableNorthIndian7.isDeleted },
+                  { id: 'gujarati', label: '🪔 Option 8: Gujarati', isStandard: true, isActive: editableGujarati8.isActive !== false, isDeleted: !!editableGujarati8.isDeleted },
+                  { id: 'punjabi', label: '👑 Option 9: Punjabi', isStandard: true, isActive: editablePunjabi9.isActive !== false, isDeleted: !!editablePunjabi9.isDeleted },
+                  ...editableCustomPackages.filter(p => !p.isDeleted).map(pkg => ({
+                    id: pkg.id,
+                    label: `✨ ${pkg.title || 'Custom Package'}`,
+                    isStandard: false,
+                    isActive: pkg.isActive !== false,
+                    isDeleted: false,
+                  })),
+                  { id: 'upgrades', label: '✨ Upgrades & Kids Pricing', isStandard: true, isActive: true, isDeleted: false },
+                ]).filter(tab => !tab.isDeleted).map((tab) => {
+                  const isSelected = adminMenuTab === tab.id || (adminMenuTab === 'live-dosa' && tab.id === 'live-dosa-1');
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setAdminMenuTab(tab.id)}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs ${
+                        isSelected
+                          ? 'text-white shadow-md scale-[1.02]'
+                          : 'bg-white border border-gray-200 text-gray-700 hover:border-amber-400 hover:bg-amber-50/30'
+                      }`}
+                      style={isSelected ? { background: 'linear-gradient(135deg, #C8860A, #F0A830)' } : {}}
+                    >
+                      <span>{tab.label}</span>
+                      {tab.id !== 'categories' && tab.id !== 'upgrades' && (
+                        <span
+                          className={`w-2 h-2 rounded-full flex-shrink-0 ${tab.isActive ? 'bg-emerald-400 ring-2 ring-emerald-200' : 'bg-gray-400 ring-2 ring-gray-200'}`}
+                          title={tab.isActive ? 'Active & visible on website' : 'Inactive (hidden from website)'}
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+
+                {/* + Add New Package Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsCreatePackageModalOpen(true)}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold text-amber-950 bg-amber-200/80 hover:bg-amber-300 border border-amber-400/80 transition-all flex items-center gap-1.5 shadow-xs cursor-pointer ml-auto"
+                  title="Create a complete new catering package"
+                >
+                  <Icon name="PlusCircleIcon" size={16} />
+                  <span>+ Add New Package</span>
+                </button>
+
+                {/* Restore standard packages button if any was hidden */}
+                {(
+                  (editableLiveDosa1.isDeleted ? 1 : 0) +
+                  (editableLiveDosa2.isDeleted ? 1 : 0) +
+                  (editableMadrasThali.isDeleted ? 1 : 0) +
+                  (editableTailorMenu4.isDeleted ? 1 : 0) +
+                  (editableDosaFestival5.isDeleted ? 1 : 0) +
+                  (editableCanape6.isDeleted ? 1 : 0) +
+                  (editableNorthIndian7.isDeleted ? 1 : 0) +
+                  (editableGujarati8.isDeleted ? 1 : 0) +
+                  (editablePunjabi9.isDeleted ? 1 : 0)
+                ) > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditableLiveDosa1(p => ({ ...p, isDeleted: false, isActive: true }));
+                      setEditableLiveDosa2(p => ({ ...p, isDeleted: false, isActive: true }));
+                      setEditableMadrasThali(p => ({ ...p, isDeleted: false, isActive: true }));
+                      setEditableTailorMenu4(p => ({ ...p, isDeleted: false, isActive: true }));
+                      setEditableDosaFestival5(p => ({ ...p, isDeleted: false, isActive: true }));
+                      setEditableCanape6(p => ({ ...p, isDeleted: false, isActive: true }));
+                      setEditableNorthIndian7(p => ({ ...p, isDeleted: false, isActive: true }));
+                      setEditableGujarati8(p => ({ ...p, isDeleted: false, isActive: true }));
+                      setEditablePunjabi9(p => ({ ...p, isDeleted: false, isActive: true }));
+                      setCustomAlert({ message: 'All deleted/hidden standard packages restored!', type: 'success' });
+                    }}
+                    className="px-3 py-1.5 rounded-xl text-[11px] font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-dashed border-gray-300 transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    <Icon name="ArrowPathIcon" size={13} />
+                    <span>Restore Hidden Packages</span>
                   </button>
-                ))}
+                )}
               </div>
 
               {/* ─── TAB 1: RESTAURANT CATEGORIES (9 EXACT CATEGORIES) ─── */}
@@ -5312,6 +5542,25 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {/* ─── TAB 2: LIVE DOSA OPTION 1 EDITOR ─── */}
               {(adminMenuTab === 'live-dosa-1' || adminMenuTab === 'live-dosa') && (
                 <div className="space-y-4 animate-in fade-in duration-300">
+                  {renderPackageControlHeader(
+                    editableLiveDosa1.title || 'Option 1: Live Dosa 1',
+                    editableLiveDosa1.isActive !== false,
+                    () => setEditableLiveDosa1(prev => ({ ...prev, isActive: prev.isActive === false ? true : false })),
+                    () => {
+                      setConfirmDialog({
+                        title: 'Hide Option 1',
+                        message: 'Are you sure you want to hide/delete Option 1 from the website? You can restore it anytime.',
+                        confirmText: 'Hide Package',
+                        cancelText: 'Cancel',
+                        type: 'warning',
+                        onConfirm: () => {
+                          setEditableLiveDosa1(prev => ({ ...prev, isActive: false, isDeleted: true }));
+                          setAdminMenuTab('categories');
+                        },
+                      });
+                    },
+                    true
+                  )}
                   {/* WhatsApp & Email Broadcast */}
                   <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-2xs">
                     <p className="text-xs font-bold text-amber-900 mb-2 flex items-center gap-1.5">
@@ -5538,6 +5787,46 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             </div>
                           </div>
                         </div>
+
+                        {/* Custom Guarantee Note & Call Out Note */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-gray-100 text-xs">
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">
+                              Guarantee Note Text <span className="font-normal text-gray-400">({editableLiveDosa1.pricing?.weekday?.minGuests ?? 35} people minimum guarantee)</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={editableLiveDosa1.pricing?.weekday?.minGuestsNote ?? ''}
+                              onChange={(e) => setEditableLiveDosa1(prev => ({
+                                ...prev,
+                                pricing: {
+                                  ...prev.pricing,
+                                  weekday: { ...prev.pricing?.weekday, minGuestsNote: e.target.value }
+                                }
+                              }))}
+                              placeholder={`${editableLiveDosa1.pricing?.weekday?.minGuests ?? 35} people minimum guarantee`}
+                              className="w-full border border-gray-200 rounded px-2 py-1 text-xs text-gray-900 focus:ring-1 focus:ring-[#C8860A] focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">
+                              Min Call-Out Badge Text <span className="font-normal text-gray-400">(Min. call out: £{Number(editableLiveDosa1.pricing?.weekday?.minCallOutCharge ?? 385).toFixed(2)})</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={editableLiveDosa1.pricing?.weekday?.minCallOutNote ?? ''}
+                              onChange={(e) => setEditableLiveDosa1(prev => ({
+                                ...prev,
+                                pricing: {
+                                  ...prev.pricing,
+                                  weekday: { ...prev.pricing?.weekday, minCallOutNote: e.target.value }
+                                }
+                              }))}
+                              placeholder={`Min. call out: £${Number(editableLiveDosa1.pricing?.weekday?.minCallOutCharge ?? 385).toFixed(2)}`}
+                              className="w-full border border-gray-200 rounded px-2 py-1 text-xs text-gray-900 focus:ring-1 focus:ring-[#C8860A] focus:outline-none"
+                            />
+                          </div>
+                        </div>
                       </div>
 
                       {/* Weekend Pricing */}
@@ -5621,6 +5910,46 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                 placeholder="480"
                               />
                             </div>
+                          </div>
+                        </div>
+
+                        {/* Custom Guarantee Note & Call Out Note */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-gray-100 text-xs">
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">
+                              Guarantee Note Text <span className="font-normal text-gray-400">({editableLiveDosa1.pricing?.weekend?.minGuests ?? 40} people minimum guarantee)</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={editableLiveDosa1.pricing?.weekend?.minGuestsNote ?? ''}
+                              onChange={(e) => setEditableLiveDosa1(prev => ({
+                                ...prev,
+                                pricing: {
+                                  ...prev.pricing,
+                                  weekend: { ...prev.pricing?.weekend, minGuestsNote: e.target.value }
+                                }
+                              }))}
+                              placeholder={`${editableLiveDosa1.pricing?.weekend?.minGuests ?? 40} people minimum guarantee`}
+                              className="w-full border border-gray-200 rounded px-2 py-1 text-xs text-gray-900 focus:ring-1 focus:ring-[#C8860A] focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">
+                              Min Call-Out Badge Text <span className="font-normal text-gray-400">(Min. call out: £{Number(editableLiveDosa1.pricing?.weekend?.minCallOutCharge ?? 480).toFixed(2)})</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={editableLiveDosa1.pricing?.weekend?.minCallOutNote ?? ''}
+                              onChange={(e) => setEditableLiveDosa1(prev => ({
+                                ...prev,
+                                pricing: {
+                                  ...prev.pricing,
+                                  weekend: { ...prev.pricing?.weekend, minCallOutNote: e.target.value }
+                                }
+                              }))}
+                              placeholder={`Min. call out: £${Number(editableLiveDosa1.pricing?.weekend?.minCallOutCharge ?? 480).toFixed(2)}`}
+                              className="w-full border border-gray-200 rounded px-2 py-1 text-xs text-gray-900 focus:ring-1 focus:ring-[#C8860A] focus:outline-none"
+                            />
                           </div>
                         </div>
                       </div>
@@ -5771,6 +6100,25 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {/* ─── TAB: LIVE DOSA OPTION 2 EDITOR (3 HOURS + MAIN + DESSERT) ─── */}
               {adminMenuTab === 'live-dosa-2' && (
                 <div className="space-y-4 animate-in fade-in duration-300">
+                  {renderPackageControlHeader(
+                    editableLiveDosa2.title || 'Option 2: Live Dosa 2',
+                    editableLiveDosa2.isActive !== false,
+                    () => setEditableLiveDosa2(prev => ({ ...prev, isActive: prev.isActive === false ? true : false })),
+                    () => {
+                      setConfirmDialog({
+                        title: 'Hide Option 2',
+                        message: 'Are you sure you want to hide/delete Option 2 from the website? You can restore it anytime.',
+                        confirmText: 'Hide Package',
+                        cancelText: 'Cancel',
+                        type: 'warning',
+                        onConfirm: () => {
+                          setEditableLiveDosa2(prev => ({ ...prev, isActive: false, isDeleted: true }));
+                          setAdminMenuTab('categories');
+                        },
+                      });
+                    },
+                    true
+                  )}
                   {/* Broadcast via WhatsApp / Email */}
                   <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 shadow-2xs">
                     <p className="text-xs font-bold text-purple-950 mb-2 flex items-center gap-1.5">
@@ -5997,6 +6345,46 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             </div>
                           </div>
                         </div>
+
+                        {/* Custom Guarantee Note & Call Out Note */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-gray-100 text-xs">
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">
+                              Guarantee Note Text <span className="font-normal text-gray-400">({editableLiveDosa2.pricing?.weekday?.minGuests ?? 35} people minimum guarantee)</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={editableLiveDosa2.pricing?.weekday?.minGuestsNote ?? ''}
+                              onChange={(e) => setEditableLiveDosa2(prev => ({
+                                ...prev,
+                                pricing: {
+                                  ...prev.pricing,
+                                  weekday: { ...prev.pricing?.weekday, minGuestsNote: e.target.value }
+                                }
+                              }))}
+                              placeholder={`${editableLiveDosa2.pricing?.weekday?.minGuests ?? 35} people minimum guarantee`}
+                              className="w-full border border-gray-200 rounded px-2 py-1 text-xs text-gray-900 focus:ring-1 focus:ring-purple-500 focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">
+                              Min Call-Out Badge Text <span className="font-normal text-gray-400">(Min. call out: £{Number(editableLiveDosa2.pricing?.weekday?.minCallOutCharge ?? 577.50).toFixed(2)})</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={editableLiveDosa2.pricing?.weekday?.minCallOutNote ?? ''}
+                              onChange={(e) => setEditableLiveDosa2(prev => ({
+                                ...prev,
+                                pricing: {
+                                  ...prev.pricing,
+                                  weekday: { ...prev.pricing?.weekday, minCallOutNote: e.target.value }
+                                }
+                              }))}
+                              placeholder={`Min. call out: £${Number(editableLiveDosa2.pricing?.weekday?.minCallOutCharge ?? 577.50).toFixed(2)}`}
+                              className="w-full border border-gray-200 rounded px-2 py-1 text-xs text-gray-900 focus:ring-1 focus:ring-purple-500 focus:outline-none"
+                            />
+                          </div>
+                        </div>
                       </div>
 
                       {/* Weekend Pricing */}
@@ -6080,6 +6468,46 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                 placeholder="700"
                               />
                             </div>
+                          </div>
+                        </div>
+
+                        {/* Custom Guarantee Note & Call Out Note */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-gray-100 text-xs">
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">
+                              Guarantee Note Text <span className="font-normal text-gray-400">({editableLiveDosa2.pricing?.weekend?.minGuests ?? 40} people minimum guarantee)</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={editableLiveDosa2.pricing?.weekend?.minGuestsNote ?? ''}
+                              onChange={(e) => setEditableLiveDosa2(prev => ({
+                                ...prev,
+                                pricing: {
+                                  ...prev.pricing,
+                                  weekend: { ...prev.pricing?.weekend, minGuestsNote: e.target.value }
+                                }
+                              }))}
+                              placeholder={`${editableLiveDosa2.pricing?.weekend?.minGuests ?? 40} people minimum guarantee`}
+                              className="w-full border border-gray-200 rounded px-2 py-1 text-xs text-gray-900 focus:ring-1 focus:ring-purple-500 focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">
+                              Min Call-Out Badge Text <span className="font-normal text-gray-400">(Min. call out: £{Number(editableLiveDosa2.pricing?.weekend?.minCallOutCharge ?? 700).toFixed(2)})</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={editableLiveDosa2.pricing?.weekend?.minCallOutNote ?? ''}
+                              onChange={(e) => setEditableLiveDosa2(prev => ({
+                                ...prev,
+                                pricing: {
+                                  ...prev.pricing,
+                                  weekend: { ...prev.pricing?.weekend, minCallOutNote: e.target.value }
+                                }
+                              }))}
+                              placeholder={`Min. call out: £${Number(editableLiveDosa2.pricing?.weekend?.minCallOutCharge ?? 700).toFixed(2)}`}
+                              className="w-full border border-gray-200 rounded px-2 py-1 text-xs text-gray-900 focus:ring-1 focus:ring-purple-500 focus:outline-none"
+                            />
                           </div>
                         </div>
                       </div>
@@ -6230,6 +6658,25 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {/* ─── TAB: MADRAS THALI (OPTION 3) EDITOR ─── */}
               {adminMenuTab === 'madras-thali' && (
                 <div className="space-y-5 animate-in fade-in duration-300">
+                  {renderPackageControlHeader(
+                    editableMadrasThali.title || 'Option 3: Madras Thali',
+                    editableMadrasThali.isActive !== false,
+                    () => setEditableMadrasThali(prev => ({ ...prev, isActive: prev.isActive === false ? true : false })),
+                    () => {
+                      setConfirmDialog({
+                        title: 'Hide Option 3',
+                        message: 'Are you sure you want to hide/delete Option 3 from the website? You can restore it anytime.',
+                        confirmText: 'Hide Package',
+                        cancelText: 'Cancel',
+                        type: 'warning',
+                        onConfirm: () => {
+                          setEditableMadrasThali(prev => ({ ...prev, isActive: false, isDeleted: true }));
+                          setAdminMenuTab('categories');
+                        },
+                      });
+                    },
+                    true
+                  )}
                   {/* Broadcast via WhatsApp / Email */}
                   <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-2xs">
                     <p className="text-xs font-bold text-amber-950 mb-2 flex items-center gap-1.5">
@@ -6734,6 +7181,25 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {/* ─── TAB: TAILOR YOUR OWN MENU (OPTION 4) EDITOR ─── */}
               {adminMenuTab === 'tailor-menu' && (
                 <div className="space-y-5 animate-in fade-in duration-300">
+                  {renderPackageControlHeader(
+                    editableTailorMenu4.title || 'Option 4: Tailor Menu',
+                    editableTailorMenu4.isActive !== false,
+                    () => setEditableTailorMenu4(prev => ({ ...prev, isActive: prev.isActive === false ? true : false })),
+                    () => {
+                      setConfirmDialog({
+                        title: 'Hide Option 4',
+                        message: 'Are you sure you want to hide/delete Option 4 from the website? You can restore it anytime.',
+                        confirmText: 'Hide Package',
+                        cancelText: 'Cancel',
+                        type: 'warning',
+                        onConfirm: () => {
+                          setEditableTailorMenu4(prev => ({ ...prev, isActive: false, isDeleted: true }));
+                          setAdminMenuTab('categories');
+                        },
+                      });
+                    },
+                    true
+                  )}
                   {/* Broadcast via WhatsApp / Email */}
                   <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-2xs">
                     <p className="text-xs font-bold text-amber-950 mb-2 flex items-center gap-1.5">
@@ -6979,6 +7445,25 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {/* ─── TAB: DOSA FESTIVAL AT YOUR HOME (OPTION 5) EDITOR ─── */}
               {adminMenuTab === 'dosa-festival' && (
                 <div className="space-y-5 animate-in fade-in duration-300">
+                  {renderPackageControlHeader(
+                    editableDosaFestival5.title || 'Option 5: Dosa Festival',
+                    editableDosaFestival5.isActive !== false,
+                    () => setEditableDosaFestival5(prev => ({ ...prev, isActive: prev.isActive === false ? true : false })),
+                    () => {
+                      setConfirmDialog({
+                        title: 'Hide Option 5',
+                        message: 'Are you sure you want to hide/delete Option 5 from the website? You can restore it anytime.',
+                        confirmText: 'Hide Package',
+                        cancelText: 'Cancel',
+                        type: 'warning',
+                        onConfirm: () => {
+                          setEditableDosaFestival5(prev => ({ ...prev, isActive: false, isDeleted: true }));
+                          setAdminMenuTab('categories');
+                        },
+                      });
+                    },
+                    true
+                  )}
                   {/* Broadcast via WhatsApp / Email */}
                   <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 shadow-2xs">
                     <p className="text-xs font-bold text-orange-950 mb-2 flex items-center gap-1.5">
@@ -7236,6 +7721,25 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {/* ─── TAB: CANAPÉ SERVICE (OPTION 6) EDITOR ─── */}
               {adminMenuTab === 'canape' && (
                 <div className="space-y-5 animate-in fade-in duration-300">
+                  {renderPackageControlHeader(
+                    editableCanape6.title || 'Option 6: Canapés',
+                    editableCanape6.isActive !== false,
+                    () => setEditableCanape6(prev => ({ ...prev, isActive: prev.isActive === false ? true : false })),
+                    () => {
+                      setConfirmDialog({
+                        title: 'Hide Option 6',
+                        message: 'Are you sure you want to hide/delete Option 6 from the website? You can restore it anytime.',
+                        confirmText: 'Hide Package',
+                        cancelText: 'Cancel',
+                        type: 'warning',
+                        onConfirm: () => {
+                          setEditableCanape6(prev => ({ ...prev, isActive: false, isDeleted: true }));
+                          setAdminMenuTab('categories');
+                        },
+                      });
+                    },
+                    true
+                  )}
                   <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 shadow-2xs">
                     <p className="text-xs font-bold text-rose-950 mb-2 flex items-center gap-1.5">
                       <span>🍢</span>
@@ -7454,6 +7958,25 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {/* ─── TAB: NORTH INDIAN STANDARD MENU (OPTION 7) EDITOR ─── */}
               {adminMenuTab === 'north-indian' && (
                 <div className="space-y-5 animate-in fade-in duration-300">
+                  {renderPackageControlHeader(
+                    editableNorthIndian7.title || 'Option 7: North Indian',
+                    editableNorthIndian7.isActive !== false,
+                    () => setEditableNorthIndian7(prev => ({ ...prev, isActive: prev.isActive === false ? true : false })),
+                    () => {
+                      setConfirmDialog({
+                        title: 'Hide Option 7',
+                        message: 'Are you sure you want to hide/delete Option 7 from the website? You can restore it anytime.',
+                        confirmText: 'Hide Package',
+                        cancelText: 'Cancel',
+                        type: 'warning',
+                        onConfirm: () => {
+                          setEditableNorthIndian7(prev => ({ ...prev, isActive: false, isDeleted: true }));
+                          setAdminMenuTab('categories');
+                        },
+                      });
+                    },
+                    true
+                  )}
                   <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 shadow-2xs">
                     <p className="text-xs font-bold text-indigo-950 mb-2 flex items-center gap-1.5">
                       <span>🍛</span>
@@ -7692,6 +8215,25 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {/* ─── TAB: GUJARATI MENU (OPTION 8) EDITOR ─── */}
               {adminMenuTab === 'gujarati' && (
                 <div className="space-y-5 animate-in fade-in duration-300">
+                  {renderPackageControlHeader(
+                    editableGujarati8.title || 'Option 8: Gujarati',
+                    editableGujarati8.isActive !== false,
+                    () => setEditableGujarati8(prev => ({ ...prev, isActive: prev.isActive === false ? true : false })),
+                    () => {
+                      setConfirmDialog({
+                        title: 'Hide Option 8',
+                        message: 'Are you sure you want to hide/delete Option 8 from the website? You can restore it anytime.',
+                        confirmText: 'Hide Package',
+                        cancelText: 'Cancel',
+                        type: 'warning',
+                        onConfirm: () => {
+                          setEditableGujarati8(prev => ({ ...prev, isActive: false, isDeleted: true }));
+                          setAdminMenuTab('categories');
+                        },
+                      });
+                    },
+                    true
+                  )}
                   <div className="bg-teal-50 border border-teal-200 rounded-2xl p-4 shadow-2xs">
                     <p className="text-xs font-bold text-teal-950 mb-2 flex items-center gap-1.5">
                       <span>🪔</span>
@@ -7907,6 +8449,25 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {/* ─── TAB: PUNJABI MENU (OPTION 9) EDITOR ─── */}
               {adminMenuTab === 'punjabi' && (
                 <div className="space-y-5 animate-in fade-in duration-300">
+                  {renderPackageControlHeader(
+                    editablePunjabi9.title || 'Option 9: Punjabi',
+                    editablePunjabi9.isActive !== false,
+                    () => setEditablePunjabi9(prev => ({ ...prev, isActive: prev.isActive === false ? true : false })),
+                    () => {
+                      setConfirmDialog({
+                        title: 'Hide Option 9',
+                        message: 'Are you sure you want to hide/delete Option 9 from the website? You can restore it anytime.',
+                        confirmText: 'Hide Package',
+                        cancelText: 'Cancel',
+                        type: 'warning',
+                        onConfirm: () => {
+                          setEditablePunjabi9(prev => ({ ...prev, isActive: false, isDeleted: true }));
+                          setAdminMenuTab('categories');
+                        },
+                      });
+                    },
+                    true
+                  )}
                   <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-2xs">
                     <p className="text-xs font-bold text-amber-950 mb-2 flex items-center gap-1.5">
                       <span>👑</span>
@@ -8119,6 +8680,935 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 </div>
               )}
 
+              {/* ─── DYNAMIC CUSTOM PACKAGES EDITOR ─── */}
+              {(() => {
+                const currentPkg = editableCustomPackages.find(p => p.id === adminMenuTab && !p.isDeleted);
+                if (!currentPkg) return null;
+
+                const updateCurrentPkg = (patch: Partial<CustomPackage>) => {
+                  setEditableCustomPackages(prev => prev.map(p => p.id === currentPkg.id ? { ...p, ...patch } : p));
+                };
+
+                return (
+                  <div className="space-y-5 animate-in fade-in duration-300">
+                    {/* Control Header with ON/OFF & Delete */}
+                    {renderPackageControlHeader(
+                      currentPkg.title || 'Custom Package',
+                      currentPkg.isActive !== false,
+                      () => updateCurrentPkg({ isActive: currentPkg.isActive === false ? true : false }),
+                      () => {
+                      setConfirmDialog({
+                        title: 'Delete Custom Package',
+                        message: `Are you sure you want to permanently delete "${currentPkg.title}"?`,
+                        confirmText: 'Delete Package',
+                        cancelText: 'Cancel',
+                        type: 'danger',
+                        onConfirm: () => {
+                          setEditableCustomPackages(prev => prev.filter(p => p.id !== currentPkg.id));
+                          setAdminMenuTab('categories');
+                        },
+                      });
+                      },
+                      false
+                    )}
+
+                    {/* WhatsApp Broadcast Card */}
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-2xs">
+                      <p className="text-xs font-bold text-amber-900 mb-2 flex items-center gap-1.5">
+                        <span>✨</span>
+                        <span>Send *{currentPkg.title}* via WhatsApp or Email:</span>
+                      </p>
+                      {renderMenuBroadcastBadges(currentPkg.title)}
+                    </div>
+
+                    <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-5">
+                      {/* Hero Settings */}
+                      <div className="bg-amber-50/60 rounded-2xl p-4 border border-amber-200 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
+                            <span>✨</span>
+                            <span>Package Hero &amp; Header Settings (User Side)</span>
+                          </span>
+                          <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-amber-200 text-amber-900">
+                            {currentPkg.items.length} Dishes Total
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Package Title</label>
+                            <input
+                              type="text"
+                              value={currentPkg.title || ''}
+                              onChange={(e) => updateCurrentPkg({ title: e.target.value })}
+                              className="w-full font-bold text-gray-900 border border-gray-200 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-amber-500"
+                              placeholder="e.g. Option 10: South Indian Feast"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Tagline / Subtitle</label>
+                            <input
+                              type="text"
+                              value={currentPkg.tagline || ''}
+                              onChange={(e) => updateCurrentPkg({ tagline: e.target.value })}
+                              className="w-full text-gray-900 border border-gray-200 rounded px-2 py-1 text-xs"
+                              placeholder="e.g. Fresh live preparation on site"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Service Duration Badge</label>
+                            <input
+                              type="text"
+                              value={currentPkg.serviceDuration || ''}
+                              onChange={(e) => updateCurrentPkg({ serviceDuration: e.target.value })}
+                              className="w-full text-gray-900 border border-gray-200 rounded px-2 py-1 text-xs"
+                              placeholder="e.g. 3 Hours Live Station"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Dishes Count Badge</label>
+                            <input
+                              type="text"
+                              value={currentPkg.dishesBadge || ''}
+                              onChange={(e) => updateCurrentPkg({ dishesBadge: e.target.value })}
+                              className="w-full text-gray-900 border border-gray-200 rounded px-2 py-1 text-xs"
+                              placeholder={`${currentPkg.items.length} Dishes Included`}
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Hero Banner Description</label>
+                          <textarea
+                            rows={2}
+                            value={currentPkg.description || ''}
+                            onChange={(e) => updateCurrentPkg({ description: e.target.value })}
+                            className="w-full text-xs text-gray-800 border border-gray-200 rounded-lg p-2"
+                            placeholder="Detailed description of the package visible on the customer card..."
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Book Button Text</label>
+                            <input
+                              type="text"
+                              value={currentPkg.bookBtnText || ''}
+                              onChange={(e) => updateCurrentPkg({ bookBtnText: e.target.value })}
+                              className="w-full text-gray-900 border border-gray-200 rounded px-2 py-1 text-xs"
+                              placeholder={`Book ${currentPkg.title || 'This Package'}`}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Pricing Model</label>
+                            <div className="flex gap-2 items-center pt-1">
+                              <button
+                                type="button"
+                                onClick={() => updateCurrentPkg({ pricingType: 'tiered' })}
+                                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                                  currentPkg.pricingType === 'tiered'
+                                    ? 'bg-amber-500 text-white shadow-xs'
+                                    : 'bg-white border border-gray-200 text-gray-700'
+                                }`}
+                              >
+                                Tiered (Weekday &amp; Weekend)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateCurrentPkg({ pricingType: 'flat' })}
+                                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                                  currentPkg.pricingType === 'flat'
+                                    ? 'bg-amber-500 text-white shadow-xs'
+                                    : 'bg-white border border-gray-200 text-gray-700'
+                                }`}
+                              >
+                                Flat Rate (£/person)
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Pricing Settings */}
+                      {currentPkg.pricingType === 'tiered' ? (
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+                              Tiered Pricing Configuration
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Weekday */}
+                            <div className="bg-white p-3.5 rounded-xl border border-amber-200 space-y-2.5 shadow-2xs">
+                              <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                                <input
+                                  type="text"
+                                  value={currentPkg.pricing?.weekday?.days || 'Week days (Monday to Friday)'}
+                                  onChange={(e) => updateCurrentPkg({
+                                    pricing: {
+                                      ...currentPkg.pricing,
+                                      weekday: { ...currentPkg.pricing?.weekday, days: e.target.value } as any,
+                                      weekend: currentPkg.pricing?.weekend || {} as any,
+                                    }
+                                  })}
+                                  className="font-bold text-xs text-gray-900 border border-gray-200 rounded px-2 py-0.5 w-2/3"
+                                />
+                                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-amber-100 text-amber-900">Standard Tier</span>
+                              </div>
+                              <div className="grid grid-cols-3 gap-2 text-xs">
+                                <div>
+                                  <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Price / Person</label>
+                                  <div className="flex items-center">
+                                    <span className="text-gray-500 text-xs mr-1">£</span>
+                                    <input
+                                      type="text"
+                                      value={currentPkg.pricing?.weekday?.pricePerPerson !== undefined ? currentPkg.pricing.weekday.pricePerPerson : ''}
+                                      onChange={(e) => updateCurrentPkg({
+                                        pricing: {
+                                          ...currentPkg.pricing,
+                                          weekday: { ...currentPkg.pricing?.weekday, pricePerPerson: isNaN(Number(e.target.value)) ? e.target.value : Number(e.target.value) } as any,
+                                          weekend: currentPkg.pricing?.weekend || {} as any,
+                                        }
+                                      })}
+                                      className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                                    />
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Min Guests</label>
+                                  <input
+                                    type="text"
+                                    value={currentPkg.pricing?.weekday?.minGuests !== undefined ? currentPkg.pricing.weekday.minGuests : ''}
+                                    onChange={(e) => updateCurrentPkg({
+                                      pricing: {
+                                        ...currentPkg.pricing,
+                                        weekday: { ...currentPkg.pricing?.weekday, minGuests: isNaN(Number(e.target.value)) ? e.target.value : Number(e.target.value) } as any,
+                                        weekend: currentPkg.pricing?.weekend || {} as any,
+                                      }
+                                    })}
+                                    className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Min Call Out</label>
+                                  <div className="flex items-center">
+                                    <span className="text-gray-500 text-xs mr-1">£</span>
+                                    <input
+                                      type="text"
+                                      value={currentPkg.pricing?.weekday?.minCallOutCharge !== undefined ? currentPkg.pricing.weekday.minCallOutCharge : ''}
+                                      onChange={(e) => updateCurrentPkg({
+                                        pricing: {
+                                          ...currentPkg.pricing,
+                                          weekday: { ...currentPkg.pricing?.weekday, minCallOutCharge: isNaN(Number(e.target.value)) ? e.target.value : Number(e.target.value) } as any,
+                                          weekend: currentPkg.pricing?.weekend || {} as any,
+                                        }
+                                      })}
+                                      className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-gray-100 text-xs">
+                                <div>
+                                  <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Guarantee Note Text</label>
+                                  <input
+                                    type="text"
+                                    value={currentPkg.pricing?.weekday?.minGuestsNote || ''}
+                                    onChange={(e) => updateCurrentPkg({
+                                      pricing: {
+                                        ...currentPkg.pricing,
+                                        weekday: { ...currentPkg.pricing?.weekday, minGuestsNote: e.target.value } as any,
+                                        weekend: currentPkg.pricing?.weekend || {} as any,
+                                      }
+                                    })}
+                                    placeholder={`${currentPkg.pricing?.weekday?.minGuests ?? 35} people minimum guarantee`}
+                                    className="w-full border border-gray-200 rounded px-2 py-1 text-xs text-gray-900"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Min Call-Out Badge Text</label>
+                                  <input
+                                    type="text"
+                                    value={currentPkg.pricing?.weekday?.minCallOutNote || ''}
+                                    onChange={(e) => updateCurrentPkg({
+                                      pricing: {
+                                        ...currentPkg.pricing,
+                                        weekday: { ...currentPkg.pricing?.weekday, minCallOutNote: e.target.value } as any,
+                                        weekend: currentPkg.pricing?.weekend || {} as any,
+                                      }
+                                    })}
+                                    placeholder={`Min. call out: £${Number(currentPkg.pricing?.weekday?.minCallOutCharge ?? 385).toFixed(2)}`}
+                                    className="w-full border border-gray-200 rounded px-2 py-1 text-xs text-gray-900"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Weekend */}
+                            <div className="bg-white p-3.5 rounded-xl border border-amber-200 space-y-2.5 shadow-2xs">
+                              <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                                <input
+                                  type="text"
+                                  value={currentPkg.pricing?.weekend?.days || 'Week Ends & Bank Holidays'}
+                                  onChange={(e) => updateCurrentPkg({
+                                    pricing: {
+                                      ...currentPkg.pricing,
+                                      weekday: currentPkg.pricing?.weekday || {} as any,
+                                      weekend: { ...currentPkg.pricing?.weekend, days: e.target.value } as any,
+                                    }
+                                  })}
+                                  className="font-bold text-xs text-gray-900 border border-gray-200 rounded px-2 py-0.5 w-2/3"
+                                />
+                                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-purple-100 text-purple-900">Peak Tier</span>
+                              </div>
+                              <div className="grid grid-cols-3 gap-2 text-xs">
+                                <div>
+                                  <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Price / Person</label>
+                                  <div className="flex items-center">
+                                    <span className="text-gray-500 text-xs mr-1">£</span>
+                                    <input
+                                      type="text"
+                                      value={currentPkg.pricing?.weekend?.pricePerPerson !== undefined ? currentPkg.pricing.weekend.pricePerPerson : ''}
+                                      onChange={(e) => updateCurrentPkg({
+                                        pricing: {
+                                          ...currentPkg.pricing,
+                                          weekday: currentPkg.pricing?.weekday || {} as any,
+                                          weekend: { ...currentPkg.pricing?.weekend, pricePerPerson: isNaN(Number(e.target.value)) ? e.target.value : Number(e.target.value) } as any,
+                                        }
+                                      })}
+                                      className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                                    />
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Min Guests</label>
+                                  <input
+                                    type="text"
+                                    value={currentPkg.pricing?.weekend?.minGuests !== undefined ? currentPkg.pricing.weekend.minGuests : ''}
+                                    onChange={(e) => updateCurrentPkg({
+                                      pricing: {
+                                        ...currentPkg.pricing,
+                                        weekday: currentPkg.pricing?.weekday || {} as any,
+                                        weekend: { ...currentPkg.pricing?.weekend, minGuests: isNaN(Number(e.target.value)) ? e.target.value : Number(e.target.value) } as any,
+                                      }
+                                    })}
+                                    className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Min Call Out</label>
+                                  <div className="flex items-center">
+                                    <span className="text-gray-500 text-xs mr-1">£</span>
+                                    <input
+                                      type="text"
+                                      value={currentPkg.pricing?.weekend?.minCallOutCharge !== undefined ? currentPkg.pricing.weekend.minCallOutCharge : ''}
+                                      onChange={(e) => updateCurrentPkg({
+                                        pricing: {
+                                          ...currentPkg.pricing,
+                                          weekday: currentPkg.pricing?.weekday || {} as any,
+                                          weekend: { ...currentPkg.pricing?.weekend, minCallOutCharge: isNaN(Number(e.target.value)) ? e.target.value : Number(e.target.value) } as any,
+                                        }
+                                      })}
+                                      className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-gray-100 text-xs">
+                                <div>
+                                  <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Guarantee Note Text</label>
+                                  <input
+                                    type="text"
+                                    value={currentPkg.pricing?.weekend?.minGuestsNote || ''}
+                                    onChange={(e) => updateCurrentPkg({
+                                      pricing: {
+                                        ...currentPkg.pricing,
+                                        weekday: currentPkg.pricing?.weekday || {} as any,
+                                        weekend: { ...currentPkg.pricing?.weekend, minGuestsNote: e.target.value } as any,
+                                      }
+                                    })}
+                                    placeholder={`${currentPkg.pricing?.weekend?.minGuests ?? 40} people minimum guarantee`}
+                                    className="w-full border border-gray-200 rounded px-2 py-1 text-xs text-gray-900"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Min Call-Out Badge Text</label>
+                                  <input
+                                    type="text"
+                                    value={currentPkg.pricing?.weekend?.minCallOutNote || ''}
+                                    onChange={(e) => updateCurrentPkg({
+                                      pricing: {
+                                        ...currentPkg.pricing,
+                                        weekday: currentPkg.pricing?.weekday || {} as any,
+                                        weekend: { ...currentPkg.pricing?.weekend, minCallOutNote: e.target.value } as any,
+                                      }
+                                    })}
+                                    placeholder={`Min. call out: £${Number(currentPkg.pricing?.weekend?.minCallOutCharge ?? 480).toFixed(2)}`}
+                                    className="w-full border border-gray-200 rounded px-2 py-1 text-xs text-gray-900"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bg-white p-4 rounded-xl border border-amber-200 space-y-3">
+                          <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+                            Flat Rate Pricing Configuration
+                          </span>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                            <div>
+                              <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Price Per Person</label>
+                              <div className="flex items-center">
+                                <span className="text-gray-500 text-xs mr-1">£</span>
+                                <input
+                                  type="text"
+                                  value={currentPkg.pricePerPerson !== undefined ? currentPkg.pricePerPerson : ''}
+                                  onChange={(e) => updateCurrentPkg({ pricePerPerson: isNaN(Number(e.target.value)) ? e.target.value as any : Number(e.target.value) })}
+                                  className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                                  placeholder="14.50"
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Min Guests</label>
+                              <input
+                                type="text"
+                                value={currentPkg.minGuests !== undefined ? currentPkg.minGuests : ''}
+                                onChange={(e) => updateCurrentPkg({ minGuests: isNaN(Number(e.target.value)) ? e.target.value as any : Number(e.target.value) })}
+                                className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                                placeholder="35"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Min Call Out</label>
+                              <div className="flex items-center">
+                                <span className="text-gray-500 text-xs mr-1">£</span>
+                                <input
+                                  type="text"
+                                  value={currentPkg.minCallOutCharge !== undefined ? currentPkg.minCallOutCharge : ''}
+                                  onChange={(e) => updateCurrentPkg({ minCallOutCharge: isNaN(Number(e.target.value)) ? e.target.value as any : Number(e.target.value) })}
+                                  className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-bold text-gray-900"
+                                  placeholder="500"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-gray-100 text-xs">
+                            <div>
+                              <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Guarantee Note Text</label>
+                              <input
+                                type="text"
+                                value={currentPkg.minGuestsNote || ''}
+                                onChange={(e) => updateCurrentPkg({ minGuestsNote: e.target.value })}
+                                placeholder={`${currentPkg.minGuests ?? 35} people minimum guarantee`}
+                                className="w-full border border-gray-200 rounded px-2 py-1 text-xs text-gray-900"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Min Call-Out Badge Text</label>
+                              <input
+                                type="text"
+                                value={currentPkg.minCallOutNote || ''}
+                                onChange={(e) => updateCurrentPkg({ minCallOutNote: e.target.value })}
+                                placeholder={`Min. call out: £${Number(currentPkg.minCallOutCharge ?? 500).toFixed(2)}`}
+                                className="w-full border border-gray-200 rounded px-2 py-1 text-xs text-gray-900"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Inclusions List */}
+                      <div className="bg-amber-50/40 p-4 rounded-xl border border-amber-200 space-y-3">
+                        <span className="text-xs font-bold text-amber-950 uppercase tracking-wider block">
+                          Package Inclusions (Bullet Points)
+                        </span>
+                        <div className="flex flex-wrap gap-2">
+                          {(currentPkg.inclusions || []).map((inc, iIdx) => (
+                            <span key={iIdx} className="bg-white border border-amber-200 text-amber-900 text-xs px-3 py-1 rounded-lg flex items-center gap-1.5 shadow-2xs">
+                              <span>✓ {inc}</span>
+                              <button
+                                type="button"
+                                onClick={() => updateCurrentPkg({ inclusions: (currentPkg.inclusions || []).filter((_, idx) => idx !== iIdx) })}
+                                className="text-red-500 hover:text-red-700 ml-1 font-bold cursor-pointer"
+                              >
+                                ✕
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                        <div className="flex gap-2 text-xs">
+                          <input
+                            type="text"
+                            value={newInclusionText}
+                            onChange={(e) => setNewInclusionText(e.target.value)}
+                            placeholder="Add inclusion (e.g. Biodegradable plates & napkins included)..."
+                            className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-1.5 bg-white text-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (newInclusionText.trim()) {
+                                updateCurrentPkg({ inclusions: [...(currentPkg.inclusions || []), newInclusionText.trim()] });
+                                setNewInclusionText('');
+                              }
+                            }}
+                            className="px-4 py-1.5 rounded-lg text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 cursor-pointer"
+                          >
+                            Add Inclusion
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Dish Items Manager */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                            Dish Items Included ({currentPkg.items.length})
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {currentPkg.items.map((item, idx) => (
+                            <div key={idx} className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/60 flex items-start justify-between gap-2 shadow-2xs hover:border-amber-300 transition-colors">
+                              <div className="flex-1 space-y-1.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                                    {idx + 1}
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={item.name}
+                                    onChange={(e) => {
+                                      const updatedItems = currentPkg.items.map((it, i) => i === idx ? { ...it, name: e.target.value } : it);
+                                      updateCurrentPkg({ items: updatedItems });
+                                    }}
+                                    className="font-bold text-xs text-gray-900 bg-white border border-gray-200 rounded px-2 py-0.5 flex-1"
+                                  />
+                                  {item.isLive && (
+                                    <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900">
+                                      🔥 LIVE
+                                    </span>
+                                  )}
+                                </div>
+                                <input
+                                  type="text"
+                                  value={item.description}
+                                  onChange={(e) => {
+                                    const updatedItems = currentPkg.items.map((it, i) => i === idx ? { ...it, description: e.target.value } : it);
+                                    updateCurrentPkg({ items: updatedItems });
+                                  }}
+                                  className="text-xs text-gray-600 bg-white border border-gray-200 rounded px-2 py-0.5 w-full"
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setConfirmDialog({
+                                    title: 'Remove Dish',
+                                    message: `Remove "${item.name}" from package?`,
+                                    confirmText: 'Remove',
+                                    cancelText: 'Cancel',
+                                    type: 'danger',
+                                    onConfirm: () => {
+                                      const updatedItems = currentPkg.items.filter((_, i) => i !== idx);
+                                      updateCurrentPkg({ items: updatedItems });
+                                    },
+                                  });
+                                }}
+                                className="text-red-400 hover:text-red-600 p-1 cursor-pointer"
+                                title="Delete item"
+                              >
+                                <Icon name="TrashIcon" size={14} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Add New Dish Box */}
+                        <div className="p-3.5 rounded-xl border border-dashed border-amber-300 bg-amber-50/40 space-y-2">
+                          <span className="text-xs font-bold text-amber-950 block">Add New Dish to Package:</span>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                            <input
+                              type="text"
+                              placeholder="Dish Name (e.g. Masala Dosa (Live))..."
+                              value={newCustomDishName}
+                              onChange={(e) => setNewCustomDishName(e.target.value)}
+                              className="border border-gray-300 rounded-lg px-2.5 py-1.5 bg-white text-xs"
+                            />
+                            <input
+                              type="text"
+                              placeholder="Description..."
+                              value={newCustomDishDesc}
+                              onChange={(e) => setNewCustomDishDesc(e.target.value)}
+                              className="border border-gray-300 rounded-lg px-2.5 py-1.5 bg-white text-xs"
+                            />
+                            <div className="flex items-center gap-2">
+                              <label className="flex items-center gap-1 text-[11px] text-gray-700 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={newCustomDishLive}
+                                  onChange={(e) => setNewCustomDishLive(e.target.checked)}
+                                  className="rounded text-amber-600"
+                                />
+                                <span>Live Prep</span>
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (newCustomDishName.trim()) {
+                                    updateCurrentPkg({
+                                      items: [
+                                        ...currentPkg.items,
+                                        {
+                                          name: newCustomDishName.trim(),
+                                          description: newCustomDishDesc.trim(),
+                                          isLive: newCustomDishLive,
+                                          tags: ['V'],
+                                        },
+                                      ],
+                                    });
+                                    setNewCustomDishName('');
+                                    setNewCustomDishDesc('');
+                                  }
+                                }}
+                                className="flex-1 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 cursor-pointer flex items-center justify-center gap-1"
+                              >
+                                <Icon name="PlusIcon" size={14} />
+                                Add Dish
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ─── ADD COMPLETE PACKAGE MODAL ─── */}
+              {isCreatePackageModalOpen && (
+                <div className="fixed inset-0 z-[110] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+                  <div className="bg-white rounded-3xl border border-amber-200 shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+                    <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-amber-500/10 to-amber-400/5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">✨</span>
+                        <div>
+                          <h3 className="font-extrabold text-base text-gray-900">Add Complete Catering Package</h3>
+                          <p className="text-xs text-gray-500">Create a new customizable package for your catering website</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsCreatePackageModalOpen(false)}
+                        className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 flex items-center justify-center font-bold text-sm cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div className="p-5 overflow-y-auto space-y-4 text-xs">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-semibold text-gray-700 mb-1">Package Title *</label>
+                          <input
+                            type="text"
+                            value={newPackageDraft.title || ''}
+                            onChange={(e) => setNewPackageDraft(p => ({ ...p, title: e.target.value }))}
+                            placeholder="e.g. Option 10: Grand Wedding Feast"
+                            className="w-full border border-gray-300 rounded-xl px-3 py-2 font-bold text-gray-900 focus:ring-1 focus:ring-amber-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-semibold text-gray-700 mb-1">Tagline / Subtitle</label>
+                          <input
+                            type="text"
+                            value={newPackageDraft.tagline || ''}
+                            onChange={(e) => setNewPackageDraft(p => ({ ...p, tagline: e.target.value }))}
+                            placeholder="e.g. 14 Authentic dishes freshly served"
+                            className="w-full border border-gray-300 rounded-xl px-3 py-2 text-gray-800"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-semibold text-gray-700 mb-1">Service Duration Badge</label>
+                          <input
+                            type="text"
+                            value={newPackageDraft.serviceDuration || ''}
+                            onChange={(e) => setNewPackageDraft(p => ({ ...p, serviceDuration: e.target.value }))}
+                            placeholder="e.g. 3 Hours Live Station"
+                            className="w-full border border-gray-300 rounded-xl px-3 py-2 text-gray-800"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-semibold text-gray-700 mb-1">Badge Tag</label>
+                          <input
+                            type="text"
+                            value={newPackageDraft.badge || ''}
+                            onChange={(e) => setNewPackageDraft(p => ({ ...p, badge: e.target.value }))}
+                            placeholder="e.g. Chef Special / Popular"
+                            className="w-full border border-gray-300 rounded-xl px-3 py-2 text-gray-800"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-gray-700 mb-1">Package Description</label>
+                        <textarea
+                          rows={2}
+                          value={newPackageDraft.description || ''}
+                          onChange={(e) => setNewPackageDraft(p => ({ ...p, description: e.target.value }))}
+                          placeholder="Comprehensive description of the live food experience..."
+                          className="w-full border border-gray-300 rounded-xl p-2.5 text-gray-800 text-xs"
+                        />
+                      </div>
+
+                      {/* Pricing Model Choice */}
+                      <div className="bg-amber-50/60 p-3.5 rounded-2xl border border-amber-200 space-y-3">
+                        <label className="block font-bold text-amber-950">Pricing Model</label>
+                        <div className="flex gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setNewPackageDraft(p => ({ ...p, pricingType: 'tiered' }))}
+                            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                              newPackageDraft.pricingType === 'tiered'
+                                ? 'bg-amber-500 text-white shadow-xs'
+                                : 'bg-white border border-gray-200 text-gray-700'
+                            }`}
+                          >
+                            Tiered (Weekday &amp; Weekend Rates)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setNewPackageDraft(p => ({ ...p, pricingType: 'flat' }))}
+                            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                              newPackageDraft.pricingType === 'flat'
+                                ? 'bg-amber-500 text-white shadow-xs'
+                                : 'bg-white border border-gray-200 text-gray-700'
+                            }`}
+                          >
+                            Flat Rate (£/person)
+                          </button>
+                        </div>
+
+                        {newPackageDraft.pricingType === 'tiered' ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                            <div className="bg-white p-3 rounded-xl border border-gray-200 space-y-2">
+                              <span className="font-bold text-xs text-amber-900 block">Weekday Tier</span>
+                              <div className="grid grid-cols-3 gap-2">
+                                <div>
+                                  <label className="text-[10px] text-gray-500 block">Price/pp</label>
+                                  <input
+                                    type="text"
+                                    value={newPackageDraft.pricing?.weekday?.pricePerPerson || 14.50}
+                                    onChange={(e) => setNewPackageDraft(p => ({
+                                      ...p,
+                                      pricing: {
+                                        ...p.pricing,
+                                        weekday: { ...p.pricing?.weekday, pricePerPerson: Number(e.target.value) || 0 } as any,
+                                        weekend: p.pricing?.weekend || {} as any,
+                                      }
+                                    }))}
+                                    className="w-full border rounded px-1.5 py-1 font-bold text-xs"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-gray-500 block">Min Guests</label>
+                                  <input
+                                    type="text"
+                                    value={newPackageDraft.pricing?.weekday?.minGuests || 35}
+                                    onChange={(e) => setNewPackageDraft(p => ({
+                                      ...p,
+                                      pricing: {
+                                        ...p.pricing,
+                                        weekday: { ...p.pricing?.weekday, minGuests: Number(e.target.value) || 0 } as any,
+                                        weekend: p.pricing?.weekend || {} as any,
+                                      }
+                                    }))}
+                                    className="w-full border rounded px-1.5 py-1 font-bold text-xs"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-gray-500 block">Min Call Out</label>
+                                  <input
+                                    type="text"
+                                    value={newPackageDraft.pricing?.weekday?.minCallOutCharge || 500}
+                                    onChange={(e) => setNewPackageDraft(p => ({
+                                      ...p,
+                                      pricing: {
+                                        ...p.pricing,
+                                        weekday: { ...p.pricing?.weekday, minCallOutCharge: Number(e.target.value) || 0 } as any,
+                                        weekend: p.pricing?.weekend || {} as any,
+                                      }
+                                    }))}
+                                    className="w-full border rounded px-1.5 py-1 font-bold text-xs"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="bg-white p-3 rounded-xl border border-gray-200 space-y-2">
+                              <span className="font-bold text-xs text-purple-900 block">Weekend Tier</span>
+                              <div className="grid grid-cols-3 gap-2">
+                                <div>
+                                  <label className="text-[10px] text-gray-500 block">Price/pp</label>
+                                  <input
+                                    type="text"
+                                    value={newPackageDraft.pricing?.weekend?.pricePerPerson || 16.00}
+                                    onChange={(e) => setNewPackageDraft(p => ({
+                                      ...p,
+                                      pricing: {
+                                        ...p.pricing,
+                                        weekday: p.pricing?.weekday || {} as any,
+                                        weekend: { ...p.pricing?.weekend, pricePerPerson: Number(e.target.value) || 0 } as any,
+                                      }
+                                    }))}
+                                    className="w-full border rounded px-1.5 py-1 font-bold text-xs"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-gray-500 block">Min Guests</label>
+                                  <input
+                                    type="text"
+                                    value={newPackageDraft.pricing?.weekend?.minGuests || 40}
+                                    onChange={(e) => setNewPackageDraft(p => ({
+                                      ...p,
+                                      pricing: {
+                                        ...p.pricing,
+                                        weekday: p.pricing?.weekday || {} as any,
+                                        weekend: { ...p.pricing?.weekend, minGuests: Number(e.target.value) || 0 } as any,
+                                      }
+                                    }))}
+                                    className="w-full border rounded px-1.5 py-1 font-bold text-xs"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-gray-500 block">Min Call Out</label>
+                                  <input
+                                    type="text"
+                                    value={newPackageDraft.pricing?.weekend?.minCallOutCharge || 640}
+                                    onChange={(e) => setNewPackageDraft(p => ({
+                                      ...p,
+                                      pricing: {
+                                        ...p.pricing,
+                                        weekday: p.pricing?.weekday || {} as any,
+                                        weekend: { ...p.pricing?.weekend, minCallOutCharge: Number(e.target.value) || 0 } as any,
+                                      }
+                                    }))}
+                                    className="w-full border rounded px-1.5 py-1 font-bold text-xs"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="bg-white p-3 rounded-xl border border-gray-200">
+                            <div className="grid grid-cols-3 gap-2">
+                              <div>
+                                <label className="text-[10px] text-gray-500 block">Price/pp (£)</label>
+                                <input
+                                  type="text"
+                                  value={newPackageDraft.pricePerPerson || 14.50}
+                                  onChange={(e) => setNewPackageDraft(p => ({ ...p, pricePerPerson: Number(e.target.value) || 0 }))}
+                                  className="w-full border rounded px-2 py-1 font-bold text-xs"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-gray-500 block">Min Guests</label>
+                                <input
+                                  type="text"
+                                  value={newPackageDraft.minGuests || 35}
+                                  onChange={(e) => setNewPackageDraft(p => ({ ...p, minGuests: Number(e.target.value) || 0 }))}
+                                  className="w-full border rounded px-2 py-1 font-bold text-xs"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-gray-500 block">Min Call Out (£)</label>
+                                <input
+                                  type="text"
+                                  value={newPackageDraft.minCallOutCharge || 500}
+                                  onChange={(e) => setNewPackageDraft(p => ({ ...p, minCallOutCharge: Number(e.target.value) || 0 }))}
+                                  className="w-full border rounded px-2 py-1 font-bold text-xs"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="p-4 border-t border-gray-100 flex items-center justify-end gap-2 bg-gray-50">
+                      <button
+                        type="button"
+                        onClick={() => setIsCreatePackageModalOpen(false)}
+                        className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-100 cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!newPackageDraft.title?.trim()) {
+                            setCustomAlert({ message: 'Please enter a package title.', type: 'error' });
+                            return;
+                          }
+                          const newPkgId = `pkg-${Date.now()}`;
+                          const completePkg: CustomPackage = {
+                            id: newPkgId,
+                            title: newPackageDraft.title.trim(),
+                            tagline: newPackageDraft.tagline || '',
+                            badge: newPackageDraft.badge || 'Special Package',
+                            serviceDuration: newPackageDraft.serviceDuration || '3 Hours Live Service',
+                            dishesBadge: newPackageDraft.dishesBadge || `${newPackageDraft.items?.length || 3} Dishes Included`,
+                            description: newPackageDraft.description || '',
+                            bookBtnText: newPackageDraft.bookBtnText || `Book ${newPackageDraft.title.trim()}`,
+                            isActive: true,
+                            isDeleted: false,
+                            pricingType: newPackageDraft.pricingType || 'tiered',
+                            pricePerPerson: newPackageDraft.pricePerPerson || 14.50,
+                            minGuests: newPackageDraft.minGuests || 35,
+                            minCallOutCharge: newPackageDraft.minCallOutCharge || 500,
+                            pricing: newPackageDraft.pricing || {
+                              weekday: {
+                                days: 'Week days (Monday to Friday)',
+                                pricePerPerson: 14.50,
+                                minGuests: 35,
+                                minCallOutCharge: 500,
+                              },
+                              weekend: {
+                                days: 'Week Ends & Bank Holidays',
+                                pricePerPerson: 16.00,
+                                minGuests: 40,
+                                minCallOutCharge: 640,
+                              },
+                            },
+                            inclusions: newPackageDraft.inclusions || ['Live preparation on site', 'Authentic chutneys & sambar'],
+                            items: newPackageDraft.items && newPackageDraft.items.length > 0 ? newPackageDraft.items : [
+                              { name: 'Special Dosa (Live)', description: 'Freshly prepared crispy crepe', isLive: true, tags: ['V'] },
+                              { name: 'Medu Vada (Live)', description: 'Crisp golden lentil donuts fried on the spot', isLive: true, tags: ['V'] },
+                              { name: 'Sambar & Chutneys', description: 'Fresh coconut chutney & piping hot sambar', isLive: true, tags: ['V'] },
+                            ],
+                          };
+
+                          setEditableCustomPackages(prev => [...prev, completePkg]);
+                          setAdminMenuTab(newPkgId);
+                          setIsCreatePackageModalOpen(false);
+                          setCustomAlert({ message: `Package "${completePkg.title}" created! Remember to click "Save Changes to Website" to publish.`, type: 'success' });
+                        }}
+                        className="px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-md cursor-pointer hover:shadow-lg transition-all"
+                        style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                      >
+                        Create &amp; Open Package
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* ─── TAB: DYNAMIC UPGRADES EDITOR ─── */}
               {adminMenuTab === 'upgrades' && (
                 <div className="space-y-4 animate-in fade-in duration-300">
@@ -8282,6 +9772,78 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         <Icon name="PlusIcon" size={14} />
                         Add Upgrade
                       </button>
+                    </div>
+                  </div>
+
+                  {/* ─── KIDS PRICING EDITOR ─── */}
+                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4 mt-2">
+                    <div className="border-b border-gray-100 pb-3 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-base font-bold text-gray-900">🧒 Children & Toddler Pricing</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Set fixed price labels for display. The <strong>customer-facing order modal</strong> automatically charges children (age 3–10) at <strong>50% of the adult package rate</strong> — these labels are used in WhatsApp quotes and invoices sent from the admin.
+                        </p>
+                      </div>
+                      <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 whitespace-nowrap ml-4">
+                        {editableKidsPricing.length} Age Groups
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      {editableKidsPricing.map((kp, idx) => (
+                        <div key={idx} className={`p-4 rounded-2xl border space-y-2 shadow-2xs ${
+                          idx === 0 ? 'border-blue-200 bg-blue-50/40' :
+                          idx === 1 ? 'border-emerald-200 bg-emerald-50/40' :
+                          'border-amber-200 bg-amber-50/40'
+                        }`}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xl">{idx === 0 ? '👶' : idx === 1 ? '🧒' : '🧑'}</span>
+                            <div>
+                              <div className={`text-[10px] font-extrabold uppercase tracking-wider ${
+                                idx === 0 ? 'text-blue-700' : idx === 1 ? 'text-emerald-700' : 'text-amber-800'
+                              }`}>Age Range Label</div>
+                            </div>
+                          </div>
+                          <input
+                            type="text"
+                            value={kp.ageRange}
+                            onChange={(e) => {
+                              const updated = [...editableKidsPricing];
+                              updated[idx] = { ...updated[idx], ageRange: e.target.value };
+                              setEditableKidsPricing(updated);
+                            }}
+                            className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-900 bg-white focus:outline-none focus:ring-1 focus:ring-[#C8860A]"
+                            placeholder="e.g. Age 3-10 Yr"
+                          />
+                          <div>
+                            <div className="text-[10px] font-semibold text-gray-500 mb-0.5">Price / Label (for quotes & invoices)</div>
+                            <input
+                              type="text"
+                              value={kp.price}
+                              onChange={(e) => {
+                                const updated = [...editableKidsPricing];
+                                updated[idx] = { ...updated[idx], price: e.target.value };
+                                setEditableKidsPricing(updated);
+                              }}
+                              className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-900 bg-white focus:outline-none focus:ring-1 focus:ring-[#C8860A]"
+                              placeholder="e.g. £20 or Free or Full Price"
+                            />
+                          </div>
+                          <div className={`text-[9px] font-semibold rounded-lg px-2 py-1 ${
+                            idx === 0 ? 'text-blue-700 bg-blue-100/60' :
+                            idx === 1 ? 'text-emerald-700 bg-emerald-100/60' :
+                            'text-amber-800 bg-amber-100/60'
+                          }`}>
+                            {idx === 0 ? '✓ Shown as FREE in customer checkout' :
+                             idx === 1 ? '✓ Customer checkout: 50% of adult package rate' :
+                             '✓ Charged full adult package rate'}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900">
+                      <strong>💡 How it works:</strong> When a customer selects a package in the <strong>Book Online</strong> modal, the child rate (ages 3–10) is automatically calculated as <strong>50% of whichever adult package they select</strong>. For example, if they pick Option 1 at £11/adult → children are charged £5.50. The labels above appear in <strong>WhatsApp/Email quotes</strong> sent from the Admin bookings view.
                     </div>
                   </div>
                 </div>

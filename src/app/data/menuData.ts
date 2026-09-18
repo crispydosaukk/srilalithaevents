@@ -26,10 +26,62 @@ export interface MenuUpgradeItem {
   icon: string;
 }
 
+export interface CustomPackageItem {
+  name: string;
+  description: string;
+  isLive?: boolean;
+  tags?: string[];
+}
+
+export interface CustomPackage {
+  id: string;
+  title: string;
+  tagline: string;
+  subtitle?: string;
+  badge?: string;
+  serviceDuration?: string;
+  dishesBadge?: string;
+  description: string;
+  bookBtnText?: string;
+  isActive: boolean;
+  isDeleted?: boolean;
+  pricingType: 'tiered' | 'flat';
+  pricePerPerson?: number;
+  minGuests?: number;
+  minCallOutCharge?: number;
+  minGuestsNote?: string;
+  minCallOutNote?: string;
+  priceNote?: string;
+  priceLabel?: string;
+  priceUnit?: string;
+  pricing?: {
+    weekday: {
+      days: string;
+      pricePerPerson: number;
+      minGuests: number;
+      minCallOutCharge: number;
+      minGuestsNote?: string;
+      minCallOutNote?: string;
+    };
+    weekend: {
+      days: string;
+      pricePerPerson: number;
+      minGuests: number;
+      minCallOutCharge: number;
+      minGuestsNote?: string;
+      minCallOutNote?: string;
+    };
+    disclaimer?: string;
+  };
+  inclusions?: string[];
+  items: CustomPackageItem[];
+}
+
 // ─── 1. LIVE DOSA STATION MENU & PRICING ──────────────────────────────────────
 // ─── 1. LIVE DOSA STATION MENUS & PRICING ─────────────────────────────────────
 export const LIVE_DOSA_OPTION_1 = {
   id: 'live-dosa-1',
+  isActive: true,
   title: 'Live Dosa Option 1',
   tagline: 'Each item is prepared fresh on the spot with theatrical flair',
   subtitle: 'Crisp & golden, the classic live counter experience (2 Hours Service)',
@@ -71,6 +123,7 @@ export const LIVE_DOSA_OPTION_1 = {
 
 export const LIVE_DOSA_OPTION_2 = {
   id: 'live-dosa-2',
+  isActive: true,
   title: 'Live Dosa Option 2',
   tagline: 'Standard Live Dosa Station + 1 Main Course + 1 Dessert (3 Hours Service)',
   subtitle: 'Full theatrical live station with extra courses & 3 hours chef service',
