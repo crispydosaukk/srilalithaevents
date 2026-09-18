@@ -120,6 +120,19 @@ export default function InteractiveMenuOrderModal({
     });
   }, []);
 
+  // ─── 6. PAYMENT GATEWAY ENABLED FLAG FROM DASHBOARD ───
+  const [stripeEnabled, setStripeEnabled] = useState<boolean>(true);
+
+  useEffect(() => {
+    return onSnapshot(doc(db, 'site_data', 'payment_gateway_settings'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        // enabled is true by default if not set
+        setStripeEnabled(data.enabled !== false);
+      }
+    });
+  }, []);
+
   const lunchSlots = formConfig?.timeSlotsConfig?.lunchSlots?.length
     ? formConfig.timeSlotsConfig.lunchSlots
     : DEFAULT_LUNCH_SLOTS;
@@ -3532,92 +3545,141 @@ export default function InteractiveMenuOrderModal({
                 </div>
               </div>
 
-              {/* Payment Type Selection */}
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide">
-                  Choose Online Payment Option (Stripe)
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <label
-                    className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
-                      paymentChoice === 'deposit'
-                        ? 'border-[#C8860A] bg-amber-50/50 shadow-sm'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="paymentType"
-                      checked={paymentChoice === 'deposit'}
-                      onChange={() => setPaymentChoice('deposit')}
-                      className="mt-0.5 text-[#C8860A] focus:ring-[#C8860A]"
-                    />
-                    <div>
-                      <div className="font-bold text-gray-900 text-xs">
-                        Pay {effectiveDepositPercentage}% Booking Deposit (£{depositAmount.toFixed(2)})
-                      </div>
-                      <div className="text-[11px] text-gray-500 mt-0.5">
-                        Secures your date immediately. Remaining £{(grandTotal - depositAmount).toFixed(2)} due before event.
-                      </div>
-                    </div>
-                  </label>
+              {/* Payment section — shown only if Stripe is enabled from Admin Dashboard */}
+              {stripeEnabled ? (
+                <>
+                  {/* Payment Type Selection */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide">
+                      Choose Online Payment Option (Stripe)
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <label
+                        className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
+                          paymentChoice === 'deposit'
+                            ? 'border-[#C8860A] bg-amber-50/50 shadow-sm'
+                            : 'border-gray-200 bg-white hover:border-gray-300'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="paymentType"
+                          checked={paymentChoice === 'deposit'}
+                          onChange={() => setPaymentChoice('deposit')}
+                          className="mt-0.5 text-[#C8860A] focus:ring-[#C8860A]"
+                        />
+                        <div>
+                          <div className="font-bold text-gray-900 text-xs">
+                            Pay {effectiveDepositPercentage}% Booking Deposit (£{depositAmount.toFixed(2)})
+                          </div>
+                          <div className="text-[11px] text-gray-500 mt-0.5">
+                            Secures your date immediately. Remaining £{(grandTotal - depositAmount).toFixed(2)} due before event.
+                          </div>
+                        </div>
+                      </label>
 
-                  <label
-                    className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
-                      paymentChoice === 'full'
-                        ? 'border-[#C8860A] bg-amber-50/50 shadow-sm'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="paymentType"
-                      checked={paymentChoice === 'full'}
-                      onChange={() => setPaymentChoice('full')}
-                      className="mt-0.5 text-[#C8860A] focus:ring-[#C8860A]"
-                    />
-                    <div>
-                      <div className="font-bold text-gray-900 text-xs">
-                        Pay Full Amount (£{grandTotal.toFixed(2)})
-                      </div>
-                      <div className="text-[11px] text-gray-500 mt-0.5">
-                        Pay 100% upfront for complete peace of mind and priority kitchen scheduling.
-                      </div>
+                      <label
+                        className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
+                          paymentChoice === 'full'
+                            ? 'border-[#C8860A] bg-amber-50/50 shadow-sm'
+                            : 'border-gray-200 bg-white hover:border-gray-300'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="paymentType"
+                          checked={paymentChoice === 'full'}
+                          onChange={() => setPaymentChoice('full')}
+                          className="mt-0.5 text-[#C8860A] focus:ring-[#C8860A]"
+                        />
+                        <div>
+                          <div className="font-bold text-gray-900 text-xs">
+                            Pay Full Amount (£{grandTotal.toFixed(2)})
+                          </div>
+                          <div className="text-[11px] text-gray-500 mt-0.5">
+                            Pay 100% upfront for complete peace of mind and priority kitchen scheduling.
+                          </div>
+                        </div>
+                      </label>
                     </div>
-                  </label>
+                  </div>
+
+                  {/* Proceed to Stripe Checkout Button */}
+                  <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setStep(2)}
+                      className="px-5 py-2.5 rounded-xl border border-gray-300 font-semibold text-gray-700 text-xs hover:bg-gray-50 cursor-pointer"
+                    >
+                      ← Edit Menu &amp; Upgrades
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={handleProceedToStripe}
+                      className="w-full sm:w-auto px-8 py-3.5 rounded-2xl font-bold text-white text-sm shadow-xl hover:shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-2.5 disabled:opacity-50 cursor-pointer"
+                      style={{ background: 'linear-gradient(135deg, #635BFF, #4F46E5)' }}
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                          <span>Redirecting to Stripe...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Icon name="LockClosedIcon" size={16} />
+                          <span>Pay £{amountToPay.toFixed(2)} with Stripe Checkout</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                /* ─── PAYMENT DISABLED BANNER ─── */
+                <div className="space-y-4">
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 text-center space-y-2">
+                    <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
+                      <Icon name="CreditCardIcon" size={24} />
+                    </div>
+                    <h4 className="font-bold text-gray-900 text-sm">Online Payment Temporarily Unavailable</h4>
+                    <p className="text-xs text-gray-600 leading-relaxed">
+                      Online Stripe payment is currently disabled. Your menu selection has been noted — please contact us directly to confirm your booking and arrange payment.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <a
+                      href={`https://wa.me/447700900000?text=${encodeURIComponent(`Hi SriLalitha, I would like to book ${activePackage?.name || 'a catering package'} for ${guests} guests on ${eventDate || 'my event date'}. My name is ${customerName}. Could you help me complete the booking?`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl font-bold text-sm text-white shadow-md hover:shadow-lg transition-all"
+                      style={{ background: 'linear-gradient(135deg, #25D366, #128C7E)' }}
+                    >
+                      <Icon name="ChatBubbleLeftRightIcon" size={18} />
+                      WhatsApp Us to Book
+                    </a>
+                    <a
+                      href={`mailto:admin@vegchennaisrilalitha.co.uk?subject=${encodeURIComponent(`Booking Request – ${activePackage?.name || 'Catering Package'} for ${guests} guests`)}&body=${encodeURIComponent(`Hi SriLalitha,\n\nI would like to book:\nPackage: ${activePackage?.name || 'Catering Package'}\nGuests: ${guests}\nEvent Date: ${eventDate || 'TBD'}\nVenue: ${venueAddress || 'TBD'}\n\nPlease help me complete the booking.\n\nThank you,\n${customerName}`)}`}
+                      className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl font-bold text-sm text-white shadow-md hover:shadow-lg transition-all"
+                      style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                    >
+                      <Icon name="EnvelopeIcon" size={18} />
+                      Email Us to Book
+                    </a>
+                  </div>
+
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setStep(2)}
+                      className="px-5 py-2.5 rounded-xl border border-gray-300 font-semibold text-gray-700 text-xs hover:bg-gray-50 cursor-pointer"
+                    >
+                      ← Edit Menu &amp; Upgrades
+                    </button>
+                  </div>
                 </div>
-              </div>
-
-              {/* Proceed to Stripe Checkout Button */}
-              <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={() => setStep(2)}
-                  className="px-5 py-2.5 rounded-xl border border-gray-300 font-semibold text-gray-700 text-xs hover:bg-gray-50 cursor-pointer"
-                >
-                  ← Edit Menu &amp; Upgrades
-                </button>
-
-                <button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={handleProceedToStripe}
-                  className="w-full sm:w-auto px-8 py-3.5 rounded-2xl font-bold text-white text-sm shadow-xl hover:shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-2.5 disabled:opacity-50 cursor-pointer"
-                  style={{ background: 'linear-gradient(135deg, #635BFF, #4F46E5)' }}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                      <span>Redirecting to Stripe...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Icon name="LockClosedIcon" size={16} />
-                      <span>Pay £{amountToPay.toFixed(2)} with Stripe Checkout</span>
-                    </>
-                  )}
-                </button>
-              </div>
+              )}
             </div>
           )}
         </div>

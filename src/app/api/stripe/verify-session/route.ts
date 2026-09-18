@@ -160,24 +160,35 @@ async function sendPaymentConfirmationEmail(params: {
       replyTo: smtp.fromEmail || smtp.user,
     });
 
-    // Also notify admin (BCC or separate send)
-    const adminEmail = smtp.fromEmail || smtp.user;
-    if (adminEmail && adminEmail !== params.customerEmail) {
+    // Notify ALL enabled admin recipients configured in Admin → Email Notifications
+    const adminRecipients = (emailConfig.recipients || []).filter(
+      (r) => r.enabled && r.email && r.email.includes('@') && r.email !== params.customerEmail
+    );
+
+    if (adminRecipients.length === 0) {
+      // Fallback to SMTP sender if no recipients configured
+      const fallbackEmail = smtp.fromEmail || smtp.user;
+      if (fallbackEmail && fallbackEmail !== params.customerEmail) {
+        adminRecipients.push({ id: 'fallback', email: fallbackEmail, name: 'Admin', enabled: true });
+      }
+    }
+
+    for (const recipient of adminRecipients) {
       await transporter.sendMail({
         from: sender,
-        to: adminEmail,
+        to: recipient.email.trim(),
         subject: `🔔 New Online Payment Received – ${params.customerName} | £${params.amountPaid.toFixed(2)} | Order #${params.orderId.slice(-8).toUpperCase()}`,
         html: htmlContent.replace(
           `Dear ${params.customerName},`,
-          `[ADMIN COPY] Customer ${params.customerName} (${params.customerEmail}) has completed payment.`
+          `[Admin Copy → ${recipient.name}] Customer ${params.customerName} (${params.customerEmail}) has completed payment online.`
         ),
         replyTo: params.customerEmail,
       });
     }
 
-    console.log(`✅ Payment confirmation email sent to ${params.customerEmail}`);
+    console.log(`✅ Payment emails sent: customer=${params.customerEmail}, admin recipients=${adminRecipients.map(r => r.email).join(', ')}`);
   } catch (emailErr) {
-    // Non-fatal — log but don't fail the verification response
+    // Non-fatal — log but don’t fail the verification response
     console.error('Failed to send payment confirmation email:', emailErr);
   }
 }
