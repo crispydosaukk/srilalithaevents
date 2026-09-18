@@ -184,6 +184,8 @@ export default function InteractiveMenuOrderModal({
   const [notes, setNotes] = useState<string>('');
   const [paymentChoice, setPaymentChoice] = useState<'deposit' | 'full'>('deposit');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isSubmittingOffline, setIsSubmittingOffline] = useState<boolean>(false);
+  const [orderSubmittedSuccess, setOrderSubmittedSuccess] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Selected Dishes Storage for Banquet packages
@@ -733,8 +735,8 @@ export default function InteractiveMenuOrderModal({
     setStep(2);
   };
 
-  // Submit and Redirect to Stripe Checkout
-  const handleProceedToStripe = async () => {
+  // Submit and Redirect to Stripe Checkout or Direct Order
+  const handleProceedToStripe = async (isDirectSubmit: boolean = false) => {
     if (!customerName.trim()) {
       setErrorMessage('Please enter your Full Name.');
       return;
@@ -767,7 +769,11 @@ export default function InteractiveMenuOrderModal({
       return;
     }
 
-    setIsSubmitting(true);
+    if (isDirectSubmit) {
+      setIsSubmittingOffline(true);
+    } else {
+      setIsSubmitting(true);
+    }
     setErrorMessage(null);
 
     try {
@@ -917,7 +923,7 @@ export default function InteractiveMenuOrderModal({
           finalPaymentPaid: false,
           paymentChoice,
           amountToPay,
-          status: 'deposit_pending',
+          status: isDirectSubmit ? 'new_enquiry' : 'deposit_pending',
           isOnlineOrder: true,
           notes,
           extraCharges: upgradesSummaryList,
@@ -925,6 +931,58 @@ export default function InteractiveMenuOrderModal({
           enquiryDate: new Date().toISOString().split('T')[0],
         });
         generatedOrderId = orderRef.id;
+
+        // Dispatch automated email notification immediately to the dynamic admin recipients & customer
+        try {
+          const dishesSummary = selectedMenuPayload
+            ? Object.entries(selectedMenuPayload)
+                .filter(([_, items]) => Array.isArray(items) && items.length > 0)
+                .map(([category, items]: [string, any]) => {
+                  const listStr = items.map((i: any) => (typeof i === 'string' ? i : i?.name || '')).filter(Boolean).join(', ');
+                  return `${category}: ${listStr}`;
+                })
+                .join(' | ')
+            : '';
+
+          await fetch('/api/send-enquiry-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            keepalive: true,
+            body: JSON.stringify({
+              bookingId: generatedOrderId,
+              name: (customerName || '').trim(),
+              email: (customerEmail || '').trim().toLowerCase(),
+              phone: customerPhone,
+              eventType: `Online Order – ${activePackage.name}`,
+              location: venueAddress || 'Catering Delivery',
+              distanceMiles: deliveryResult?.distanceMiles || 0,
+              deliveryCharge,
+              totalEstimatedAmount: grandTotal,
+              date: eventDate,
+              timeOfDay: eventTime,
+              guests: Number(guests),
+              message: notes ? `${notes}\n\n[Selected Dishes: ${dishesSummary}]` : `Selected Dishes: ${dishesSummary}`,
+              selectedPackage: activePackage.name,
+              deposit: depositAmount,
+              depositLabel: isDirectSubmit ? 'Deposit Payable:' : 'Deposit Paid:',
+              customFields: {
+                'Order Source': isDirectSubmit ? 'Online Interactive Menu Order (Direct Booking)' : 'Online Interactive Menu Order',
+                'Payment Mode': isDirectSubmit ? 'Direct Callback / Arrange Later' : paymentChoice === 'deposit' ? `Deposit (${effectiveDepositPercentage}%)` : 'Full Payment Upfront',
+                'Adults & Children': `${adults} Adults, ${kids} Kids (4-10 yrs), ${toddlers} Toddlers (<4 yrs)`,
+                'Selected Dishes / Inclusions': dishesSummary || 'Package Standard Inclusions',
+                'Upgrades': upgradesSummaryList.length > 0 ? upgradesSummaryList.map(u => u.name).join(', ') : 'None',
+              },
+            }),
+          });
+        } catch (emailErr) {
+          console.warn('Could not dispatch initial online order email notification:', emailErr);
+        }
+
+        if (isDirectSubmit) {
+          setOrderSubmittedSuccess(true);
+          setIsSubmittingOffline(false);
+          return;
+        }
       } catch (dbErr) {
         console.warn('Could not write order pre-record to Firestore, will record on verification:', dbErr);
       }
@@ -968,6 +1026,7 @@ export default function InteractiveMenuOrderModal({
       console.error('Checkout error:', err);
       setErrorMessage(err.message || 'An error occurred while redirecting to Stripe payment.');
       setIsSubmitting(false);
+      setIsSubmittingOffline(false);
     }
   };
 
@@ -3203,7 +3262,35 @@ export default function InteractiveMenuOrderModal({
           )}
 
           {/* ══════════ STEP 3: REVIEW & STRIPE PAYMENT ══════════ */}
-          {step === 3 && (
+          {orderSubmittedSuccess ? (
+            <div className="py-12 px-6 text-center space-y-4 animate-in fade-in zoom-in duration-200">
+              <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
+                <Icon name="CheckCircleIcon" size={36} />
+              </div>
+              <h3 className="text-xl font-extrabold text-gray-900">Order Request Submitted!</h3>
+              <p className="text-sm text-gray-600 max-w-md mx-auto leading-relaxed">
+                Thank you, <strong>{customerName}</strong>! Your order request for <strong>{activePackage.name}</strong> has been received. A confirmation has been dispatched to <strong>{customerEmail || 'your email'}</strong> and our catering team has been notified.
+              </p>
+              <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-2xl max-w-md mx-auto text-left text-xs text-amber-900 space-y-1">
+                <div><strong>Event Date:</strong> {eventDate} ({eventTime})</div>
+                <div><strong>Guests:</strong> {guests} ({adults} Adults, {kids} Kids, {toddlers} Toddlers)</div>
+                <div><strong>Estimated Total:</strong> £{grandTotal.toFixed(2)}</div>
+                <div><strong>Deposit:</strong> £{depositAmount.toFixed(2)}</div>
+              </div>
+              <div className="pt-4 flex justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOrderSubmittedSuccess(false);
+                    onClose();
+                  }}
+                  className="px-6 py-3 rounded-xl bg-gray-900 text-white font-bold text-xs hover:bg-black transition-all cursor-pointer"
+                >
+                  Close &amp; Return to Website
+                </button>
+              </div>
+            </div>
+          ) : step === 3 && (
             <div className="space-y-6">
               {/* Customer Contact & Booking Confirmation Card */}
               <div className="bg-white p-5 rounded-2xl border border-gray-200 space-y-4">
@@ -3617,7 +3704,7 @@ export default function InteractiveMenuOrderModal({
                     <button
                       type="button"
                       disabled={isSubmitting}
-                      onClick={handleProceedToStripe}
+                      onClick={() => handleProceedToStripe(false)}
                       className="w-full sm:w-auto px-8 py-3.5 rounded-2xl font-bold text-white text-sm shadow-xl hover:shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-2.5 disabled:opacity-50 cursor-pointer"
                       style={{ background: 'linear-gradient(135deg, #635BFF, #4F46E5)' }}
                     >
@@ -3642,11 +3729,32 @@ export default function InteractiveMenuOrderModal({
                     <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
                       <Icon name="CreditCardIcon" size={24} />
                     </div>
-                    <h4 className="font-bold text-gray-900 text-sm">Online Payment Temporarily Unavailable</h4>
+                    <h4 className="font-bold text-gray-900 text-sm">Online Card Payment Temporarily Unavailable</h4>
                     <p className="text-xs text-gray-600 leading-relaxed">
-                      Online Stripe payment is currently disabled. Your menu selection has been noted — please contact us directly to confirm your booking and arrange payment.
+                      Instant card checkout is currently paused in settings. You can still submit your complete menu selection directly below — all details will be sent immediately to our catering team and we will call you to confirm!
                     </p>
                   </div>
+
+                  {/* Direct submit button */}
+                  <button
+                    type="button"
+                    disabled={isSubmittingOffline}
+                    onClick={() => handleProceedToStripe(true)}
+                    className="w-full py-3.5 px-6 rounded-2xl font-bold text-white text-sm shadow-lg hover:shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                    style={{ background: 'linear-gradient(135deg, #C8860A, #E69D24)' }}
+                  >
+                    {isSubmittingOffline ? (
+                      <>
+                        <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                        <span>Submitting Your Order Request...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Icon name="CheckCircleIcon" size={18} />
+                        <span>Submit Order &amp; Request Callback</span>
+                      </>
+                    )}
+                  </button>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <a

@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
       message,
       selectedPackage,
       deposit,
+      depositLabel,
       customFields,
       isWaitlist,
     } = body;
@@ -329,7 +330,7 @@ export async function POST(req: NextRequest) {
                         </tr>` : ''}
                         ${deposit ? `
                         <tr>
-                          <td style="padding: 4px 0; color: #64748B;">Deposit Payable:</td>
+                          <td style="padding: 4px 0; color: #64748B;">${depositLabel || 'Deposit Paid:'}</td>
                           <td align="right" style="padding: 4px 0; font-weight: 800; color: #059669; font-size: 14px;">£${Number(deposit).toFixed(2)}</td>
                         </tr>` : ''}
                         ${deliveryCharge ? `
@@ -417,9 +418,8 @@ export async function POST(req: NextRequest) {
     `;
 
     // 7. Prepare Mail Options
-    const adminMailOptions = {
+    const adminMailOptionsBase = {
       from: sender,
-      to: activeRecipients.join(', '),
       subject: adminSubject,
       html: adminHtml,
       replyTo: email && email.includes('@') ? email : undefined,
@@ -567,23 +567,45 @@ export async function POST(req: NextRequest) {
     }
 
     // 9. Dispatch concurrently to avoid timeouts and dropped requests
-    const tasks: Promise<any>[] = [transporter.sendMail(adminMailOptions)];
+    const tasks: Promise<any>[] = [];
+    
+    // Add a task for each admin recipient
+    activeRecipients.forEach(recipientEmail => {
+      tasks.push(
+        transporter.sendMail({
+          ...adminMailOptionsBase,
+          to: recipientEmail,
+        })
+      );
+    });
+
     if (customerMailOptions) {
       tasks.push(transporter.sendMail(customerMailOptions));
     }
 
-    const [adminResult, customerResult] = await Promise.allSettled(tasks);
+    const results = await Promise.allSettled(tasks);
 
-    const adminSent = adminResult.status === 'fulfilled';
-    const adminMessageId = adminSent ? (adminResult.value as any)?.messageId : null;
-    const customerSent = customerResult && customerResult.status === 'fulfilled';
+    // Consider admin sent if at least one admin email succeeded
+    const adminResults = results.slice(0, activeRecipients.length);
+    const adminSent = adminResults.some(r => r.status === 'fulfilled');
+    const firstSuccessfulAdmin = adminResults.find(r => r.status === 'fulfilled');
+    const adminMessageId = firstSuccessfulAdmin ? (firstSuccessfulAdmin as any).value?.messageId : null;
+    
+    let customerSent = false;
+    if (customerMailOptions) {
+      const customerResult = results[results.length - 1];
+      customerSent = customerResult.status === 'fulfilled';
+      if (customerResult.status === 'rejected') {
+        console.warn('Failed to deliver customer confirmation email:', customerResult.reason);
+      }
+    }
 
-    if (adminResult.status === 'rejected') {
-      console.error('Failed to deliver admin notification email:', adminResult.reason);
-    }
-    if (customerResult && customerResult.status === 'rejected') {
-      console.warn('Failed to deliver customer confirmation email:', customerResult.reason);
-    }
+    // Log any admin failures
+    adminResults.forEach((result, idx) => {
+      if (result.status === 'rejected') {
+        console.error(`Failed to deliver admin notification to ${activeRecipients[idx]}:`, result.reason);
+      }
+    });
 
     return NextResponse.json({
       success: adminSent || customerSent,

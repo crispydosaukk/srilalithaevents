@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerStripe } from '@/lib/stripe';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { ensureServerAuth } from '@/lib/firebaseServer';
 import nodemailer from 'nodemailer';
 import {
   DEFAULT_EMAIL_NOTIFICATION_CONFIG,
@@ -42,15 +43,19 @@ async function sendPaymentConfirmationEmail(params: {
       return;
     }
 
-    const port = Number(smtp.port) || 587;
-    const isSecure = port === 465 ? true : Boolean(smtp.secure);
-
     const transporter = nodemailer.createTransport({
-      host: smtp.host || 'smtp.gmail.com',
-      port,
-      secure: isSecure,
-      auth: { user: smtp.user, pass: smtp.pass },
-      tls: { rejectUnauthorized: false },
+      host: smtp.host || 'mail.vegchennaisrilalitha.co.uk',
+      port: smtp.port || 465,
+      secure: smtp.secure !== false,
+      pool: true,
+      maxConnections: 3,
+      auth: {
+        user: smtp.user,
+        pass: smtp.pass,
+      },
+      tls: {
+        rejectUnauthorized: false,
+      },
     });
 
     const sender = `"${smtp.fromName || 'SriLalitha Events & Catering'}" <${smtp.fromEmail || smtp.user}>`;
@@ -151,42 +156,55 @@ async function sendPaymentConfirmationEmail(params: {
 </body>
 </html>`;
 
-    // Send to customer
-    await transporter.sendMail({
-      from: sender,
-      to: params.customerEmail.trim(),
-      subject: `✅ Payment Confirmed – SriLalitha Catering Booking #${params.orderId.slice(-8).toUpperCase()}`,
-      html: htmlContent,
-      replyTo: smtp.fromEmail || smtp.user,
-    });
-
-    // Notify ALL enabled admin recipients configured in Admin → Email Notifications
+    // 1. Prepare Admin recipients
     const adminRecipients = (emailConfig.recipients || []).filter(
-      (r) => r.enabled && r.email && r.email.includes('@') && r.email !== params.customerEmail
+      (r) => r.enabled && r.email && r.email.includes('@')
     );
 
     if (adminRecipients.length === 0) {
       // Fallback to SMTP sender if no recipients configured
-      const fallbackEmail = smtp.fromEmail || smtp.user;
-      if (fallbackEmail && fallbackEmail !== params.customerEmail) {
-        adminRecipients.push({ id: 'fallback', email: fallbackEmail, name: 'Admin', enabled: true });
-      }
+      const fallbackEmail = smtp.fromEmail || smtp.user || 'admin@vegchennaisrilalitha.co.uk';
+      adminRecipients.push({ id: 'fallback', email: fallbackEmail, name: 'Admin', enabled: true });
     }
 
-    for (const recipient of adminRecipients) {
-      await transporter.sendMail({
-        from: sender,
-        to: recipient.email.trim(),
-        subject: `🔔 New Online Payment Received – ${params.customerName} | £${params.amountPaid.toFixed(2)} | Order #${params.orderId.slice(-8).toUpperCase()}`,
-        html: htmlContent.replace(
-          `Dear ${params.customerName},`,
-          `[Admin Copy → ${recipient.name}] Customer ${params.customerName} (${params.customerEmail}) has completed payment online.`
-        ),
-        replyTo: params.customerEmail,
-      });
+    const tasks: Promise<any>[] = [];
+
+    // Send to customer if valid email provided
+    if (params.customerEmail && params.customerEmail.includes('@')) {
+      tasks.push(
+        transporter.sendMail({
+          from: sender,
+          to: params.customerEmail.trim(),
+          subject: `✅ Payment Confirmed – SriLalitha Catering Booking #${params.orderId.slice(-8).toUpperCase()}`,
+          html: htmlContent,
+          replyTo: smtp.fromEmail || smtp.user,
+        })
+      );
     }
 
-    console.log(`✅ Payment emails sent: customer=${params.customerEmail}, admin recipients=${adminRecipients.map(r => r.email).join(', ')}`);
+    // Send individual email to each active admin recipient
+    adminRecipients.forEach((recipient) => {
+      tasks.push(
+        transporter.sendMail({
+          from: sender,
+          to: recipient.email.trim(),
+          subject: `🔔 New Online Payment Received – ${params.customerName} | £${params.amountPaid.toFixed(2)} | Order #${params.orderId.slice(-8).toUpperCase()}`,
+          html: htmlContent.replace(
+            `Dear ${params.customerName},`,
+            `<div style="background:#FEF3C7; border:1px solid #F59E0B; border-radius:6px; padding:10px 14px; margin-bottom:16px; font-size:13px; color:#92400E;"><strong>Admin Notification:</strong> Dispatched to <em>${recipient.name} (${recipient.email})</em>. Customer <strong>${params.customerName}</strong> (${params.customerEmail || 'No email provided'}) has completed online payment.</div>Dear ${params.customerName},`
+          ),
+          replyTo: params.customerEmail && params.customerEmail.includes('@') ? params.customerEmail.trim() : undefined,
+        })
+      );
+    });
+
+    const results = await Promise.allSettled(tasks);
+    const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+    const failed = results.filter((r) => r.status === 'rejected');
+    if (failed.length > 0) {
+      failed.forEach((f: any) => console.error('Failed to send a payment email task:', f.reason));
+    }
+    console.log(`✅ Payment emails dispatched (${succeeded}/${tasks.length} succeeded). Admin recipients: ${adminRecipients.map(r => r.email).join(', ')}`);
   } catch (emailErr) {
     // Non-fatal — log but don’t fail the verification response
     console.error('Failed to send payment confirmation email:', emailErr);
@@ -210,60 +228,45 @@ export async function GET(req: NextRequest) {
     const orderId = metadata.orderId;
 
     if (isPaid && orderId) {
+      // 1. Authenticate server session to satisfy Firestore update security rules
+      await ensureServerAuth();
+
+      const isDeposit = metadata.paymentType === 'deposit';
+      const amountPaid = Number(metadata.amountPaid || (session.amount_total ? session.amount_total / 100 : 0));
+      const totalAmount = Number(metadata.totalAmount || amountPaid);
+
+      const updateData: any = {
+        stripeSessionId: session.id,
+        stripePaymentIntentId: String(session.payment_intent || ''),
+        stripeCustomerEmail: session.customer_details?.email || metadata.customerEmail || '',
+        depositPaid: true,
+        status: 'deposit_confirmed',
+        paymentMethodDeposit: 'Paid via Stripe Checkout (Online)',
+        deposit: isDeposit ? amountPaid : totalAmount,
+        amountPaidSoFar: amountPaid,
+        finalPaymentPaid: !isDeposit,
+        paymentProofDeposit: 'stripe_verified_payment',
+        isOnlineOrder: true,
+        updatedAt: new Date().toISOString(),
+      };
+
+      let wasAlreadyPaid = false;
+      let existingOrderData: any = null;
+
       try {
         const orderRef = doc(db, 'booking_requests', orderId);
         const orderSnap = await getDoc(orderRef);
 
-        const isDeposit = metadata.paymentType === 'deposit';
-        const amountPaid = Number(metadata.amountPaid || (session.amount_total ? session.amount_total / 100 : 0));
-        const totalAmount = Number(metadata.totalAmount || amountPaid);
-
-        const updateData: any = {
-          stripeSessionId: session.id,
-          stripePaymentIntentId: String(session.payment_intent || ''),
-          stripeCustomerEmail: session.customer_details?.email || metadata.customerEmail || '',
-          depositPaid: true,
-          status: 'deposit_confirmed',
-          paymentMethodDeposit: 'Paid via Stripe Checkout (Online)',
-          deposit: isDeposit ? amountPaid : totalAmount,
-          amountPaidSoFar: amountPaid,
-          finalPaymentPaid: !isDeposit,
-          paymentProofDeposit: 'stripe_verified_payment',
-          isOnlineOrder: true,
-          updatedAt: new Date().toISOString(),
-        };
-
         if (orderSnap.exists()) {
-          // Only send the email once — if it's not already marked paid
-          const wasAlreadyPaid = orderSnap.data()?.depositPaid === true;
+          existingOrderData = orderSnap.data();
+          wasAlreadyPaid = existingOrderData?.depositPaid === true;
           await updateDoc(orderRef, updateData);
-
-          if (!wasAlreadyPaid) {
-            // Send confirmation email to customer
-            const customerEmail = session.customer_details?.email || metadata.customerEmail || '';
-            if (customerEmail && customerEmail.includes('@')) {
-              await sendPaymentConfirmationEmail({
-                customerEmail,
-                customerName: metadata.customerName || orderSnap.data()?.name || 'Valued Customer',
-                orderId,
-                packageName: metadata.packageName || orderSnap.data()?.packageName || 'Catering Package',
-                guests: metadata.guests || orderSnap.data()?.guests || 0,
-                eventDate: metadata.eventDate || orderSnap.data()?.date || '',
-                eventTime: metadata.eventTime || orderSnap.data()?.timeOfDay || '',
-                location: metadata.location || orderSnap.data()?.location || '',
-                amountPaid,
-                totalAmount,
-                paymentType: metadata.paymentType || 'deposit',
-                depositPercentage: metadata.depositPercentage || '30',
-              });
-            }
-          }
         } else {
-          // Order not in Firestore yet — create it and send email
+          const customerEmail = metadata.customerEmail || session.customer_details?.email || '';
           await setDoc(orderRef, {
             id: orderId,
             name: metadata.customerName || 'Customer',
-            email: metadata.customerEmail || session.customer_details?.email || '',
+            email: customerEmail,
             phone: metadata.customerPhone || '',
             packageName: metadata.packageName || 'Custom Package',
             guests: Number(metadata.guests || 0),
@@ -275,27 +278,32 @@ export async function GET(req: NextRequest) {
             ...updateData,
             createdAt: new Date().toISOString(),
           }, { merge: true });
-
-          const customerEmail = session.customer_details?.email || metadata.customerEmail || '';
-          if (customerEmail && customerEmail.includes('@')) {
-            await sendPaymentConfirmationEmail({
-              customerEmail,
-              customerName: metadata.customerName || 'Valued Customer',
-              orderId,
-              packageName: metadata.packageName || 'Custom Package',
-              guests: metadata.guests || 0,
-              eventDate: metadata.eventDate || '',
-              eventTime: metadata.eventTime || '',
-              location: metadata.location || '',
-              amountPaid,
-              totalAmount,
-              paymentType: metadata.paymentType || 'deposit',
-              depositPercentage: metadata.depositPercentage || '30',
-            });
-          }
         }
       } catch (dbErr) {
         console.error('Error updating order status in Firestore:', dbErr);
+      }
+
+      // 2. ALWAYS dispatch payment confirmation email (runs independently of DB update status)
+      if (!wasAlreadyPaid) {
+        const customerEmail = session.customer_details?.email || metadata.customerEmail || existingOrderData?.email || '';
+        try {
+          await sendPaymentConfirmationEmail({
+            customerEmail,
+            customerName: metadata.customerName || existingOrderData?.name || 'Valued Customer',
+            orderId,
+            packageName: metadata.packageName || existingOrderData?.packageName || 'Catering Package',
+            guests: metadata.guests || existingOrderData?.guests || 0,
+            eventDate: metadata.eventDate || existingOrderData?.date || '',
+            eventTime: metadata.eventTime || existingOrderData?.timeOfDay || '',
+            location: metadata.location || existingOrderData?.location || '',
+            amountPaid,
+            totalAmount,
+            paymentType: metadata.paymentType || 'deposit',
+            depositPercentage: metadata.depositPercentage || '30',
+          });
+        } catch (emailDispatchErr) {
+          console.error('Error in sendPaymentConfirmationEmail:', emailDispatchErr);
+        }
       }
     }
 
