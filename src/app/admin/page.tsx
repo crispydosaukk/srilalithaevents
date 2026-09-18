@@ -60,6 +60,25 @@ import { auth, db, storage } from '@/lib/firebase';
 import { collection, onSnapshot, query, where, orderBy, doc, setDoc, deleteDoc, getDoc, getDocs, addDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import AccessControl from '@/components/admin/AccessControl';
+import WebsiteContentEditor from '@/components/admin/WebsiteContentEditor';
+import {
+  WebsiteContentConfig,
+  DEFAULT_WEBSITE_CONTENT,
+  sanitizeWebsiteContent,
+} from '@/app/data/websiteContentConfig';
+import {
+  EmailNotificationConfig,
+  EmailRecipient,
+  DEFAULT_EMAIL_NOTIFICATION_CONFIG,
+  sanitizeEmailNotificationConfig,
+} from '@/app/data/emailNotificationConfig';
+import {
+  CommunicationConfig,
+  DEFAULT_COMMUNICATION_CONFIG,
+  sanitizeCommunicationConfig,
+  renderCommunicationTemplate,
+  buildMailtoLink,
+} from '@/app/data/communicationTemplates';
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
@@ -352,7 +371,7 @@ function buildWhatsAppLink(phone: string, message: string) {
   return `https://wa.me/${cleaned}?text=${encodeURIComponent(message)}`;
 }
 
-type AdminTab = 'overview' | 'online_orders' | 'enquiries' | 'bookings' | 'calendar' | 'customers' | 'payments' | 'menus' | 'history' | 'settings' | 'access' | 'discount_approvals' | 'tracker';
+type AdminTab = 'overview' | 'online_orders' | 'enquiries' | 'bookings' | 'calendar' | 'customers' | 'payments' | 'menus' | 'history' | 'settings' | 'access' | 'discount_approvals' | 'tracker' | 'website_content';
 
 // ─── COMPONENT ────────────────────────────────────────────────────────────────
 
@@ -414,7 +433,42 @@ export default function AdminPage() {
   const [formConfig, setFormConfig] = useState<BookingFormConfig>(DEFAULT_FORM_CONFIG);
   const [editableFormConfig, setEditableFormConfig] = useState<BookingFormConfig>(DEFAULT_FORM_CONFIG);
   const [isSavingFormConfig, setIsSavingFormConfig] = useState(false);
-  const [settingsSection, setSettingsSection] = useState<'form_builder' | 'venue' | 'location_delivery' | 'pricing' | 'stripe_gateway' | 'bank' | 'block_dates'>('form_builder');
+  const [settingsSection, setSettingsSection] = useState<'form_builder' | 'venue' | 'location_delivery' | 'pricing' | 'stripe_gateway' | 'bank' | 'block_dates' | 'website_content' | 'email_notifications' | 'message_templates'>('form_builder');
+
+  // Dynamic Email Notification State (Recipients, SMTP Settings, Test Dispatch)
+  const [emailConfig, setEmailConfig] = useState<EmailNotificationConfig>(DEFAULT_EMAIL_NOTIFICATION_CONFIG);
+  const [editableEmailConfig, setEditableEmailConfig] = useState<EmailNotificationConfig>(DEFAULT_EMAIL_NOTIFICATION_CONFIG);
+  const [isSavingEmailConfig, setIsSavingEmailConfig] = useState(false);
+  const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
+  const [newRecipientInput, setNewRecipientInput] = useState({ email: '', name: '' });
+  const [testRecipientEmail, setTestRecipientEmail] = useState('admin@vegchennaisrilalitha.co.uk');
+  const [showSmtpPassword, setShowSmtpPassword] = useState(false);
+
+  // Dynamic Communication Templates & Email Composer Modal State
+  const [commConfig, setCommConfig] = useState<CommunicationConfig>(DEFAULT_COMMUNICATION_CONFIG);
+  const [editableCommConfig, setEditableCommConfig] = useState<CommunicationConfig>(DEFAULT_COMMUNICATION_CONFIG);
+  const [isSavingCommConfig, setIsSavingCommConfig] = useState(false);
+  const [selectedTemplateForEdit, setSelectedTemplateForEdit] = useState<string>('enquiry_reply');
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailModalData, setEmailModalData] = useState<{
+    to: string;
+    customerName: string;
+    subject: string;
+    body: string;
+    bookingId?: string;
+  }>({
+    to: '',
+    customerName: '',
+    subject: '',
+    body: '',
+    bookingId: '',
+  });
+  const [isSendingCustomEmail, setIsSendingCustomEmail] = useState(false);
+
+  // Dynamic Website Content State (Hero, Badges, Stats Ribbon, Menu Header, Terms & Conditions)
+  const [websiteContent, setWebsiteContent] = useState<WebsiteContentConfig>(DEFAULT_WEBSITE_CONTENT);
+  const [editableWebsiteContent, setEditableWebsiteContent] = useState<WebsiteContentConfig>(DEFAULT_WEBSITE_CONTENT);
+  const [isSavingWebsiteContent, setIsSavingWebsiteContent] = useState(false);
   const [deliverySettings, setDeliverySettings] = useState<DeliveryLocationConfig>(DEFAULT_DELIVERY_CONFIG);
   const [isSavingDeliverySettings, setIsSavingDeliverySettings] = useState(false);
   const [testPostcode, setTestPostcode] = useState('');
@@ -523,12 +577,273 @@ export default function AdminPage() {
             accountNumber: '12345678'
           }, { merge: true });
         }
+
+        const contentSnap = await getDoc(doc(db, 'site_data', 'website_content'));
+        if (!contentSnap.exists()) {
+          await setDoc(doc(db, 'site_data', 'website_content'), DEFAULT_WEBSITE_CONTENT, { merge: true });
+        }
+
+        const emailSnap = await getDoc(doc(db, 'site_data', 'email_settings'));
+        if (!emailSnap.exists()) {
+          await setDoc(doc(db, 'site_data', 'email_settings'), DEFAULT_EMAIL_NOTIFICATION_CONFIG, { merge: true });
+        }
+
+        const commSnap = await getDoc(doc(db, 'site_data', 'communication_templates'));
+        if (!commSnap.exists()) {
+          await setDoc(doc(db, 'site_data', 'communication_templates'), DEFAULT_COMMUNICATION_CONFIG, { merge: true });
+        }
       } catch (e) {
         console.error("Note: Auto-seeding check finished or deferred.", e);
       }
     };
     seedSiteDataDefaults();
   }, []);
+
+  // Listen to dynamic website content (Hero, Badges, Stats Ribbon, Menu Header, Terms & Conditions)
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'site_data', 'website_content'), (docSnap) => {
+      if (docSnap.exists()) {
+        const sanitized = sanitizeWebsiteContent(docSnap.data());
+        setWebsiteContent(sanitized);
+        setEditableWebsiteContent(sanitized);
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  // Listen to dynamic email notification settings (Recipients, SMTP, toggles)
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'site_data', 'email_settings'), (docSnap) => {
+      if (docSnap.exists()) {
+        const sanitized = sanitizeEmailNotificationConfig(docSnap.data());
+        setEmailConfig(sanitized);
+        setEditableEmailConfig(sanitized);
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  // Listen to dynamic communication & email message templates
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'site_data', 'communication_templates'), (docSnap) => {
+      if (docSnap.exists()) {
+        const sanitized = sanitizeCommunicationConfig(docSnap.data());
+        setCommConfig(sanitized);
+        setEditableCommConfig(sanitized);
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const saveWebsiteContentToDatabase = async () => {
+    try {
+      setIsSavingWebsiteContent(true);
+      await setDoc(doc(db, 'site_data', 'website_content'), editableWebsiteContent, { merge: true });
+      setCustomAlert({
+        message: 'Website content updated successfully! Live changes are now visible on the homepage.',
+        type: 'success',
+      });
+    } catch (err: any) {
+      console.error('Error saving website content:', err);
+      setCustomAlert({
+        message: 'Failed to save website content: ' + (err.message || err),
+        type: 'error',
+      });
+    } finally {
+      setIsSavingWebsiteContent(false);
+    }
+  };
+
+  const saveEmailSettings = async () => {
+    setIsSavingEmailConfig(true);
+    try {
+      const sanitized = sanitizeEmailNotificationConfig(editableEmailConfig);
+      sanitized.updatedAt = new Date().toISOString();
+      await setDoc(doc(db, 'site_data', 'email_settings'), sanitized, { merge: true });
+      setEmailConfig(sanitized);
+      setEditableEmailConfig(sanitized);
+      setCustomAlert({
+        message: 'Email notification settings saved successfully! Enquiry emails will dispatch to all active recipients.',
+        type: 'success',
+      });
+    } catch (err: any) {
+      console.error('Error saving email settings:', err);
+      setCustomAlert({
+        message: 'Failed to save email settings: ' + (err?.message || err),
+        type: 'error',
+      });
+    } finally {
+      setIsSavingEmailConfig(false);
+    }
+  };
+
+  const handleAddRecipient = () => {
+    const email = newRecipientInput.email.trim().toLowerCase();
+    if (!email || !email.includes('@')) {
+      setCustomAlert({ message: 'Please enter a valid email address.', type: 'error' });
+      return;
+    }
+    if (editableEmailConfig.recipients.some(r => r.email.toLowerCase() === email)) {
+      setCustomAlert({ message: 'This email address is already in the recipient list.', type: 'error' });
+      return;
+    }
+    const newRec: EmailRecipient = {
+      id: `recipient-${Date.now()}`,
+      email,
+      name: newRecipientInput.name.trim() || 'Admin Recipient',
+      enabled: true,
+    };
+    const updated = {
+      ...editableEmailConfig,
+      recipients: [...editableEmailConfig.recipients, newRec],
+    };
+    setEditableEmailConfig(updated);
+    setNewRecipientInput({ email: '', name: '' });
+  };
+
+  const handleToggleRecipient = (id: string) => {
+    setEditableEmailConfig(prev => ({
+      ...prev,
+      recipients: prev.recipients.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r),
+    }));
+  };
+
+  const handleDeleteRecipient = (id: string) => {
+    setEditableEmailConfig(prev => ({
+      ...prev,
+      recipients: prev.recipients.filter(r => r.id !== id),
+    }));
+  };
+
+  const handleSendTestEmail = async () => {
+    if (!editableEmailConfig.smtp.user || !editableEmailConfig.smtp.pass) {
+      setCustomAlert({
+        message: 'Please enter your SMTP Username/Email and Password before sending a test email.',
+        type: 'error',
+      });
+      return;
+    }
+    setIsSendingTestEmail(true);
+    try {
+      const res = await fetch('/api/send-test-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          smtp: editableEmailConfig.smtp,
+          testRecipient: testRecipientEmail || editableEmailConfig.recipients[0]?.email || 'admin@vegchennaisrilalitha.co.uk',
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCustomAlert({
+          message: data.message || 'Test email successfully sent!',
+          type: 'success',
+        });
+      } else {
+        setCustomAlert({
+          message: data.error || 'Failed to send test email. Check your SMTP credentials.',
+          type: 'error',
+        });
+      }
+    } catch (e: any) {
+      setCustomAlert({
+        message: 'Network error sending test email: ' + (e?.message || e),
+        type: 'error',
+      });
+    } finally {
+      setIsSendingTestEmail(false);
+    }
+  };
+
+  const saveCommunicationTemplates = async () => {
+    setIsSavingCommConfig(true);
+    try {
+      const sanitized = sanitizeCommunicationConfig(editableCommConfig);
+      sanitized.updatedAt = new Date().toISOString();
+      await setDoc(doc(db, 'site_data', 'communication_templates'), sanitized, { merge: true });
+      setCommConfig(sanitized);
+      setEditableCommConfig(sanitized);
+      setCustomAlert({
+        message: 'Communication & email message templates saved successfully! Dynamic messages will be used across all booking and enquiry communication.',
+        type: 'success',
+      });
+    } catch (err: any) {
+      console.error('Error saving communication templates:', err);
+      setCustomAlert({
+        message: 'Failed to save communication templates: ' + (err?.message || err),
+        type: 'error',
+      });
+    } finally {
+      setIsSavingCommConfig(false);
+    }
+  };
+
+  const openEmailComposer = (
+    to: string,
+    customerName: string,
+    subject: string,
+    body: string,
+    bookingId?: string
+  ) => {
+    setEmailModalData({
+      to: to || '',
+      customerName: customerName || '',
+      subject: subject || '',
+      body: body || '',
+      bookingId: bookingId || '',
+    });
+    setEmailModalOpen(true);
+  };
+
+  const handleSendCustomEmailDirectly = async () => {
+    if (!emailModalData.to || !emailModalData.to.includes('@')) {
+      setCustomAlert({ message: 'Please enter a valid recipient email address.', type: 'error' });
+      return;
+    }
+    if (!emailModalData.subject.trim()) {
+      setCustomAlert({ message: 'Please enter an email subject.', type: 'error' });
+      return;
+    }
+    if (!emailModalData.body.trim()) {
+      setCustomAlert({ message: 'Please enter message content.', type: 'error' });
+      return;
+    }
+
+    setIsSendingCustomEmail(true);
+    try {
+      const res = await fetch('/api/send-custom-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: emailModalData.to,
+          customerName: emailModalData.customerName,
+          subject: emailModalData.subject,
+          message: emailModalData.body,
+          bookingId: emailModalData.bookingId,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCustomAlert({
+          message: `Email successfully sent to ${emailModalData.to}!`,
+          type: 'success',
+        });
+        setEmailModalOpen(false);
+      } else {
+        setCustomAlert({
+          message: data.error || 'Failed to dispatch email. Please check SMTP settings.',
+          type: 'error',
+        });
+      }
+    } catch (err: any) {
+      setCustomAlert({
+        message: 'Network error sending email: ' + (err?.message || err),
+        type: 'error',
+      });
+    } finally {
+      setIsSendingCustomEmail(false);
+    }
+  };
 
   // Listen to dynamic booking form configuration
   useEffect(() => {
@@ -674,11 +989,11 @@ export default function AdminPage() {
     return () => unsubscribe();
   }, [loggedIn]);
 
-  // Form Builder Handlers
-  const saveFormConfigToDatabase = async () => {
+  // Form Builder Handlers with Direct Firestore Auto-Persistence
+  const persistFormConfig = async (configToSave: BookingFormConfig, successMessage?: string) => {
     setIsSavingFormConfig(true);
     try {
-      const cleanFields = (editableFormConfig.fields || []).map((f, idx) => {
+      const cleanFields = (configToSave.fields || []).map((f, idx) => {
         const cleanField: any = {
           id: String(f.id || `field_${idx + 1}`),
           label: String(f.label || ''),
@@ -700,44 +1015,53 @@ export default function AdminPage() {
       });
 
       const slotCapacity: SlotCapacityConfig = {
-        maxOutdoorCateringPerSlot: Math.max(1, Number(editableFormConfig.slotCapacity?.maxOutdoorCateringPerSlot || 4)),
-        maxHallBookingsPerSlot: Math.max(1, Number(editableFormConfig.slotCapacity?.maxHallBookingsPerSlot || 1)),
-        outdoorCateringTimeSlots: (editableFormConfig.slotCapacity?.outdoorCateringTimeSlots && editableFormConfig.slotCapacity.outdoorCateringTimeSlots.length > 0)
-          ? editableFormConfig.slotCapacity.outdoorCateringTimeSlots
+        maxOutdoorCateringPerSlot: Math.max(1, Number(configToSave.slotCapacity?.maxOutdoorCateringPerSlot || 4)),
+        maxHallBookingsPerSlot: Math.max(1, Number(configToSave.slotCapacity?.maxHallBookingsPerSlot || 1)),
+        outdoorCateringTimeSlots: (configToSave.slotCapacity?.outdoorCateringTimeSlots && configToSave.slotCapacity.outdoorCateringTimeSlots.length > 0)
+          ? configToSave.slotCapacity.outdoorCateringTimeSlots
           : DEFAULT_OUTDOOR_TIME_SLOTS,
-        standardTimeSlots: (editableFormConfig.slotCapacity?.standardTimeSlots && editableFormConfig.slotCapacity.standardTimeSlots.length > 0)
-          ? editableFormConfig.slotCapacity.standardTimeSlots
-          : (editableFormConfig.fields.find(f => f.id === 'timeOfDay')?.options || DEFAULT_TIME_SLOTS),
+        standardTimeSlots: (configToSave.slotCapacity?.standardTimeSlots && configToSave.slotCapacity.standardTimeSlots.length > 0)
+          ? configToSave.slotCapacity.standardTimeSlots
+          : (configToSave.fields.find(f => f.id === 'timeOfDay')?.options || DEFAULT_TIME_SLOTS),
       };
 
       const payload = JSON.parse(JSON.stringify({
-        formTitle: editableFormConfig.formTitle || 'Request a Booking',
-        formSubtitle: editableFormConfig.formSubtitle || "Fill in your details and we'll get back to you within 24 hours",
-        submitButtonText: editableFormConfig.submitButtonText || 'Submit Booking Request',
+        formTitle: configToSave.formTitle || 'Request a Booking',
+        formSubtitle: configToSave.formSubtitle || "Fill in your details and we'll get back to you within 24 hours",
+        submitButtonText: configToSave.submitButtonText || 'Submit Booking Request',
         fields: cleanFields,
         slotCapacity,
-        timeSlotsConfig: editableFormConfig.timeSlotsConfig || DEFAULT_FORM_CONFIG.timeSlotsConfig,
+        timeSlotsConfig: configToSave.timeSlotsConfig || DEFAULT_FORM_CONFIG.timeSlotsConfig,
         updatedAt: new Date().toISOString(),
       }));
 
       await setDoc(doc(db, 'site_data', 'booking_form_config'), payload, { merge: true });
-      setFormConfig(editableFormConfig);
-      setCustomAlert({
-        message: 'Booking form configuration successfully saved! All changes are live on the website.',
-        type: 'success'
-      });
+      setFormConfig(configToSave);
+      setEditableFormConfig(configToSave);
+      if (successMessage) {
+        setCustomAlert({
+          message: successMessage,
+          type: 'success'
+        });
+      }
+      return true;
     } catch (err: any) {
       console.error('Error saving booking form config:', err);
       setCustomAlert({
         message: err?.message || 'Error saving form configuration.',
         type: 'error'
       });
+      return false;
     } finally {
       setIsSavingFormConfig(false);
     }
   };
 
-  const handleMoveField = (index: number, direction: 'up' | 'down') => {
+  const saveFormConfigToDatabase = async () => {
+    await persistFormConfig(editableFormConfig, 'Booking form configuration successfully saved! All changes are live on the website.');
+  };
+
+  const handleMoveField = async (index: number, direction: 'up' | 'down') => {
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= editableFormConfig.fields.length) return;
     const newFields = [...editableFormConfig.fields];
@@ -747,32 +1071,48 @@ export default function AdminPage() {
     newFields.forEach((f, i) => {
       f.order = i + 1;
     });
-    setEditableFormConfig(prev => ({ ...prev, fields: newFields }));
+    const updatedConfig: BookingFormConfig = { ...editableFormConfig, fields: newFields };
+    setEditableFormConfig(updatedConfig);
+    await persistFormConfig(updatedConfig);
   };
 
-  const handleToggleField = (fieldId: string) => {
-    setEditableFormConfig(prev => ({
-      ...prev,
-      fields: prev.fields.map(f => f.id === fieldId ? { ...f, enabled: !f.enabled } : f)
-    }));
+  const handleToggleField = async (fieldId: string) => {
+    const target = editableFormConfig.fields.find(f => f.id === fieldId);
+    const nextState = target ? !target.enabled : false;
+    const updatedFields = editableFormConfig.fields.map(f => f.id === fieldId ? { ...f, enabled: !f.enabled } : f);
+    const updatedConfig: BookingFormConfig = { ...editableFormConfig, fields: updatedFields };
+    setEditableFormConfig(updatedConfig);
+    await persistFormConfig(updatedConfig, `Field "${target?.label || fieldId}" is now ${nextState ? 'visible' : 'hidden'} on the website.`);
   };
 
-  const handleDeleteField = (fieldId: string) => {
-    setEditableFormConfig(prev => ({
-      ...prev,
-      fields: prev.fields.filter(f => f.id !== fieldId).map((f, idx) => ({ ...f, order: idx + 1 }))
-    }));
+  const handleDeleteField = async (fieldId: string) => {
+    const target = editableFormConfig.fields.find(f => f.id === fieldId);
+    const updatedFields = editableFormConfig.fields.filter(f => f.id !== fieldId).map((f, idx) => ({ ...f, order: idx + 1 }));
+    const updatedConfig: BookingFormConfig = { ...editableFormConfig, fields: updatedFields };
+    setEditableFormConfig(updatedConfig);
+    await persistFormConfig(updatedConfig, `Field "${target?.label || fieldId}" was removed from the booking form.`);
   };
 
-  const handleSaveFieldModal = (field: FormField) => {
-    setEditableFormConfig(prev => ({
-      ...prev,
-      fields: prev.fields.map(f => f.id === field.id ? field : f)
-    }));
+  const handleSaveFieldModal = async (field: FormField) => {
+    if (!field.label || !field.label.trim()) {
+      setCustomAlert({ message: 'Please enter a field label.', type: 'error' });
+      return;
+    }
+    const updatedFields = editableFormConfig.fields.map(f => f.id === field.id ? field : f);
+    const updatedConfig: BookingFormConfig = { ...editableFormConfig, fields: updatedFields };
+    setEditableFormConfig(updatedConfig);
     setEditingFieldModal(null);
+    await persistFormConfig(updatedConfig, `Field "${field.label}" updated and saved successfully!`);
   };
 
-  const handleCreateNewField = () => {
+  const handleUpdateFieldOptions = async (fieldId: string, updatedOptions: string[]) => {
+    const updatedFields = editableFormConfig.fields.map(f => f.id === fieldId ? { ...f, options: updatedOptions } : f);
+    const updatedConfig: BookingFormConfig = { ...editableFormConfig, fields: updatedFields };
+    setEditableFormConfig(updatedConfig);
+    await persistFormConfig(updatedConfig, 'Dropdown options updated and saved!');
+  };
+
+  const handleCreateNewField = async () => {
     if (!newFieldForm.label || !newFieldForm.label.trim()) {
       setCustomAlert({ message: 'Please enter a field label', type: 'error' });
       return;
@@ -802,11 +1142,12 @@ export default function AdminPage() {
       order: editableFormConfig.fields.length + 1,
     };
 
-    setEditableFormConfig(prev => ({
-      ...prev,
-      fields: [...prev.fields, createdField]
-    }));
+    const updatedConfig: BookingFormConfig = {
+      ...editableFormConfig,
+      fields: [...editableFormConfig.fields, createdField]
+    };
 
+    setEditableFormConfig(updatedConfig);
     setShowAddFieldModal(false);
     setNewFieldForm({
       id: '',
@@ -819,7 +1160,7 @@ export default function AdminPage() {
       options: [],
       helperText: '',
     });
-    setCustomAlert({ message: `Field "${createdField.label}" added to form builder!`, type: 'success' });
+    await persistFormConfig(updatedConfig, `Field "${createdField.label}" was created and published to the website!`);
   };
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterEvent, setFilterEvent] = useState<string>('all');
@@ -1016,7 +1357,7 @@ export default function AdminPage() {
 
   // ─── REAL MENU EDITABLE STATE ─────────────────────────────────────────────
   // ─── REAL MENU EDITABLE STATE ─────────────────────────────────────────────
-  type AdminMenuTab = 'categories' | 'live-dosa-1' | 'live-dosa-2' | 'madras-thali' | 'tailor-menu' | 'dosa-festival' | 'canape' | 'north-indian' | 'gujarati' | 'punjabi' | 'upgrades' | 'buffet' | 'banquet' | 'live-dosa';
+  type AdminMenuTab = 'categories' | 'live-dosa-1' | 'live-dosa-2' | 'madras-thali' | 'tailor-menu' | 'dosa-festival' | 'canape' | 'north-indian' | 'gujarati' | 'punjabi' | 'upgrades' | 'live-dosa';
   const [adminMenuTab, setAdminMenuTab] = useState<AdminMenuTab>('categories');
   const [selectedAdminCategoryIndex, setSelectedAdminCategoryIndex] = useState<number>(0);
 
@@ -1154,10 +1495,16 @@ export default function AdminPage() {
   const [newDishTags, setNewDishTags] = useState('V');
   const [newLiveDosaName, setNewLiveDosaName] = useState('');
   const [newLiveDosaDesc, setNewLiveDosaDesc] = useState('');
+  const [newLiveDosaTags, setNewLiveDosaTags] = useState('V');
+  const [newLiveDosa2Name, setNewLiveDosa2Name] = useState('');
+  const [newLiveDosa2Desc, setNewLiveDosa2Desc] = useState('');
+  const [newLiveDosa2Tags, setNewLiveDosa2Tags] = useState('V');
   const [newBuffetItemName, setNewBuffetItemName] = useState('');
   const [newBuffetItemDesc, setNewBuffetItemDesc] = useState('');
   const [newThaliAdditionName, setNewThaliAdditionName] = useState('');
   const [newThaliAdditionPrice, setNewThaliAdditionPrice] = useState<number>(2.5);
+  const [newThaliCoreDishName, setNewThaliCoreDishName] = useState('');
+  const [newThaliCoreDishDesc, setNewThaliCoreDishDesc] = useState('');
   const [newFestivalDosaName, setNewFestivalDosaName] = useState('');
   const [newCanapeItemName, setNewCanapeItemName] = useState('');
   const [newNorthIndianItemName, setNewNorthIndianItemName] = useState('');
@@ -1517,6 +1864,276 @@ Please transfer this outstanding balance to:
 📌 Reference: ${booking.id} (Extras)
 
 Once paid, please send a screenshot of the transfer confirmation here so we can finalize and close your booking. Thank you! 🙏`;
+  };
+
+  // ─── DYNAMIC EMAIL CONTENT GENERATORS ──────────────────────────────────────
+  const getEnquiryEmailContent = (b: Booking) => {
+    const tmpl = editableCommConfig.templates.enquiry_reply || DEFAULT_COMMUNICATION_CONFIG.templates.enquiry_reply;
+    const subject = renderCommunicationTemplate(tmpl.subject, {
+      customerName: b.name.split(' ')[0],
+      eventType: b.eventType,
+      eventDate: b.date || 'your preferred date',
+      bookingId: b.id,
+    });
+    const body = renderCommunicationTemplate(tmpl.body, {
+      customerName: b.name.split(' ')[0],
+      eventType: b.eventType,
+      eventDate: b.date || 'TBD',
+      guests: b.guests,
+      contactWhatsApp: editableCommConfig.contactWhatsApp,
+      contactEmail: editableCommConfig.contactEmail,
+    });
+    return { subject, body };
+  };
+
+  const getOrderEmailContent = (order: any) => {
+    const subject = `✨ SriLalitha Catering: Confirmation for Order #${order.id}`;
+    const body = `Hi ${order.name},\n\nThank you for your order with SriLalitha Catering (Order #${order.id})!\n\nWe have received your menu selection for ${order.date} (${order.guests} guests).\n\nEverything is scheduled in our kitchen. Please feel free to reply if you need any adjustments.\n\nWarm regards,\nSriLalitha Events & Catering\nPhone / WhatsApp: ${editableCommConfig.contactWhatsApp}\nEmail: ${editableCommConfig.contactEmail}`;
+    return { subject, body };
+  };
+
+  const getMenuEmailContent = (customerName: string, customerPhone: string, customerEmail: string, menuType: string, guestCount: number, booking?: Booking) => {
+    const tmpl = editableCommConfig.templates.menu_sharing || DEFAULT_COMMUNICATION_CONFIG.templates.menu_sharing;
+    
+    let menuDetails = `Menu Category: ${menuType}\n`;
+    const matchedCategory = editableMenuCategories.find(c => c.title.toLowerCase() === menuType.toLowerCase() || c.id === menuType);
+    if (matchedCategory) {
+      menuDetails += `🍽️ ${matchedCategory.title} (${matchedCategory.items.length} items):\n\n` +
+        matchedCategory.items.map(i => `• ${i.name}\n  ${i.description}`).join('\n\n');
+    } else if (menuType === 'Live Dosa Option 2' || menuType.toLowerCase().includes('option 2')) {
+      menuDetails += `👑 Live Dosa Option 2 (3 Hours Service + 1 Main + 1 Dessert):\n` +
+        `• Weekdays (Mon-Fri): £${editableLiveDosa2.pricing?.weekday?.pricePerPerson || 16.50}/person\n` +
+        `• Weekends & Bank Holidays: £${editableLiveDosa2.pricing?.weekend?.pricePerPerson || 17.50}/person\n\n` +
+        `Inclusions: 12 Live On-Site Dishes + 1 Restaurant Main + 1 Traditional Dessert + 3 Hours Chef Service.`;
+    } else if (menuType === 'Madras Thali (Option 3)' || menuType.toLowerCase().includes('thali') || menuType.toLowerCase().includes('option 3')) {
+      menuDetails += `🍲 ${editableMadrasThali.title}:\n• Price: £${editableMadrasThali.pricePerPerson}/person\n12 Core Dishes Included:\n` +
+        editableMadrasThali.coreDishes.map(d => `• ${d.name}: ${d.description}`).join('\n');
+    } else if (menuType === 'Tailor Your Own Menu (Option 4)' || menuType.toLowerCase().includes('tailor')) {
+      menuDetails += `🎨 ${editableTailorMenu4.title}:\n• Price: ${editableTailorMenu4.priceLabel}\n4 Signature Live Stations: ${editableTailorMenu4.liveStationsFeatured.map(s => s.name).join(', ')}`;
+    } else if (menuType === 'Dosa Festival At Your Home (Option 5)' || menuType.toLowerCase().includes('festival')) {
+      menuDetails += `🥞 ${editableDosaFestival5.title}:\n• Price: £${editableDosaFestival5.pricePerPerson}/person (34+ Varieties)`;
+    } else if (menuType === 'Live Dosa Option 1' || menuType.toLowerCase().includes('option 1')) {
+      menuDetails += `🎪 Live Dosa Option 1 (12 Live Dishes · 2 Hours Service):\n` +
+        `• Weekdays: £${editableLiveDosa1.pricing?.weekday?.pricePerPerson || 11}/person\n` +
+        `• Weekends: £${editableLiveDosa1.pricing?.weekend?.pricePerPerson || 12}/person`;
+    } else {
+      menuDetails += `Detailed options for ${menuType}`;
+    }
+
+    const subject = renderCommunicationTemplate(tmpl.subject, {
+      customerName: customerName.split(' ')[0],
+      menuType,
+      eventType: booking?.eventType || 'Catering',
+      eventDate: booking?.date || 'Upcoming Event',
+    });
+
+    const body = renderCommunicationTemplate(tmpl.body, {
+      customerName: customerName.split(' ')[0],
+      menuType,
+      eventType: booking?.eventType || 'Catering',
+      eventDate: booking?.date || 'Upcoming Event',
+      menuDetails,
+      guests: guestCount || booking?.guests || 0,
+      totalEstimatedAmount: booking ? getTotalAmount(booking).toLocaleString() : 'As per selection',
+      contactWhatsApp: editableCommConfig.contactWhatsApp,
+      contactEmail: editableCommConfig.contactEmail,
+    });
+
+    return { subject, body };
+  };
+
+  const getDepositEmailContent = (booking: Booking) => {
+    const tmpl = editableCommConfig.templates.deposit_request || DEFAULT_COMMUNICATION_CONFIG.templates.deposit_request;
+    const subject = renderCommunicationTemplate(tmpl.subject, {
+      customerName: booking.name.split(' ')[0],
+      eventType: booking.eventType,
+      bookingId: booking.id,
+      eventDate: booking.date,
+    });
+    const body = renderCommunicationTemplate(tmpl.body, {
+      customerName: booking.name.split(' ')[0],
+      eventType: booking.eventType,
+      eventDate: booking.date,
+      deposit: booking.deposit.toLocaleString(),
+      bankAccountName: bankDetails.accountName,
+      bankSortCode: bankDetails.sortCode,
+      bankAccountNumber: bankDetails.accountNumber,
+      bookingId: booking.id,
+      contactWhatsApp: editableCommConfig.contactWhatsApp,
+      contactEmail: editableCommConfig.contactEmail,
+    });
+    return { subject, body };
+  };
+
+  const getFinalInvoiceEmailContent = (booking: Booking) => {
+    const tmpl = editableCommConfig.templates.final_invoice || DEFAULT_COMMUNICATION_CONFIG.templates.final_invoice;
+    const adults = booking.adults ?? booking.guests;
+    const kids4to10 = booking.kids4to10 || 0;
+    const kidsUnder4 = booking.kidsUnder4 || 0;
+    const pricePerPerson = editableBanquetPackages.find(p => p.name === (booking.selectedMenu || booking.package))?.pricePerPerson || 0;
+    const grandTotal = getTotalAmount(booking);
+    const extraChargesTotal = (booking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
+    const finalPaymentPaidAmt = grandTotal - booking.deposit - extraChargesTotal;
+    
+    const isDepositPaid = booking.depositPaid || !['new_enquiry', 'menu_sent', 'menu_selected', 'deposit_pending'].includes(booking.status);
+    const isFinalPaid = booking.finalPaymentPaid;
+    const isExtraPaid = booking.status === 'completed' || !!booking.paymentProofExtra || booking.finalPaymentPaid;
+    
+    const totalPaid = (isDepositPaid ? booking.deposit : 0) +
+                      (isFinalPaid ? finalPaymentPaidAmt : 0) +
+                      (isExtraPaid ? extraChargesTotal : 0);
+    const remainingBalance = Math.max(0, grandTotal - totalPaid);
+
+    const breakdownText = `• Adults: ${adults} × £${pricePerPerson}/person\n` +
+      (kids4to10 > 0 ? `• Kids (4-10 yrs): ${kids4to10} guests\n` : '') +
+      `• Total Guests: ${adults + kids4to10 + kidsUnder4}\n` +
+      `• Base Amount: £${booking.baseAmount.toLocaleString()}\n` +
+      `• Grand Total: £${grandTotal.toLocaleString()}\n` +
+      `• Deposit Paid: £${booking.deposit.toLocaleString()}\n` +
+      `• Remaining Balance: £${remainingBalance.toLocaleString()}`;
+
+    const subject = renderCommunicationTemplate(tmpl.subject, {
+      customerName: booking.name.split(' ')[0],
+      bookingId: booking.id,
+      eventType: booking.eventType,
+    });
+
+    const body = renderCommunicationTemplate(tmpl.body, {
+      customerName: booking.name.split(' ')[0],
+      bookingId: booking.id,
+      eventDate: booking.date,
+      eventTime: booking.time,
+      packageName: booking.selectedMenu || booking.package,
+      guests: adults + kids4to10 + kidsUnder4,
+      invoiceBreakdown: breakdownText,
+      bankAccountName: bankDetails.accountName,
+      bankSortCode: bankDetails.sortCode,
+      bankAccountNumber: bankDetails.accountNumber,
+      contactWhatsApp: editableCommConfig.contactWhatsApp,
+      contactEmail: editableCommConfig.contactEmail,
+    });
+
+    return { subject, body };
+  };
+
+  const getExtraInvoiceEmailContent = (booking: Booking) => {
+    const tmpl = editableCommConfig.templates.extra_invoice || DEFAULT_COMMUNICATION_CONFIG.templates.extra_invoice;
+    const nonPreset = (booking.extraCharges || []).filter(c => !c.isPreset && !(editableUpgrades?.items || []).some((preset: MenuUpgradeItem) => preset.name === c.label));
+    const extraChargesTotal = nonPreset.reduce((sum, c) => sum + c.amount, 0);
+    const extrasList = nonPreset.map(c => `• ${c.label}: £${c.amount.toLocaleString()}`).join('\n');
+
+    const subject = renderCommunicationTemplate(tmpl.subject, {
+      customerName: booking.name.split(' ')[0],
+      bookingId: booking.id,
+    });
+
+    const body = renderCommunicationTemplate(tmpl.body, {
+      customerName: booking.name.split(' ')[0],
+      bookingId: booking.id,
+      extrasList: extrasList || '• Event adjustments',
+      extraTotal: extraChargesTotal.toLocaleString(),
+      bankAccountName: bankDetails.accountName,
+      bankSortCode: bankDetails.sortCode,
+      bankAccountNumber: bankDetails.accountNumber,
+      contactWhatsApp: editableCommConfig.contactWhatsApp,
+      contactEmail: editableCommConfig.contactEmail,
+    });
+
+    return { subject, body };
+  };
+
+  const getEventReminderEmailContent = (booking: Booking) => {
+    const tmpl = editableCommConfig.templates.event_reminder || DEFAULT_COMMUNICATION_CONFIG.templates.event_reminder;
+    const subject = renderCommunicationTemplate(tmpl.subject, {
+      customerName: booking.name.split(' ')[0],
+      eventType: booking.eventType,
+      eventDate: booking.date,
+      bookingId: booking.id,
+    });
+    const body = renderCommunicationTemplate(tmpl.body, {
+      customerName: booking.name.split(' ')[0],
+      eventType: booking.eventType,
+      eventDate: booking.date,
+      eventTime: booking.time,
+      contactWhatsApp: editableCommConfig.contactWhatsApp,
+      contactEmail: editableCommConfig.contactEmail,
+    });
+    return { subject, body };
+  };
+
+  const getCompletedEmailContent = (booking: Booking) => {
+    const tmpl = editableCommConfig.templates.booking_completed || DEFAULT_COMMUNICATION_CONFIG.templates.booking_completed;
+    const total = getTotalAmount(booking).toLocaleString();
+    const summary = `• Event: ${booking.eventType}\n• Date: ${booking.date}\n• Package: ${booking.selectedMenu || booking.package}\n• Total Amount Paid: £${total} (Paid in Full ✅)`;
+
+    const subject = renderCommunicationTemplate(tmpl.subject, {
+      customerName: booking.name.split(' ')[0],
+      bookingId: booking.id,
+      eventType: booking.eventType,
+    });
+
+    const body = renderCommunicationTemplate(tmpl.body, {
+      customerName: booking.name.split(' ')[0],
+      bookingId: booking.id,
+      completedSummary: summary,
+      contactWhatsApp: editableCommConfig.contactWhatsApp,
+      contactEmail: editableCommConfig.contactEmail,
+    });
+
+    return { subject, body };
+  };
+
+  const getGeneralCustomerEmailContent = (customerName: string, customerEmail: string, bookingId?: string) => {
+    const tmpl = editableCommConfig.templates.general_message || DEFAULT_COMMUNICATION_CONFIG.templates.general_message;
+    const subject = renderCommunicationTemplate(tmpl.subject, {
+      customerName: customerName.split(' ')[0],
+      bookingId: bookingId || '',
+    });
+    const body = renderCommunicationTemplate(tmpl.body, {
+      customerName: customerName.split(' ')[0],
+      bookingId: bookingId || '',
+      contactWhatsApp: editableCommConfig.contactWhatsApp,
+      contactEmail: editableCommConfig.contactEmail,
+    });
+    return { subject, body };
+  };
+
+  const renderMenuBroadcastBadges = (menuTitle: string) => {
+    const list = enquiries.concat(activeBookings).slice(0, 6);
+    if (list.length === 0) {
+      return <span className="text-xs text-gray-400 italic">No active customers</span>;
+    }
+    return (
+      <div className="flex flex-wrap gap-2">
+        {list.map((b) => (
+          <div key={b.id} className="inline-flex items-center gap-1 bg-white border border-amber-300 rounded-lg p-1 shadow-2xs">
+            <span className="text-xs font-bold text-gray-800 px-1.5">{b.name.split(' ')[0]}:</span>
+            <a
+              href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, menuTitle, b.guests)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-1.5 py-0.5 rounded text-[11px] font-bold text-white bg-[#25D366] hover:opacity-90 flex items-center gap-1"
+              title="Send via WhatsApp"
+            >
+              <Icon name="ChatBubbleLeftRightIcon" size={11} />
+              WA
+            </a>
+            <button
+              type="button"
+              onClick={() => {
+                const { subject, body } = getMenuEmailContent(b.name, b.phone, b.email, menuTitle, b.guests, b);
+                openEmailComposer(b.email, b.name, subject, body, b.id);
+              }}
+              className="px-1.5 py-0.5 rounded text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 flex items-center gap-1 cursor-pointer"
+              title="Send via Email"
+            >
+              <Icon name="EnvelopeIcon" size={11} />
+              Email
+            </button>
+          </div>
+        ))}
+      </div>
+    );
   };
 
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -2127,20 +2744,55 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
   };
 
   const handleBlockDate = async () => {
-    if (!blockDateInput) return;
+    if (!blockDateInput) {
+      setCustomAlert({ message: 'Please select a date from the calendar input to block.', type: 'error' });
+      return;
+    }
+    if (blockedDates.includes(blockDateInput)) {
+      setCustomAlert({ message: `Date ${blockDateInput} is already blocked.`, type: 'error' });
+      return;
+    }
+    const targetDate = blockDateInput;
     try {
-      await setDoc(doc(db, 'blocked_dates', blockDateInput), { date: blockDateInput });
+      // Optimistic update so UI responds immediately
+      setBlockedDates(prev => Array.from(new Set([...prev, targetDate])).sort());
       setBlockDateInput('');
-    } catch (error) {
+      await setDoc(doc(db, 'blocked_dates', targetDate), {
+        date: targetDate,
+        blockedAt: new Date().toISOString(),
+      });
+      setCustomAlert({
+        message: `Date ${targetDate} is now blocked! Customers cannot select or submit bookings for this date on the website.`,
+        type: 'success',
+      });
+    } catch (error: any) {
       console.error('Error blocking date:', error);
+      // Revert optimistic update
+      setBlockedDates(prev => prev.filter(d => d !== targetDate));
+      setCustomAlert({
+        message: 'Failed to block date: ' + (error?.message || error),
+        type: 'error',
+      });
     }
   };
 
   const handleUnblockDate = async (dateStr: string) => {
     try {
+      // Optimistic update
+      setBlockedDates(prev => prev.filter(d => d !== dateStr));
       await deleteDoc(doc(db, 'blocked_dates', dateStr));
-    } catch (error) {
+      setCustomAlert({
+        message: `Date ${dateStr} has been unblocked and is now open for bookings.`,
+        type: 'success',
+      });
+    } catch (error: any) {
       console.error('Error unblocking date:', error);
+      // Revert optimistic update
+      setBlockedDates(prev => Array.from(new Set([...prev, dateStr])).sort());
+      setCustomAlert({
+        message: 'Failed to unblock date: ' + (error?.message || error),
+        type: 'error',
+      });
     }
   };
 
@@ -2817,6 +3469,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     { id: 'customers', label: 'Customers', icon: 'UsersIcon', requiredPerm: 'manage_customers' },
     { id: 'payments', label: 'Payments', icon: 'CreditCardIcon', requiredPerm: 'manage_payments' },
     { id: 'menus', label: 'Menus', icon: 'ClipboardDocumentListIcon', requiredPerm: 'manage_menus' },
+    { id: 'website_content', label: 'Website Content', icon: 'PaintBrushIcon', requiredPerm: 'manage_settings' },
     { id: 'history', label: 'History', icon: 'ArchiveBoxIcon', requiredPerm: 'manage_history' },
     { id: 'discount_approvals', label: 'Discount Approvals', icon: 'TagIcon', badge: pendingDiscounts.length || undefined, requiredPerm: 'manage_discounts' },
     { id: 'settings', label: 'Settings', icon: 'Cog6ToothIcon', requiredPerm: 'manage_settings' },
@@ -2953,6 +3606,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 {activeTab === 'customers' && `${customers.length} registered customers`}
                 {activeTab === 'payments' && 'Track deposits and balances'}
                 {activeTab === 'menus' && 'Manage catering packages'}
+                {activeTab === 'website_content' && 'Manage Hero, Badges, Stats Ribbon, and Terms & Conditions'}
                 {activeTab === 'history' && `${historyBookings.length} history records`}
                 {activeTab === 'settings' && 'Venue configuration'}
                 {activeTab === 'access' && 'Manage roles and permissions'}
@@ -3046,12 +3700,26 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           <div className="text-sm font-medium text-gray-900 truncate">{b.name}</div>
                           <div className="text-xs text-gray-400">{b.eventType} · {b.date} · {b.guests} guests</div>
                         </div>
-                        <a href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, thank you for your enquiry with SriLalitha! We'd love to help with your ${b.eventType}. Could you confirm your preferred date and guest count?`)} target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors flex-shrink-0"
-                          style={{ background: '#25D366', color: 'white' }}>
-                          <Icon name="ChatBubbleLeftRightIcon" size={13} />
-                          WhatsApp
-                        </a>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <a href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, thank you for your enquiry with SriLalitha! We'd love to help with your ${b.eventType}. Could you confirm your preferred date and guest count?`)} target="_blank" rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors"
+                            style={{ background: '#25D366', color: 'white' }}>
+                            <Icon name="ChatBubbleLeftRightIcon" size={13} />
+                            WhatsApp
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const { subject, body } = getEnquiryEmailContent(b);
+                              openEmailComposer(b.email, b.name, subject, body, b.id);
+                            }}
+                            className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 cursor-pointer"
+                            title="Send Email to Customer"
+                          >
+                            <Icon name="EnvelopeIcon" size={13} />
+                            Email
+                          </button>
+                        </div>
                       </div>
                     ))}
                     {enquiries.length === 0 && <div className="px-5 py-8 text-center text-sm text-gray-400">No new enquiries</div>}
@@ -3264,6 +3932,18 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                 <Icon name="ChatBubbleLeftRightIcon" size={14} />
                                 WhatsApp
                               </a>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const { subject, body } = getOrderEmailContent(order);
+                                  openEmailComposer(order.email, order.name, subject, body, order.id);
+                                }}
+                                className="px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-blue-200"
+                              >
+                                <Icon name="EnvelopeIcon" size={14} />
+                                Email
+                              </button>
 
                               <button
                                 type="button"
@@ -3515,6 +4195,17 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       <Icon name="ChatBubbleLeftRightIcon" size={14} />
                       Reply on WhatsApp
                     </a>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const { subject, body } = getEnquiryEmailContent(b);
+                        openEmailComposer(b.email, b.name, subject, body, b.id);
+                      }}
+                      className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-colors bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 cursor-pointer shadow-2xs"
+                    >
+                      <Icon name="EnvelopeIcon" size={14} />
+                      Reply on Email
+                    </button>
                     <button onClick={() => { updateStatus(b.id, 'menu_sent'); setShowMenuPanel(true); setSelectedBooking(b); }}
                       className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border transition-colors"
                       style={{ borderColor: '#C8860A', color: '#C8860A' }}>
@@ -3589,7 +4280,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Amount</th>
                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Discount</th>
                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Status</th>
-                        <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">WhatsApp</th>
+                        <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Contact</th>
                         <th className="px-4 py-3"></th>
                       </tr>
                     </thead>
@@ -3633,13 +4324,28 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             </span>
                           </td>
                           <td className="px-4 py-3.5">
-                            <a href={buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]}, this is SriLalitha regarding your ${booking.eventType} booking on ${booking.date}.`)}
-                              target="_blank" rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
-                              style={{ background: '#25D366', color: 'white' }}>
-                              <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                              Chat
-                            </a>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <a href={buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]}, this is SriLalitha regarding your ${booking.eventType} booking on ${booking.date}.`)}
+                                target="_blank" rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-lg"
+                                style={{ background: '#25D366', color: 'white' }}
+                                title="Chat on WhatsApp">
+                                <Icon name="ChatBubbleLeftRightIcon" size={12} />
+                                WhatsApp
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const { subject, body } = getGeneralCustomerEmailContent(booking.name, booking.email, booking.id);
+                                  openEmailComposer(booking.email, booking.name, subject, body, booking.id);
+                                }}
+                                className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 cursor-pointer"
+                                title="Send Email"
+                              >
+                                <Icon name="EnvelopeIcon" size={12} />
+                                Email
+                              </button>
+                            </div>
                           </td>
                           <td className="px-4 py-3.5">
                             <div className="flex items-center gap-3">
@@ -3734,13 +4440,28 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold flex-shrink-0 ${STATUS_COLORS[b.status]}`}>
                             {STATUS_LABELS[b.status]}
                           </span>
-                          <a href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, just a reminder about your ${b.eventType} at SriLalitha on ${b.date} at ${b.time}. We look forward to seeing you!`)}
-                            target="_blank" rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg flex-shrink-0"
-                            style={{ background: '#25D366', color: 'white' }}>
-                            <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                            Remind
-                          </a>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <a href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, just a reminder about your ${b.eventType} at SriLalitha on ${b.date} at ${b.time}. We look forward to seeing you!`)}
+                              target="_blank" rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-lg"
+                              style={{ background: '#25D366', color: 'white' }}
+                              title="Remind on WhatsApp">
+                              <Icon name="ChatBubbleLeftRightIcon" size={12} />
+                              WhatsApp
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const { subject, body } = getEventReminderEmailContent(b);
+                                openEmailComposer(b.email, b.name, subject, body, b.id);
+                              }}
+                              className="flex items-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 cursor-pointer"
+                              title="Remind via Email"
+                            >
+                              <Icon name="EnvelopeIcon" size={12} />
+                              Email
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
@@ -3791,15 +4512,27 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           <td className="px-4 py-3.5 text-sm font-semibold text-gray-900">{customer.totalSpent > 0 ? `£${customer.totalSpent.toLocaleString()}` : '—'}</td>
                           <td className="px-4 py-3.5 text-xs text-gray-500">{customer.lastEvent}</td>
                           <td className="px-4 py-3.5">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               <a href={buildWhatsAppLink(customer.phone, `Hi ${customer.name.split(' ')[0]}, this is SriLalitha. How can we help you today?`)}
                                 target="_blank" rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
+                                className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-lg"
                                 style={{ background: '#25D366', color: 'white' }}>
                                 <Icon name="ChatBubbleLeftRightIcon" size={12} />
                                 WhatsApp
                               </a>
-                              <button onClick={() => setSelectedCustomer(customer)} className="text-xs font-semibold hover:underline" style={{ color: '#C8860A' }}>View</button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const { subject, body } = getGeneralCustomerEmailContent(customer.name, customer.email);
+                                  openEmailComposer(customer.email, customer.name, subject, body);
+                                }}
+                                className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 cursor-pointer"
+                                title="Send Email"
+                              >
+                                <Icon name="EnvelopeIcon" size={12} />
+                                Email
+                              </button>
+                              <button onClick={() => setSelectedCustomer(customer)} className="text-xs font-semibold hover:underline ml-1" style={{ color: '#C8860A' }}>View</button>
                             </div>
                           </td>
                         </tr>
@@ -3939,8 +4672,6 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   { id: 'gujarati', label: '🪔 Option 8: Gujarati' },
                   { id: 'punjabi', label: '👑 Option 9: Punjabi' },
                   { id: 'upgrades', label: '✨ Upgrades' },
-                  { id: 'buffet', label: '🍛 Buffet' },
-                  { id: 'banquet', label: '🎁 Banquet' },
                 ] as { id: AdminMenuTab; label: string }[]).map((tab) => (
                   <button key={tab.id} onClick={() => setAdminMenuTab(tab.id)}
                     className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${adminMenuTab === tab.id || (adminMenuTab === 'live-dosa' && tab.id === 'live-dosa-1') ? 'text-white shadow-md scale-[1.02]' : 'bg-white border border-gray-200 text-gray-700 hover:border-amber-400 shadow-2xs'}`}
@@ -3988,28 +4719,11 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
                             <p className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
                               <span>📱</span>
-                              <span>Send *{activeCat.title}* ({activeCat.items.length} items) to a Customer via WhatsApp:</span>
+                              <span>Send *{activeCat.title}* ({activeCat.items.length} items) via WhatsApp or Email:</span>
                             </p>
                             <span className="text-[11px] text-amber-700 font-semibold">{activeCat.description}</span>
                           </div>
-                          <div className="flex flex-wrap gap-2">
-                            {enquiries.concat(activeBookings).slice(0, 6).map((b) => (
-                              <a
-                                key={b.id}
-                                href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, activeCat.title, b.guests)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white shadow-2xs hover:opacity-90"
-                                style={{ background: '#25D366' }}
-                              >
-                                <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                                Send to {b.name.split(' ')[0]}
-                              </a>
-                            ))}
-                            {enquiries.concat(activeBookings).length === 0 && (
-                              <span className="text-xs text-gray-400 italic">No active customers</span>
-                            )}
-                          </div>
+                          {renderMenuBroadcastBadges(activeCat.title)}
                         </div>
 
                         {/* Items List in Active Category */}
@@ -4176,38 +4890,95 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {/* ─── TAB 2: LIVE DOSA OPTION 1 EDITOR ─── */}
               {(adminMenuTab === 'live-dosa-1' || adminMenuTab === 'live-dosa') && (
                 <div className="space-y-4 animate-in fade-in duration-300">
-                  {/* WhatsApp Broadcast */}
+                  {/* WhatsApp & Email Broadcast */}
                   <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-2xs">
                     <p className="text-xs font-bold text-amber-900 mb-2 flex items-center gap-1.5">
                       <span>🎪</span>
-                      <span>Send Full Live Dosa Option 1 Menu (2 Hours) to a Customer:</span>
+                      <span>Send Full Live Dosa Option 1 Menu (2 Hours) via WhatsApp or Email:</span>
                     </p>
-                    <div className="flex flex-wrap gap-2">
-                      {enquiries.concat(activeBookings).slice(0, 6).map((b) => (
-                        <a
-                          key={b.id}
-                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'Live Dosa Option 1', b.guests)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white shadow-2xs hover:opacity-90"
-                          style={{ background: '#25D366' }}
-                        >
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Send to {b.name.split(' ')[0]}
-                        </a>
-                      ))}
-                    </div>
+                    {renderMenuBroadcastBadges('Live Dosa Option 1')}
                   </div>
 
                   <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
-                    <div className="border-b border-gray-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div>
-                        <h3 className="text-base font-bold text-gray-900">{editableLiveDosa1.title} (12 Live Dishes · 2 Hours)</h3>
-                        <p className="text-xs text-gray-500">Each item is prepared fresh on the spot with theatrical flair</p>
+                    {/* Option 1 Header & Presentation Settings */}
+                    <div className="bg-amber-50/60 rounded-2xl p-4 border border-amber-200 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
+                          <span>✨</span>
+                          <span>Option 1 Hero &amp; Header Settings (User Side)</span>
+                        </span>
+                        <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-200 text-amber-900">
+                          {editableLiveDosa1.items?.length || 0} Dishes Total
+                        </span>
                       </div>
-                      <span className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-900">
-                        2 Hours Service Floor
-                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Menu Title
+                          </label>
+                          <input
+                            type="text"
+                            value={editableLiveDosa1.title || ''}
+                            onChange={(e) => setEditableLiveDosa1(prev => ({ ...prev, title: e.target.value }))}
+                            className="w-full font-bold text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                            placeholder="Live Dosa Option 1"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Tagline / Subtitle
+                          </label>
+                          <input
+                            type="text"
+                            value={editableLiveDosa1.tagline || ''}
+                            onChange={(e) => setEditableLiveDosa1(prev => ({ ...prev, tagline: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                            placeholder="Each item is prepared fresh on the spot with theatrical flair"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            Service Duration Badge
+                          </label>
+                          <input
+                            type="text"
+                            value={editableLiveDosa1.serviceDuration || ''}
+                            onChange={(e) => setEditableLiveDosa1(prev => ({ ...prev, serviceDuration: e.target.value }))}
+                            className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                            placeholder="2 Hours Live Station"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                          Hero Banner Description
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={editableLiveDosa1.description || ''}
+                          onChange={(e) => setEditableLiveDosa1(prev => ({ ...prev, description: e.target.value }))}
+                          className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none resize-none"
+                          placeholder="Our master chefs prepare fresh, crispy, golden dosas, live meduvada, and fluffy uthappams..."
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1">
+                          Minimum Call Out Charge Disclaimer / Note
+                        </label>
+                        <input
+                          type="text"
+                          value={editableLiveDosa1.pricing?.disclaimer || ''}
+                          onChange={(e) => setEditableLiveDosa1(prev => ({
+                            ...prev,
+                            pricing: {
+                              ...prev.pricing,
+                              disclaimer: e.target.value
+                            }
+                          }))}
+                          className="w-full text-xs bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-[#C8860A] focus:outline-none"
+                          placeholder="Minimum call out charge (£385 on Weekdays / £480 on Weekends) can be reached..."
+                        />
+                      </div>
                     </div>
 
                     {/* Live Dosa Option 1 Pricing Rules */}
@@ -4357,8 +5128,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {editableLiveDosa1.items.map((item, idx) => (
-                        <div key={idx} className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/60 flex items-start justify-between gap-2">
-                          <div className="flex-1 space-y-1">
+                        <div key={idx} className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/60 flex items-start justify-between gap-2 shadow-2xs hover:border-amber-300 transition-colors">
+                          <div className="flex-1 space-y-1.5">
                             <div className="flex items-center gap-2">
                               <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
                                 {idx + 1}
@@ -4373,7 +5144,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                     items: prev.items.map((it, i) => i === idx ? { ...it, name } : it),
                                   }));
                                 }}
-                                className="font-bold text-xs text-gray-900 bg-white border border-gray-200 rounded px-2 py-1 w-full"
+                                className="font-bold text-xs text-gray-900 bg-white border border-gray-200 rounded px-2 py-1 w-full focus:ring-1 focus:ring-amber-400 focus:outline-none"
+                                placeholder="Dish name..."
                               />
                             </div>
                             <input
@@ -4386,58 +5158,111 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                   items: prev.items.map((it, i) => i === idx ? { ...it, description } : it),
                                 }));
                               }}
-                              className="text-[11px] text-gray-500 bg-white border border-gray-200 rounded px-2 py-1 w-full"
+                              className="text-[11px] text-gray-600 bg-white border border-gray-200 rounded px-2 py-1 w-full focus:ring-1 focus:ring-amber-400 focus:outline-none"
+                              placeholder="Dish description..."
                             />
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-bold text-gray-400 uppercase">Tags:</span>
+                              <input
+                                type="text"
+                                value={(item.tags || []).join(', ')}
+                                onChange={(e) => {
+                                  const tags = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                                  setEditableLiveDosa1(prev => ({
+                                    ...prev,
+                                    items: prev.items.map((it, i) => i === idx ? { ...it, tags } : it),
+                                  }));
+                                }}
+                                className="text-[10px] font-bold text-amber-900 bg-white border border-gray-200 rounded px-2 py-0.5 w-36 focus:ring-1 focus:ring-amber-400 focus:outline-none"
+                                placeholder="V, M, J, O..."
+                                title="Dietary tags comma-separated"
+                              />
+                            </div>
                           </div>
 
                           <button
+                            type="button"
                             onClick={() => {
                               setEditableLiveDosa1(prev => ({
                                 ...prev,
                                 items: prev.items.filter((_, i) => i !== idx),
                               }));
                             }}
-                            className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-500 cursor-pointer"
+                            className="p-1.5 px-2 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer flex-shrink-0"
                             title="Delete Dish"
                           >
                             <Icon name="TrashIcon" size={13} />
+                            <span className="hidden sm:inline text-[11px]">Delete</span>
                           </button>
                         </div>
                       ))}
                     </div>
 
                     {/* Add Live Dosa Option 1 Dish */}
-                    <div className="pt-3 border-t border-gray-100 flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="Live dish name..."
-                        value={newLiveDosaName}
-                        onChange={(e) => setNewLiveDosaName(e.target.value)}
-                        className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-xs bg-gray-50"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Description..."
-                        value={newLiveDosaDesc}
-                        onChange={(e) => setNewLiveDosaDesc(e.target.value)}
-                        className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-xs bg-gray-50"
-                      />
-                      <button
-                        onClick={() => {
-                          if (newLiveDosaName.trim()) {
-                            setEditableLiveDosa1(prev => ({
-                              ...prev,
-                              items: [...prev.items, { name: newLiveDosaName.trim(), description: newLiveDosaDesc.trim() || 'Crisp & golden, the classic favourite', tags: ['V'], isLive: true }],
-                            }));
-                            setNewLiveDosaName('');
-                            setNewLiveDosaDesc('');
-                          }
-                        }}
-                        className="px-3 py-2 rounded-lg text-white font-bold text-xs cursor-pointer"
-                        style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
-                      >
-                        <Icon name="PlusIcon" size={14} />
-                      </button>
+                    <div className="pt-3 border-t border-gray-200 bg-amber-50/50 p-4 rounded-xl border border-amber-200 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
+                          <span>➕</span>
+                          <span>Add New Dish to Option 1</span>
+                        </span>
+                        <span className="text-[10px] text-amber-800">Hot &amp; Crisp Live Station item</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                        <div className="sm:col-span-4">
+                          <input
+                            type="text"
+                            placeholder="Dish name (e.g. Cheese Masala Dosa)..."
+                            value={newLiveDosaName}
+                            onChange={(e) => setNewLiveDosaName(e.target.value)}
+                            className="w-full border border-amber-300 rounded-lg px-3 py-2 text-xs bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C8860A]"
+                          />
+                        </div>
+                        <div className="sm:col-span-5">
+                          <input
+                            type="text"
+                            placeholder="Description (e.g. Crisp golden crepe with melted cheese)..."
+                            value={newLiveDosaDesc}
+                            onChange={(e) => setNewLiveDosaDesc(e.target.value)}
+                            className="w-full border border-amber-300 rounded-lg px-3 py-2 text-xs bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C8860A]"
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <input
+                            type="text"
+                            placeholder="Tags (V, M, J)..."
+                            value={newLiveDosaTags}
+                            onChange={(e) => setNewLiveDosaTags(e.target.value)}
+                            className="w-full border border-amber-300 rounded-lg px-3 py-2 text-xs bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C8860A]"
+                          />
+                        </div>
+                        <div className="sm:col-span-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (newLiveDosaName.trim()) {
+                                const tags = newLiveDosaTags.split(',').map(s => s.trim()).filter(Boolean);
+                                setEditableLiveDosa1(prev => ({
+                                  ...prev,
+                                  items: [...prev.items, {
+                                    name: newLiveDosaName.trim(),
+                                    description: newLiveDosaDesc.trim() || 'Freshly prepared live on the tawa',
+                                    tags: tags.length > 0 ? tags : ['V'],
+                                    isLive: true
+                                  }],
+                                }));
+                                setNewLiveDosaName('');
+                                setNewLiveDosaDesc('');
+                                setNewLiveDosaTags('V');
+                              }
+                            }}
+                            className="w-full h-full min-h-[34px] px-3 py-2 rounded-lg text-white font-bold text-xs cursor-pointer shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-1"
+                            style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                          >
+                            <Icon name="PlusIcon" size={14} />
+                            <span className="hidden sm:inline">Add</span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -4446,38 +5271,107 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {/* ─── TAB: LIVE DOSA OPTION 2 EDITOR (3 HOURS + MAIN + DESSERT) ─── */}
               {adminMenuTab === 'live-dosa-2' && (
                 <div className="space-y-4 animate-in fade-in duration-300">
-                  {/* WhatsApp Broadcast */}
+                  {/* Broadcast via WhatsApp / Email */}
                   <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 shadow-2xs">
                     <p className="text-xs font-bold text-purple-950 mb-2 flex items-center gap-1.5">
                       <span>👑</span>
-                      <span>Send Full Live Dosa Option 2 Menu (3 Hours + 1 Main + 1 Dessert) to a Customer:</span>
+                      <span>Send Full Live Dosa Option 2 Menu (3 Hours + 1 Main + 1 Dessert) via WhatsApp or Email:</span>
                     </p>
-                    <div className="flex flex-wrap gap-2">
-                      {enquiries.concat(activeBookings).slice(0, 6).map((b) => (
-                        <a
-                          key={b.id}
-                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'Live Dosa Option 2', b.guests)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white shadow-2xs hover:opacity-90"
-                          style={{ background: '#25D366' }}
-                        >
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Send to {b.name.split(' ')[0]}
-                        </a>
-                      ))}
-                    </div>
+                    {renderMenuBroadcastBadges('Live Dosa Option 2')}
                   </div>
 
                   <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
-                    <div className="border-b border-gray-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div>
-                        <h3 className="text-base font-bold text-gray-900">{editableLiveDosa2.title}</h3>
-                        <p className="text-xs text-gray-500">12 Live Dishes + 1 Main Course + 1 Dessert + 3 Hours Continuous Service</p>
+                    {/* Option 2 Header & Presentation Settings */}
+                    <div className="bg-purple-50/60 rounded-2xl p-4 border border-purple-200 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-purple-950 uppercase tracking-wider flex items-center gap-1.5">
+                          <span>✨</span>
+                          <span>Option 2 Hero &amp; Header Settings (User Side)</span>
+                        </span>
+                        <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-purple-200 text-purple-900">
+                          {editableLiveDosa2.items?.length || 0} Dishes Total
+                        </span>
                       </div>
-                      <span className="text-xs font-bold px-3 py-1 rounded-full bg-purple-100 text-purple-900 border border-purple-200">
-                        3 Hours Service Floor
-                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-purple-900 uppercase tracking-wider mb-1">
+                            Menu Title
+                          </label>
+                          <input
+                            type="text"
+                            value={editableLiveDosa2.title || ''}
+                            onChange={(e) => setEditableLiveDosa2(prev => ({ ...prev, title: e.target.value }))}
+                            className="w-full font-bold text-xs bg-white border border-purple-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-purple-600 focus:outline-none"
+                            placeholder="Live Dosa Option 2"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-purple-900 uppercase tracking-wider mb-1">
+                            Tagline / Subtitle
+                          </label>
+                          <input
+                            type="text"
+                            value={editableLiveDosa2.tagline || ''}
+                            onChange={(e) => setEditableLiveDosa2(prev => ({ ...prev, tagline: e.target.value }))}
+                            className="w-full text-xs bg-white border border-purple-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-purple-600 focus:outline-none"
+                            placeholder="Standard Live Dosa Station + 1 Main Course + 1 Dessert (3 Hours Service)"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-purple-900 uppercase tracking-wider mb-1">
+                            Package Badge
+                          </label>
+                          <input
+                            type="text"
+                            value={editableLiveDosa2.badge || ''}
+                            onChange={(e) => setEditableLiveDosa2(prev => ({ ...prev, badge: e.target.value }))}
+                            className="w-full text-xs bg-white border border-purple-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-purple-600 focus:outline-none"
+                            placeholder="👑 Premium Live Dosa Package"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-purple-900 uppercase tracking-wider mb-1">
+                            Service Duration Badge
+                          </label>
+                          <input
+                            type="text"
+                            value={editableLiveDosa2.serviceDuration || ''}
+                            onChange={(e) => setEditableLiveDosa2(prev => ({ ...prev, serviceDuration: e.target.value }))}
+                            className="w-full text-xs bg-white border border-purple-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-purple-600 focus:outline-none"
+                            placeholder="⏱️ 3 Hours Service Duration"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-purple-900 uppercase tracking-wider mb-1">
+                          Hero Banner Description
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={editableLiveDosa2.description || ''}
+                          onChange={(e) => setEditableLiveDosa2(prev => ({ ...prev, description: e.target.value }))}
+                          className="w-full text-xs bg-white border border-purple-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-purple-600 focus:outline-none resize-none"
+                          placeholder="The ultimate live dining spectacle. Includes the full standard 12 live dishes..."
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-purple-900 uppercase tracking-wider mb-1">
+                          Minimum Call Out Charge Disclaimer / Note
+                        </label>
+                        <input
+                          type="text"
+                          value={editableLiveDosa2.pricing?.disclaimer || ''}
+                          onChange={(e) => setEditableLiveDosa2(prev => ({
+                            ...prev,
+                            pricing: {
+                              ...prev.pricing,
+                              disclaimer: e.target.value
+                            }
+                          }))}
+                          className="w-full text-xs bg-white border border-purple-300 rounded-lg px-3 py-1.5 text-gray-900 focus:ring-2 focus:ring-purple-600 focus:outline-none"
+                          placeholder="Minimum call out charge (£577.50 on Weekdays / £700 on Weekends) can be reached..."
+                        />
+                      </div>
                     </div>
 
                     {/* Live Dosa Option 2 Pricing Rules */}
@@ -4627,8 +5521,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {editableLiveDosa2.items.map((item, idx) => (
-                        <div key={idx} className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/60 flex items-start justify-between gap-2">
-                          <div className="flex-1 space-y-1">
+                        <div key={idx} className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/60 flex items-start justify-between gap-2 shadow-2xs hover:border-purple-300 transition-colors">
+                          <div className="flex-1 space-y-1.5">
                             <div className="flex items-center gap-2">
                               <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
                                 {idx + 1}
@@ -4643,7 +5537,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                     items: prev.items.map((it, i) => i === idx ? { ...it, name } : it),
                                   }));
                                 }}
-                                className="font-bold text-xs text-gray-900 bg-white border border-gray-200 rounded px-2 py-1 w-full"
+                                className="font-bold text-xs text-gray-900 bg-white border border-gray-200 rounded px-2 py-1 w-full focus:ring-1 focus:ring-purple-400 focus:outline-none"
+                                placeholder="Dish name..."
                               />
                             </div>
                             <input
@@ -4656,59 +5551,111 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                   items: prev.items.map((it, i) => i === idx ? { ...it, description } : it),
                                 }));
                               }}
-                              className="text-[11px] text-gray-500 bg-white border border-gray-200 rounded px-2 py-1 w-full"
+                              className="text-[11px] text-gray-600 bg-white border border-gray-200 rounded px-2 py-1 w-full focus:ring-1 focus:ring-purple-400 focus:outline-none"
+                              placeholder="Dish description..."
                             />
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-bold text-gray-400 uppercase">Tags:</span>
+                              <input
+                                type="text"
+                                value={(item.tags || []).join(', ')}
+                                onChange={(e) => {
+                                  const tags = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                                  setEditableLiveDosa2(prev => ({
+                                    ...prev,
+                                    items: prev.items.map((it, i) => i === idx ? { ...it, tags } : it),
+                                  }));
+                                }}
+                                className="text-[10px] font-bold text-purple-900 bg-white border border-gray-200 rounded px-2 py-0.5 w-36 focus:ring-1 focus:ring-purple-400 focus:outline-none"
+                                placeholder="V, M, J, O..."
+                                title="Dietary tags comma-separated"
+                              />
+                            </div>
                           </div>
 
                           <button
+                            type="button"
                             onClick={() => {
                               setEditableLiveDosa2(prev => ({
                                 ...prev,
                                 items: prev.items.filter((_, i) => i !== idx),
                               }));
                             }}
-                            className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-500 cursor-pointer"
+                            className="p-1.5 px-2 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer flex-shrink-0"
                             title="Delete Dish"
                           >
                             <Icon name="TrashIcon" size={13} />
+                            <span className="hidden sm:inline text-[11px]">Delete</span>
                           </button>
                         </div>
                       ))}
                     </div>
 
                     {/* Add Live Dosa Option 2 Dish */}
-                    <div className="pt-3 border-t border-gray-100 flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="Live dish name..."
-                        value={newLiveDosaName}
-                        onChange={(e) => setNewLiveDosaName(e.target.value)}
-                        className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-xs bg-gray-50"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Description..."
-                        value={newLiveDosaDesc}
-                        onChange={(e) => setNewLiveDosaDesc(e.target.value)}
-                        className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-xs bg-gray-50"
-                      />
-                      <button
-                        onClick={() => {
-                          if (newLiveDosaName.trim()) {
-                            setEditableLiveDosa2(prev => ({
-                              ...prev,
-                              items: [...prev.items, { name: newLiveDosaName.trim(), description: newLiveDosaDesc.trim() || 'Live theatrical delicacy', tags: ['V'], isLive: true }],
-                            }));
-                            setNewLiveDosaName('');
-                            setNewLiveDosaDesc('');
-                          }
-                        }}
-                        className="px-4 py-2 rounded-lg text-xs font-bold text-white shadow-sm hover:shadow-md transition-all cursor-pointer flex items-center gap-1 flex-shrink-0"
-                        style={{ background: 'linear-gradient(135deg, #7C3AED, #A855F7)' }}
-                      >
-                        <Icon name="PlusIcon" size={14} />
-                        Add Dish
-                      </button>
+                    <div className="pt-3 border-t border-gray-200 bg-purple-50/50 p-4 rounded-xl border border-purple-200 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-purple-950 uppercase tracking-wider flex items-center gap-1.5">
+                          <span>➕</span>
+                          <span>Add New Dish to Option 2</span>
+                        </span>
+                        <span className="text-[10px] text-purple-800">Hot &amp; Crisp Live Station or Course item</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                        <div className="sm:col-span-4">
+                          <input
+                            type="text"
+                            placeholder="Dish name (e.g. Special Ghee Podi Dosa)..."
+                            value={newLiveDosa2Name}
+                            onChange={(e) => setNewLiveDosa2Name(e.target.value)}
+                            className="w-full border border-purple-300 rounded-lg px-3 py-2 text-xs bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-600"
+                          />
+                        </div>
+                        <div className="sm:col-span-5">
+                          <input
+                            type="text"
+                            placeholder="Description (e.g. Traditional slow-roasted golden crepe)..."
+                            value={newLiveDosa2Desc}
+                            onChange={(e) => setNewLiveDosa2Desc(e.target.value)}
+                            className="w-full border border-purple-300 rounded-lg px-3 py-2 text-xs bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-600"
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <input
+                            type="text"
+                            placeholder="Tags (V, M, J)..."
+                            value={newLiveDosa2Tags}
+                            onChange={(e) => setNewLiveDosa2Tags(e.target.value)}
+                            className="w-full border border-purple-300 rounded-lg px-3 py-2 text-xs bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-600"
+                          />
+                        </div>
+                        <div className="sm:col-span-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (newLiveDosa2Name.trim()) {
+                                const tags = newLiveDosa2Tags.split(',').map(s => s.trim()).filter(Boolean);
+                                setEditableLiveDosa2(prev => ({
+                                  ...prev,
+                                  items: [...prev.items, {
+                                    name: newLiveDosa2Name.trim(),
+                                    description: newLiveDosa2Desc.trim() || 'Live theatrical delicacy',
+                                    tags: tags.length > 0 ? tags : ['V'],
+                                    isLive: true
+                                  }],
+                                }));
+                                setNewLiveDosa2Name('');
+                                setNewLiveDosa2Desc('');
+                                setNewLiveDosa2Tags('V');
+                              }
+                            }}
+                            className="w-full h-full min-h-[34px] px-3 py-2 rounded-lg text-white font-bold text-xs cursor-pointer shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-1"
+                            style={{ background: 'linear-gradient(135deg, #7C3AED, #A855F7)' }}
+                          >
+                            <Icon name="PlusIcon" size={14} />
+                            <span className="hidden sm:inline">Add</span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -4717,27 +5664,13 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {/* ─── TAB: MADRAS THALI (OPTION 3) EDITOR ─── */}
               {adminMenuTab === 'madras-thali' && (
                 <div className="space-y-5 animate-in fade-in duration-300">
-                  {/* WhatsApp Broadcast for Thali */}
+                  {/* Broadcast via WhatsApp / Email */}
                   <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-2xs">
                     <p className="text-xs font-bold text-amber-950 mb-2 flex items-center gap-1.5">
                       <span>🍲</span>
-                      <span>Send Madras Thali (Option 3: 12 Items + Flavours + Additions) to a Customer via WhatsApp:</span>
+                      <span>Send Madras Thali (Option 3) via WhatsApp or Email:</span>
                     </p>
-                    <div className="flex flex-wrap gap-2">
-                      {enquiries.concat(activeBookings).slice(0, 6).map((b) => (
-                        <a
-                          key={b.id}
-                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'Madras Thali (Option 3)', b.guests)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white shadow-2xs hover:opacity-90"
-                          style={{ background: '#25D366' }}
-                        >
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Send to {b.name.split(' ')[0]}
-                        </a>
-                      ))}
-                    </div>
+                    {renderMenuBroadcastBadges('Madras Thali (Option 3)')}
                   </div>
 
                   <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-5">
@@ -4777,22 +5710,37 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                         {editableMadrasThali.coreDishes.map((dish, idx) => (
                           <div key={idx} className="p-3 rounded-xl border border-gray-200 bg-gray-50/70 space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="w-4 h-4 rounded-full bg-amber-100 text-amber-800 text-[9px] font-bold flex items-center justify-center flex-shrink-0">
-                                {idx + 1}
-                              </span>
-                              <input
-                                type="text"
-                                value={dish.name}
-                                onChange={(e) => {
-                                  const name = e.target.value;
+                            <div className="flex items-center justify-between gap-1.5">
+                              <div className="flex items-center gap-1.5 flex-1">
+                                <span className="w-4 h-4 rounded-full bg-amber-100 text-amber-800 text-[9px] font-bold flex items-center justify-center flex-shrink-0">
+                                  {idx + 1}
+                                </span>
+                                <input
+                                  type="text"
+                                  value={dish.name}
+                                  onChange={(e) => {
+                                    const name = e.target.value;
+                                    setEditableMadrasThali(prev => ({
+                                      ...prev,
+                                      coreDishes: prev.coreDishes.map((d, i) => i === idx ? { ...d, name } : d),
+                                    }));
+                                  }}
+                                  className="font-bold text-xs text-gray-900 bg-white border border-gray-200 rounded px-2 py-0.5 w-full"
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
                                   setEditableMadrasThali(prev => ({
                                     ...prev,
-                                    coreDishes: prev.coreDishes.map((d, i) => i === idx ? { ...d, name } : d),
+                                    coreDishes: prev.coreDishes.filter((_, i) => i !== idx),
                                   }));
                                 }}
-                                className="font-bold text-xs text-gray-900 bg-white border border-gray-200 rounded px-2 py-0.5 w-full"
-                              />
+                                className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded cursor-pointer"
+                                title="Delete Dish"
+                              >
+                                <Icon name="TrashIcon" size={12} />
+                              </button>
                             </div>
                             <input
                               type="text"
@@ -4808,6 +5756,42 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             />
                           </div>
                         ))}
+                      </div>
+
+                      {/* Add New Core Dish */}
+                      <div className="pt-2 flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="New core dish name..."
+                          value={newThaliCoreDishName}
+                          onChange={(e) => setNewThaliCoreDishName(e.target.value)}
+                          className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-1.5 text-xs bg-gray-50 text-gray-900"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Description..."
+                          value={newThaliCoreDishDesc}
+                          onChange={(e) => setNewThaliCoreDishDesc(e.target.value)}
+                          className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-1.5 text-xs bg-gray-50 text-gray-900"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (newThaliCoreDishName.trim()) {
+                              setEditableMadrasThali(prev => ({
+                                ...prev,
+                                coreDishes: [...prev.coreDishes, { name: newThaliCoreDishName.trim(), description: newThaliCoreDishDesc.trim() || 'Authentic South Indian specialty' }],
+                              }));
+                              setNewThaliCoreDishName('');
+                              setNewThaliCoreDishDesc('');
+                            }
+                          }}
+                          className="px-3 py-1.5 rounded-lg text-white font-bold text-xs flex items-center gap-1 shadow-sm cursor-pointer"
+                          style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                        >
+                          <Icon name="PlusIcon" size={13} />
+                          <span>Add</span>
+                        </button>
                       </div>
                     </div>
 
@@ -5028,27 +6012,13 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {/* ─── TAB: TAILOR YOUR OWN MENU (OPTION 4) EDITOR ─── */}
               {adminMenuTab === 'tailor-menu' && (
                 <div className="space-y-5 animate-in fade-in duration-300">
-                  {/* WhatsApp Broadcast for Option 4 */}
+                  {/* Broadcast via WhatsApp / Email */}
                   <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-2xs">
                     <p className="text-xs font-bold text-amber-950 mb-2 flex items-center gap-1.5">
                       <span>🎨</span>
-                      <span>Send Option 4: Tailor Your Own Menu to a Customer via WhatsApp:</span>
+                      <span>Send Option 4: Tailor Your Own Menu via WhatsApp or Email:</span>
                     </p>
-                    <div className="flex flex-wrap gap-2">
-                      {enquiries.concat(activeBookings).slice(0, 6).map((b) => (
-                        <a
-                          key={b.id}
-                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'Tailor Your Own Menu (Option 4)', b.guests)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white shadow-2xs hover:opacity-90"
-                          style={{ background: '#25D366' }}
-                        >
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Send to {b.name.split(' ')[0]}
-                        </a>
-                      ))}
-                    </div>
+                    {renderMenuBroadcastBadges('Tailor Your Own Menu (Option 4)')}
                   </div>
 
                   <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-5">
@@ -5153,27 +6123,13 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {/* ─── TAB: DOSA FESTIVAL AT YOUR HOME (OPTION 5) EDITOR ─── */}
               {adminMenuTab === 'dosa-festival' && (
                 <div className="space-y-5 animate-in fade-in duration-300">
-                  {/* WhatsApp Broadcast for Option 5 */}
+                  {/* Broadcast via WhatsApp / Email */}
                   <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 shadow-2xs">
                     <p className="text-xs font-bold text-orange-950 mb-2 flex items-center gap-1.5">
                       <span>🥞</span>
-                      <span>Send Option 5: Dosa Festival (34+ Varieties) to a Customer via WhatsApp:</span>
+                      <span>Send Option 5: Dosa Festival (34+ Varieties) via WhatsApp or Email:</span>
                     </p>
-                    <div className="flex flex-wrap gap-2">
-                      {enquiries.concat(activeBookings).slice(0, 6).map((b) => (
-                        <a
-                          key={b.id}
-                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'Dosa Festival At Your Home (Option 5)', b.guests)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white shadow-2xs hover:opacity-90"
-                          style={{ background: '#25D366' }}
-                        >
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Send to {b.name.split(' ')[0]}
-                        </a>
-                      ))}
-                    </div>
+                    {renderMenuBroadcastBadges('Dosa Festival At Your Home (Option 5)')}
                   </div>
 
                   <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-5">
@@ -5296,23 +6252,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 shadow-2xs">
                     <p className="text-xs font-bold text-rose-950 mb-2 flex items-center gap-1.5">
                       <span>🍢</span>
-                      <span>Send Option 6: Canapé Service to a Customer via WhatsApp:</span>
+                      <span>Send Option 6: Canapé Service via WhatsApp or Email:</span>
                     </p>
-                    <div className="flex flex-wrap gap-2">
-                      {enquiries.concat(activeBookings).slice(0, 6).map((b) => (
-                        <a
-                          key={b.id}
-                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'Canapé Service (Option 6)', b.guests)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white shadow-2xs hover:opacity-90"
-                          style={{ background: '#25D366' }}
-                        >
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Send to {b.name.split(' ')[0]}
-                        </a>
-                      ))}
-                    </div>
+                    {renderMenuBroadcastBadges('Canapé Service (Option 6)')}
                   </div>
 
                   <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
@@ -5408,23 +6350,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 shadow-2xs">
                     <p className="text-xs font-bold text-indigo-950 mb-2 flex items-center gap-1.5">
                       <span>🍛</span>
-                      <span>Send Option 7: North Indian Standard Menu to a Customer via WhatsApp:</span>
+                      <span>Send Option 7: North Indian Standard Menu via WhatsApp or Email:</span>
                     </p>
-                    <div className="flex flex-wrap gap-2">
-                      {enquiries.concat(activeBookings).slice(0, 6).map((b) => (
-                        <a
-                          key={b.id}
-                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'North Indian Standard Menu (Option 7)', b.guests)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white shadow-2xs hover:opacity-90"
-                          style={{ background: '#25D366' }}
-                        >
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Send to {b.name.split(' ')[0]}
-                        </a>
-                      ))}
-                    </div>
+                    {renderMenuBroadcastBadges('North Indian Standard Menu (Option 7)')}
                   </div>
 
                   <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
@@ -5523,23 +6451,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   <div className="bg-teal-50 border border-teal-200 rounded-2xl p-4 shadow-2xs">
                     <p className="text-xs font-bold text-teal-950 mb-2 flex items-center gap-1.5">
                       <span>🪔</span>
-                      <span>Send Option 8: Gujarati Menu to a Customer via WhatsApp:</span>
+                      <span>Send Option 8: Gujarati Menu via WhatsApp or Email:</span>
                     </p>
-                    <div className="flex flex-wrap gap-2">
-                      {enquiries.concat(activeBookings).slice(0, 6).map((b) => (
-                        <a
-                          key={b.id}
-                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'Gujarati Menu (Option 8)', b.guests)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white shadow-2xs hover:opacity-90"
-                          style={{ background: '#25D366' }}
-                        >
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Send to {b.name.split(' ')[0]}
-                        </a>
-                      ))}
-                    </div>
+                    {renderMenuBroadcastBadges('Gujarati Menu (Option 8)')}
                   </div>
 
                   <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
@@ -5645,23 +6559,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-2xs">
                     <p className="text-xs font-bold text-amber-950 mb-2 flex items-center gap-1.5">
                       <span>👑</span>
-                      <span>Send Option 9: Punjabi Menu to a Customer via WhatsApp:</span>
+                      <span>Send Option 9: Punjabi Menu via WhatsApp or Email:</span>
                     </p>
-                    <div className="flex flex-wrap gap-2">
-                      {enquiries.concat(activeBookings).slice(0, 6).map((b) => (
-                        <a
-                          key={b.id}
-                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'Punjabi Menu (Option 9)', b.guests)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white shadow-2xs hover:opacity-90"
-                          style={{ background: '#25D366' }}
-                        >
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Send to {b.name.split(' ')[0]}
-                        </a>
-                      ))}
-                    </div>
+                    {renderMenuBroadcastBadges('Punjabi Menu (Option 9)')}
                   </div>
 
                   <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
@@ -5764,27 +6664,13 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {/* ─── TAB: DYNAMIC UPGRADES EDITOR ─── */}
               {adminMenuTab === 'upgrades' && (
                 <div className="space-y-4 animate-in fade-in duration-300">
-                  {/* WhatsApp Broadcast for Upgrades */}
+                  {/* Broadcast via WhatsApp / Email */}
                   <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-2xs">
                     <p className="text-xs font-bold text-amber-900 mb-2 flex items-center gap-1.5">
                       <span>✨</span>
-                      <span>Send Event Upgrades to a Customer:</span>
+                      <span>Send Event Upgrades via WhatsApp or Email:</span>
                     </p>
-                    <div className="flex flex-wrap gap-2">
-                      {enquiries.concat(activeBookings).slice(0, 6).map((b) => (
-                        <a
-                          key={b.id}
-                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'Upgrades', b.guests)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white shadow-2xs hover:opacity-90"
-                          style={{ background: '#25D366' }}
-                        >
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Send to {b.name.split(' ')[0]}
-                        </a>
-                      ))}
-                    </div>
+                    {renderMenuBroadcastBadges('Upgrades')}
                   </div>
 
                   <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
@@ -5942,376 +6828,26 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   </div>
                 </div>
               )}
-
-              {/* ─── TAB 3: SOUTH INDIAN BUFFET EDITOR ─── */}
-              {adminMenuTab === 'buffet' && (
-                <div className="space-y-4 animate-in fade-in duration-300">
-                  {/* WhatsApp Broadcast */}
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 shadow-2xs">
-                    <p className="text-xs font-bold text-emerald-900 mb-2 flex items-center gap-1.5">
-                      <span>🍲</span>
-                      <span>Send South Indian Buffet Menu to a Customer:</span>
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {enquiries.concat(activeBookings).slice(0, 6).map((b) => (
-                        <a
-                          key={b.id}
-                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'South Indian Buffet', b.guests)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white shadow-2xs hover:opacity-90"
-                          style={{ background: '#25D366' }}
-                        >
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Send to {b.name.split(' ')[0]}
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Schedule & Pricing Editor */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-white p-5 rounded-2xl border border-gray-200 space-y-3">
-                      <h4 className="font-bold text-sm text-gray-900">Weekday Schedule &amp; Pricing</h4>
-                      <div>
-                        <label className="text-[11px] font-bold text-gray-500 block mb-1">Days</label>
-                        <input
-                          type="text"
-                          value={editableSouthIndianBuffet.weekday.days}
-                          onChange={(e) => setEditableSouthIndianBuffet(prev => ({
-                            ...prev,
-                            weekday: { ...prev.weekday, days: e.target.value }
-                          }))}
-                          className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-semibold"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[11px] font-bold text-gray-500 block mb-1">Price</label>
-                        <input
-                          type="text"
-                          value={editableSouthIndianBuffet.weekday.price}
-                          onChange={(e) => setEditableSouthIndianBuffet(prev => ({
-                            ...prev,
-                            weekday: { ...prev.weekday, price: e.target.value }
-                          }))}
-                          className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold text-emerald-700"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="bg-white p-5 rounded-2xl border border-gray-200 space-y-3">
-                      <h4 className="font-bold text-sm text-gray-900">Weekend Schedule &amp; Pricing</h4>
-                      <div>
-                        <label className="text-[11px] font-bold text-gray-500 block mb-1">Days</label>
-                        <input
-                          type="text"
-                          value={editableSouthIndianBuffet.weekend.days}
-                          onChange={(e) => setEditableSouthIndianBuffet(prev => ({
-                            ...prev,
-                            weekend: { ...prev.weekend, days: e.target.value }
-                          }))}
-                          className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-semibold"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[11px] font-bold text-gray-500 block mb-1">Price</label>
-                        <input
-                          type="text"
-                          value={editableSouthIndianBuffet.weekend.price}
-                          onChange={(e) => setEditableSouthIndianBuffet(prev => ({
-                            ...prev,
-                            weekend: { ...prev.weekend, price: e.target.value }
-                          }))}
-                          className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold text-amber-700"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 14 Buffet Spread Dishes Editor */}
-                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
-                    <div className="border-b border-gray-100 pb-3 flex items-center justify-between">
-                      <div>
-                        <h3 className="text-base font-bold text-gray-900">Buffet Spread Items</h3>
-                        <p className="text-xs text-gray-500">Unlimited servings included in South Indian Buffet</p>
-                      </div>
-                      <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-900">
-                        {editableSouthIndianBuffet.items.length} Inclusions
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                      {editableSouthIndianBuffet.items.map((bItem, idx) => (
-                        <div key={idx} className="p-3 rounded-xl border border-gray-200 bg-gray-50/60 flex items-start justify-between gap-2">
-                          <div className="flex-1 space-y-1">
-                            <input
-                              type="text"
-                              value={bItem.name}
-                              onChange={(e) => {
-                                const name = e.target.value;
-                                setEditableSouthIndianBuffet(prev => ({
-                                  ...prev,
-                                  items: prev.items.map((it, i) => i === idx ? { ...it, name } : it),
-                                }));
-                              }}
-                              className="font-bold text-xs text-gray-900 bg-white border border-gray-200 rounded px-2 py-1 w-full"
-                            />
-                            <input
-                              type="text"
-                              value={bItem.description}
-                              onChange={(e) => {
-                                const description = e.target.value;
-                                setEditableSouthIndianBuffet(prev => ({
-                                  ...prev,
-                                  items: prev.items.map((it, i) => i === idx ? { ...it, description } : it),
-                                }));
-                              }}
-                              className="text-[11px] text-gray-500 bg-white border border-gray-200 rounded px-2 py-1 w-full"
-                            />
-                          </div>
-
-                          {currentUser?.role === 'Super Admin' && (
-                            <button
-                              onClick={() => {
-                                setEditableSouthIndianBuffet(prev => ({
-                                  ...prev,
-                                  items: prev.items.filter((_, i) => i !== idx),
-                                }));
-                              }}
-                              className="p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-500"
-                            >
-                              <Icon name="TrashIcon" size={13} />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Add Buffet Item */}
-                    <div className="pt-3 border-t border-gray-100 flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="Buffet dish name..."
-                        value={newBuffetItemName}
-                        onChange={(e) => setNewBuffetItemName(e.target.value)}
-                        className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-xs bg-gray-50"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Description..."
-                        value={newBuffetItemDesc}
-                        onChange={(e) => setNewBuffetItemDesc(e.target.value)}
-                        className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-xs bg-gray-50"
-                      />
-                      <button
-                        onClick={() => {
-                          if (newBuffetItemName.trim()) {
-                            setEditableSouthIndianBuffet(prev => ({
-                              ...prev,
-                              items: [...prev.items, { name: newBuffetItemName.trim(), description: newBuffetItemDesc.trim() || 'Unlimited buffet dish', tags: ['V'] }],
-                            }));
-                            setNewBuffetItemName('');
-                            setNewBuffetItemDesc('');
-                          }
-                        }}
-                        className="px-3 py-2 rounded-lg text-white font-bold text-xs"
-                        style={{ background: 'linear-gradient(135deg, #2E7D32, #4CAF50)' }}
-                      >
-                        <Icon name="PlusIcon" size={14} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* ─── TAB 4: BANQUET PACKAGES & VENUE SERVICES ─── */}
-              {adminMenuTab === 'banquet' && (
-                <div className="space-y-4 animate-in fade-in duration-300">
-                  {editableBanquetPackages.map((pkg) => (
-                    <div key={pkg.id} className="bg-white rounded-xl border border-gray-200 p-5">
-                      {editingPackageId === pkg.id && editingPackageData ? (
-                        /* Edit Mode */
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <h3 className="font-semibold text-gray-900">{pkg.name}</h3>
-                            <div className="flex gap-2">
-                              <button onClick={saveEditPackage} className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white" style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>Save</button>
-                              <button onClick={() => { setEditingPackageId(null); setEditingPackageData(null); }} className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500">Cancel</button>
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                            <div>
-                              <label className="text-xs text-gray-500 block mb-1">Price/Person (£)</label>
-                              <input type="number" value={editingPackageData.pricePerPerson} onChange={(e) => setEditingPackageData({ ...editingPackageData, pricePerPerson: Number(e.target.value) })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                            </div>
-                            <div>
-                              <label className="text-xs text-gray-500 block mb-1">Veg Starters</label>
-                              <input type="number" value={editingPackageData.starters.veg} onChange={(e) => setEditingPackageData({ ...editingPackageData, starters: { ...editingPackageData.starters, veg: Number(e.target.value) } })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                            </div>
-                            <div>
-                              <label className="text-xs text-gray-500 block mb-1">Non-Veg Starters</label>
-                              <input type="number" value={editingPackageData.starters.nonVeg} onChange={(e) => setEditingPackageData({ ...editingPackageData, starters: { ...editingPackageData.starters, nonVeg: Number(e.target.value) } })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                            </div>
-                            <div>
-                              <label className="text-xs text-gray-500 block mb-1">Veg Mains</label>
-                              <input type="number" value={editingPackageData.mains.veg} onChange={(e) => setEditingPackageData({ ...editingPackageData, mains: { ...editingPackageData.mains, veg: Number(e.target.value) } })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                            </div>
-                            <div>
-                              <label className="text-xs text-gray-500 block mb-1">Non-Veg Mains</label>
-                              <input type="number" value={editingPackageData.mains.nonVeg} onChange={(e) => setEditingPackageData({ ...editingPackageData, mains: { ...editingPackageData.mains, nonVeg: Number(e.target.value) } })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                            </div>
-                            <div>
-                              <label className="text-xs text-gray-500 block mb-1">Min Guests</label>
-                              {/* @ts-ignore */}
-                              <input type="number" value={editingPackageData.minGuests ?? ''} onChange={(e) => setEditingPackageData({ ...editingPackageData, minGuests: e.target.value ? Number(e.target.value) : null })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" placeholder="None" />
-                            </div>
-                            <div>
-                              <label className="text-xs text-gray-500 block mb-1">Max Guests</label>
-                              {/* @ts-ignore */}
-                              <input type="number" value={editingPackageData.maxGuests ?? ''} onChange={(e) => setEditingPackageData({ ...editingPackageData, maxGuests: e.target.value ? Number(e.target.value) : null })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" placeholder="None" />
-                            </div>
-                          </div>
-                          <div>
-                            <label className="text-xs text-gray-500 block mb-1">Desserts (one per line)</label>
-                            <textarea rows={3} value={editingPackageData.desserts.join('\n')} onChange={(e) => setEditingPackageData({ ...editingPackageData, desserts: e.target.value.split('\n').filter(Boolean) })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none resize-none" />
-                          </div>
-                          <div>
-                            <label className="text-xs text-gray-500 block mb-1">Drinks (one per line)</label>
-                            <textarea rows={3} value={editingPackageData.drinks.join('\n')} onChange={(e) => setEditingPackageData({ ...editingPackageData, drinks: e.target.value.split('\n').filter(Boolean) })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none resize-none" />
-                          </div>
-                          <div>
-                            <label className="text-xs text-gray-500 block mb-1">Tag / Badge</label>
-                            <input type="text" value={editingPackageData.tag} onChange={(e) => setEditingPackageData({ ...editingPackageData, tag: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" placeholder="e.g. Most Popular" />
-                          </div>
-                        </div>
-                      ) : (
-                        /* View Mode */
-                        <div>
-                          <div className="flex items-start justify-between mb-3">
-                            <div>
-                              <div className="flex items-center gap-2 mb-0.5">
-                                <h3 className="font-semibold text-gray-900">{pkg.name}</h3>
-                                {pkg.tag && <span className="text-xs font-semibold px-2 py-0.5 rounded-full border" style={{ background: 'rgba(200,134,10,0.08)', color: '#C8860A', borderColor: 'rgba(200,134,10,0.3)' }}>{pkg.tag}</span>}
-                              </div>
-                              <span className="text-lg font-bold" style={{ color: '#C8860A' }}>£{pkg.pricePerPerson}<span className="text-sm font-normal text-gray-500">/person (Excl. VAT)</span></span>
-                              {pkg.guestLabel && <div className="text-xs text-gray-500 mt-0.5">{pkg.guestLabel}</div>}
-                            </div>
-                            <button onClick={() => startEditPackage(pkg)} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors hover:bg-amber-50" style={{ borderColor: '#C8860A', color: '#C8860A' }}>
-                              <Icon name="PencilSquareIcon" size={14} />
-                              Edit
-                            </button>
-                          </div>
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-                            {'canapes' in pkg && pkg.canapes && (
-                              <div className="bg-gray-50 rounded-lg p-2.5">
-                                <div className="text-xs text-gray-400 mb-0.5">Canapés</div>
-                                <div className="text-xs font-medium text-gray-700">{pkg.canapes.veg}V · {pkg.canapes.nonVeg}NV</div>
-                              </div>
-                            )}
-                            <div className="bg-gray-50 rounded-lg p-2.5">
-                              <div className="text-xs text-gray-400 mb-0.5">Starters</div>
-                              <div className="text-xs font-medium text-gray-700">{pkg.starters.veg}V · {pkg.starters.nonVeg}NV</div>
-                            </div>
-                            <div className="bg-gray-50 rounded-lg p-2.5">
-                              <div className="text-xs text-gray-400 mb-0.5">Mains</div>
-                              <div className="text-xs font-medium text-gray-700">{pkg.mains.veg}V · {pkg.mains.nonVeg}NV</div>
-                            </div>
-                            <div className="bg-gray-50 rounded-lg p-2.5">
-                              <div className="text-xs text-gray-400 mb-0.5">Desserts</div>
-                              <div className="text-xs font-medium text-gray-700">{pkg.desserts.length} item{pkg.desserts.length !== 1 ? 's' : ''}</div>
-                            </div>
-                            {pkg.drinks.length > 0 && (
-                              <div className="bg-gray-50 rounded-lg p-2.5">
-                                <div className="text-xs text-gray-400 mb-0.5">Drinks</div>
-                                <div className="text-xs font-medium text-gray-700">{pkg.drinks.length} item{pkg.drinks.length !== 1 ? 's' : ''}</div>
-                              </div>
-                            )}
-                          </div>
-                          <div className="border-t border-gray-100 pt-3">
-                            <p className="text-xs text-gray-500 mb-2 font-medium">📱 Send this package to a customer via WhatsApp:</p>
-                            <div className="flex flex-wrap gap-2">
-                              {enquiries.concat(activeBookings).slice(0, 4).map((b) => (
-                                <a key={b.id}
-                                  href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n🥗 Starters: ${pkg.starters.veg} Veg + ${pkg.starters.nonVeg} Non-Veg\n🍛 Mains: ${pkg.mains.veg} Veg + ${pkg.mains.nonVeg} Non-Veg\n🍮 Desserts: ${pkg.desserts.join(', ')}\n${pkg.drinks.length > 0 ? `🥤 Drinks: ${pkg.drinks.join(', ')}\n` : ''}${pkg.guestLabel ? `\n👥 ${pkg.guestLabel}` : ''}\n\nFor ${b.guests} guests, estimated total: *£${(pkg.pricePerPerson * b.guests).toLocaleString()}* (Excl. VAT)\n\n🧒 *Kids Pricing* (Over 50 Adults):\n${editableKidsPricing.map(kp => `${kp.ageRange}: ${kp.price}`).join('\\n')}\n\n🏢 *Venue Hire Charges:*\n${editableVenueCharges.map(vc => `• ${vc.day}: ${vc.charge}${vc.note ? ` (${vc.note})` : ''}`).join('\\n')}\n\nWould you like to go ahead with this package? Please reply to confirm! 🙏`)}
-                                  target="_blank" rel="noopener noreferrer"
-                                  className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
-                                  style={{ background: '#25D366', color: 'white' }}>
-                                  <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                                  Send to {b.name.split(' ')[0]}
-                                </a>
-                              ))}
-                              {enquiries.concat(activeBookings).length === 0 && (
-                                <span className="text-xs text-gray-400 italic">No active customers to send to</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-
-                  {/* Venue Hall Charges */}
-                  <div className="bg-white rounded-xl border border-gray-200 p-5">
-                    <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                      <Icon name="BuildingOffice2Icon" size={16} style={{ color: '#C8860A' }} />
-                      Venue Hall Charges
-                    </h3>
-                    <div className="space-y-2">
-                      {editableVenueCharges.map((row, i) => (
-                        <div key={i} className="flex items-center gap-3 flex-wrap">
-                          <input type="text" value={row.day} onChange={(e) => setEditableVenueCharges(prev => prev.map((r, idx) => idx === i ? { ...r, day: e.target.value } : r))} className="flex-1 min-w-[160px] border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                          <input type="text" value={row.charge} onChange={(e) => setEditableVenueCharges(prev => prev.map((r, idx) => idx === i ? { ...r, charge: e.target.value } : r))} className="flex-1 min-w-[160px] border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none font-semibold" style={{ color: '#C8860A' }} />
-                          <input type="text" value={row.note} onChange={(e) => setEditableVenueCharges(prev => prev.map((r, idx) => idx === i ? { ...r, note: e.target.value } : r))} className="w-28 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-500" placeholder="Note" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Dry Hire Prices */}
-                  <div className="bg-white rounded-xl border border-gray-200 p-5">
-                    <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                      <Icon name="BuildingOfficeIcon" size={16} style={{ color: '#C8860A' }} />
-                      Dry Hire Prices
-                    </h3>
-                    <div className="space-y-2">
-                      {editableDryHirePrices.map((row, i) => (
-                        <div key={i} className="flex items-center gap-3 flex-wrap">
-                          <input type="text" value={row.day} onChange={(e) => setEditableDryHirePrices(prev => prev.map((r, idx) => idx === i ? { ...r, day: e.target.value } : r))} className="flex-1 min-w-[160px] border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" placeholder="Day" />
-                          <input type="text" value={row.session} onChange={(e) => setEditableDryHirePrices(prev => prev.map((r, idx) => idx === i ? { ...r, session: e.target.value } : r))} className="w-28 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" placeholder="Session" />
-                          <input type="number" value={row.price} onChange={(e) => setEditableDryHirePrices(prev => prev.map((r, idx) => idx === i ? { ...r, price: Number(e.target.value) } : r))} className="flex-1 min-w-[120px] border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none font-semibold" style={{ color: '#C8860A' }} placeholder="Price (£)" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Table Service & Kids Pricing */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-white rounded-xl border border-gray-200 p-5">
-                      <h3 className="font-semibold text-gray-900 mb-3">Table Service Charges</h3>
-                      <div className="space-y-2">
-                        {editableTableService.map((ts, i) => (
-                          <div key={i} className="flex items-center gap-2">
-                            <input type="text" value={ts.service} onChange={(e) => setEditableTableService(prev => prev.map((t, idx) => idx === i ? { ...t, service: e.target.value } : t))} className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                            <input type="text" value={ts.price} onChange={(e) => setEditableTableService(prev => prev.map((t, idx) => idx === i ? { ...t, price: e.target.value } : t))} className="w-32 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none font-semibold" style={{ color: '#C8860A' }} />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="bg-white rounded-xl border border-gray-200 p-5">
-                      <h3 className="font-semibold text-gray-900 mb-3">Kids Pricing</h3>
-                      <div className="space-y-2">
-                        {editableKidsPricing.map((kp, i) => (
-                          <div key={i} className="flex items-center gap-2">
-                            <input type="text" value={kp.ageRange} onChange={(e) => setEditableKidsPricing(prev => prev.map((k, idx) => idx === i ? { ...k, ageRange: e.target.value } : k))} className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                            <input type="text" value={kp.price} onChange={(e) => setEditableKidsPricing(prev => prev.map((k, idx) => idx === i ? { ...k, price: e.target.value } : k))} className="w-28 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none font-semibold" style={{ color: '#C8860A' }} />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
+          )}
+
+          {/* ─── WEBSITE CONTENT CMS ─── */}
+          {activeTab === 'website_content' && (
+            <WebsiteContentEditor
+              content={editableWebsiteContent}
+              onChange={setEditableWebsiteContent}
+              onSave={saveWebsiteContentToDatabase}
+              isSaving={isSavingWebsiteContent}
+              onReset={() => {
+                if (confirm('Reset all website content back to default values?')) {
+                  setEditableWebsiteContent(DEFAULT_WEBSITE_CONTENT);
+                  setCustomAlert({
+                    message: 'Reset to default in editor. Click "Save Website Content" to publish to the homepage.',
+                    type: 'success',
+                  });
+                }
+              }}
+            />
           )}
 
           {/* ─── HISTORY ─── */}
@@ -6496,17 +7032,6 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   </span>
                 </button>
                 <button
-                  onClick={() => setSettingsSection('venue')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                    settingsSection === 'venue'
-                      ? 'bg-[#C8860A] text-white shadow-sm'
-                      : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  <Icon name="BuildingOfficeIcon" size={16} />
-                  Venue Profile
-                </button>
-                <button
                   onClick={() => setSettingsSection('location_delivery')}
                   className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
                     settingsSection === 'location_delivery'
@@ -6560,6 +7085,49 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 >
                   <Icon name="NoSymbolIcon" size={16} />
                   Block Dates
+                </button>
+                <button
+                  onClick={() => setSettingsSection('website_content')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                    settingsSection === 'website_content'
+                      ? 'bg-[#C8860A] text-white shadow-sm'
+                      : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <Icon name="PaintBrushIcon" size={16} />
+                  Website Content
+                </button>
+                <button
+                  onClick={() => setSettingsSection('email_notifications')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                    settingsSection === 'email_notifications'
+                      ? 'bg-[#C8860A] text-white shadow-sm'
+                      : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <Icon name="EnvelopeIcon" size={16} />
+                  <span>Email Notifications</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                    settingsSection === 'email_notifications' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-900'
+                  }`}>
+                    {editableEmailConfig.recipients.filter(r => r.enabled).length} Active
+                  </span>
+                </button>
+                <button
+                  onClick={() => setSettingsSection('message_templates')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                    settingsSection === 'message_templates'
+                      ? 'bg-[#C8860A] text-white shadow-sm'
+                      : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <Icon name="ChatBubbleBottomCenterTextIcon" size={16} />
+                  <span>Message & Email Templates</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                    settingsSection === 'message_templates' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-900'
+                  }`}>
+                    {Object.keys(editableCommConfig.templates || {}).length}
+                  </span>
                 </button>
               </div>
 
@@ -6803,42 +7371,6 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               >
                                 + Add Slot
                               </button>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Venue Hall Standard Settings */}
-                        <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 space-y-2">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                            <div>
-                              <span className="text-xs font-bold text-gray-900">
-                                🏛️ Venue Hall (In-House) Max Bookings / Slot
-                              </span>
-                              <p className="text-[11px] text-gray-500 mt-0.5">
-                                For In-House hall bookings, maximum events allowed per time slot.
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2 self-start sm:self-center">
-                              <label className="text-xs font-bold text-gray-700 whitespace-nowrap">
-                                Max Bookings:
-                              </label>
-                              <input
-                                type="number"
-                                min="1"
-                                max="5"
-                                value={editableFormConfig.slotCapacity?.maxHallBookingsPerSlot ?? 1}
-                                onChange={(e) => {
-                                  const val = Math.max(1, parseInt(e.target.value) || 1);
-                                  setEditableFormConfig(prev => ({
-                                    ...prev,
-                                    slotCapacity: {
-                                      ...(prev.slotCapacity || DEFAULT_SLOT_CAPACITY),
-                                      maxHallBookingsPerSlot: val,
-                                    }
-                                  }));
-                                }}
-                                className="w-16 border border-gray-300 rounded-lg px-2 py-1 text-xs font-bold text-center bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C8860A]"
-                              />
                             </div>
                           </div>
                         </div>
@@ -7215,12 +7747,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                             type="button"
                                             onClick={() => {
                                               const updated = (field.options || []).filter((_, i) => i !== optIdx);
-                                              setEditableFormConfig(prev => ({
-                                                ...prev,
-                                                fields: prev.fields.map(f => f.id === field.id ? { ...f, options: updated } : f)
-                                              }));
+                                              handleUpdateFieldOptions(field.id, updated);
                                             }}
-                                            className="text-gray-400 hover:text-rose-600 transition-colors p-0.5"
+                                            className="text-gray-400 hover:text-rose-600 transition-colors p-0.5 cursor-pointer"
                                             title={`Remove ${opt}`}
                                           >
                                             <Icon name="XMarkIcon" size={12} />
@@ -7245,10 +7774,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                             const val = inputEl?.value?.trim();
                                             if (val && !(field.options || []).includes(val)) {
                                               const updated = [...(field.options || []), val];
-                                              setEditableFormConfig(prev => ({
-                                                ...prev,
-                                                fields: prev.fields.map(f => f.id === field.id ? { ...f, options: updated } : f)
-                                              }));
+                                              handleUpdateFieldOptions(field.id, updated);
                                               inputEl.value = '';
                                             }
                                           }
@@ -7262,14 +7788,11 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                           const val = inputEl?.value?.trim();
                                           if (val && !(field.options || []).includes(val)) {
                                             const updated = [...(field.options || []), val];
-                                            setEditableFormConfig(prev => ({
-                                              ...prev,
-                                              fields: prev.fields.map(f => f.id === field.id ? { ...f, options: updated } : f)
-                                            }));
+                                            handleUpdateFieldOptions(field.id, updated);
                                             inputEl.value = '';
                                           }
                                         }}
-                                        className="px-3 py-1 rounded-lg text-xs font-bold text-white transition-colors"
+                                        className="px-3 py-1 rounded-lg text-xs font-bold text-white transition-colors cursor-pointer"
                                         style={{ background: '#C8860A' }}
                                       >
                                         + Add Option
@@ -7409,50 +7932,6 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         </div>
                       </div>
                     </div>
-                  </div>
-                </div>
-              )}
-
-              {/* ── SECTION 2: VENUE DETAILS ── */}
-              {settingsSection === 'venue' && (
-                <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-2xl space-y-4 shadow-sm">
-                  <h3 className="font-bold text-gray-900 flex items-center gap-2 text-base">
-                    <Icon name="BuildingOfficeIcon" size={18} style={{ color: '#C8860A' }} />
-                    Venue Profile & Details
-                  </h3>
-                  <div className="space-y-3.5">
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Venue Name</label>
-                      <input type="text" value={venueDetails.venueName} onChange={(e) => setVenueDetails(prev => ({ ...prev, venueName: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Max Capacity</label>
-                      <input type="number" value={venueDetails.maxCapacity} onChange={(e) => setVenueDetails(prev => ({ ...prev, maxCapacity: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Contact Email</label>
-                      <input type="email" value={venueDetails.contactEmail} onChange={(e) => setVenueDetails(prev => ({ ...prev, contactEmail: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Phone</label>
-                      <input type="tel" value={venueDetails.phone} onChange={(e) => setVenueDetails(prev => ({ ...prev, phone: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">WhatsApp Business Number</label>
-                      <input type="tel" value={venueDetails.whatsapp} onChange={(e) => setVenueDetails(prev => ({ ...prev, whatsapp: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Address</label>
-                      <input type="text" value={venueDetails.address} onChange={(e) => setVenueDetails(prev => ({ ...prev, address: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50" />
-                    </div>
-                    <button
-                      onClick={saveVenueDetails}
-                      disabled={isSavingVenueDetails}
-                      className="text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition-all mt-2 shadow-md active:scale-95 disabled:opacity-50"
-                      style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
-                    >
-                      {isSavingVenueDetails ? 'Saving...' : 'Save Venue Details'}
-                    </button>
                   </div>
                 </div>
               )}
@@ -7916,25 +8395,839 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
               {/* ── SECTION 5: BLOCK DATES ── */}
               {settingsSection === 'block_dates' && (
-                <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-2xl space-y-4 shadow-sm">
-                  <h3 className="font-bold text-gray-900 flex items-center gap-2 text-base">
-                    <Icon name="NoSymbolIcon" size={18} style={{ color: '#C8860A' }} />
-                    Block Dates & Manage Venue Availability
-                  </h3>
-                  <div className="flex items-center gap-2">
-                    <input type="date" value={blockDateInput} onChange={(e) => setBlockDateInput(e.target.value)} className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none bg-gray-50" />
-                    <button onClick={handleBlockDate} className="bg-gray-900 hover:bg-gray-700 text-white font-medium px-4 py-2 rounded-xl text-sm transition-colors">Block Date</button>
+                <div className="bg-white rounded-2xl border border-gray-200 p-6 max-w-3xl space-y-5 shadow-sm">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+                    <div>
+                      <h3 className="font-bold text-gray-900 flex items-center gap-2 text-base">
+                        <Icon name="NoSymbolIcon" size={20} style={{ color: '#C8860A' }} />
+                        Block Dates &amp; Calendar Availability
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Prevent bookings on holidays, fully-booked dates, or venue maintenance days. Blocked dates cannot be chosen on the homepage or menu order forms.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-900">
+                        {blockedDates.length} {blockedDates.length === 1 ? 'Date' : 'Dates'} Blocked
+                      </span>
+                    </div>
                   </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {blockedDates.map((d) => (
-                      <div key={d} className="flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-600 text-xs font-semibold px-3 py-1.5 rounded-lg">
-                        {d}
-                        <button onClick={() => handleUnblockDate(d)} className="hover:text-red-800 transition-colors p-0.5"><Icon name="XMarkIcon" size={12} /></button>
+
+                  <div className="bg-amber-50/50 border border-amber-200/70 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="flex-1">
+                      <label className="block text-xs font-bold text-amber-950 uppercase tracking-wide mb-1">
+                        Select Date to Block
+                      </label>
+                      <input
+                        type="date"
+                        value={blockDateInput}
+                        min={new Date().toISOString().split('T')[0]}
+                        onChange={(e) => setBlockDateInput(e.target.value)}
+                        className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-white font-medium text-gray-900"
+                      />
+                    </div>
+                    <div className="sm:self-end">
+                      <button
+                        type="button"
+                        onClick={handleBlockDate}
+                        disabled={!blockDateInput}
+                        className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold text-white transition-all shadow-md active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+                        style={{ background: 'linear-gradient(135deg, #1F2937, #111827)' }}
+                      >
+                        <Icon name="NoSymbolIcon" size={16} />
+                        <span>Block This Date</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                      <Icon name="CalendarDaysIcon" size={14} className="text-gray-500" />
+                      Currently Blocked Dates
+                    </h4>
+                    <div className="flex flex-wrap gap-2.5">
+                      {blockedDates.map((d) => (
+                        <div
+                          key={d}
+                          className="flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold px-3 py-1.5 rounded-xl shadow-2xs hover:bg-rose-100/70 transition-colors"
+                        >
+                          <span className="font-mono">{d}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleUnblockDate(d)}
+                            className="text-rose-400 hover:text-rose-700 hover:bg-rose-200/60 transition-colors p-1 rounded-full cursor-pointer"
+                            title={`Unblock ${d}`}
+                          >
+                            <Icon name="XMarkIcon" size={14} />
+                          </button>
+                        </div>
+                      ))}
+                      {blockedDates.length === 0 && (
+                        <div className="w-full py-6 text-center border-2 border-dashed border-gray-200 rounded-xl bg-gray-50/50">
+                          <p className="text-xs text-gray-400 font-medium">No dates currently blocked. All calendar dates are open for booking.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── SECTION 6: WEBSITE CONTENT ── */}
+              {settingsSection === 'website_content' && (
+                <WebsiteContentEditor
+                  content={editableWebsiteContent}
+                  onChange={setEditableWebsiteContent}
+                  onSave={saveWebsiteContentToDatabase}
+                  isSaving={isSavingWebsiteContent}
+                  onReset={() => {
+                    if (confirm('Reset all website content back to default values?')) {
+                      setEditableWebsiteContent(DEFAULT_WEBSITE_CONTENT);
+                      setCustomAlert({
+                        message: 'Reset to default in editor. Click "Save Website Content" to publish to the homepage.',
+                        type: 'success',
+                      });
+                    }
+                  }}
+                />
+              )}
+
+              {/* ── SECTION 7: EMAIL NOTIFICATIONS & SMTP ── */}
+              {settingsSection === 'email_notifications' && (
+                <div className="space-y-6">
+                  {/* Top Action Bar */}
+                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <h3 className="font-bold text-gray-900 flex items-center gap-2 text-base">
+                        <Icon name="EnvelopeIcon" size={20} style={{ color: '#C8860A' }} />
+                        Enquiry Email Notifications &amp; Mail Server Settings
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Configure dynamic recipient inboxes (e.g. admin@vegchennaisrilalitha.co.uk), outgoing Zingbite / cPanel SMTP settings, and customer confirmation emails.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={saveEmailSettings}
+                      disabled={isSavingEmailConfig}
+                      className="px-5 py-2.5 rounded-xl text-xs font-bold text-white transition-all shadow-md active:scale-95 disabled:opacity-50 flex items-center gap-2 cursor-pointer flex-shrink-0"
+                      style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                    >
+                      {isSavingEmailConfig ? (
+                        <>
+                          <span className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />
+                          <span>Saving Settings...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Icon name="CloudArrowUpIcon" size={16} />
+                          <span>Save Email Settings</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* 1. Master Enable/Disable Switch Card */}
+                  <div className={`p-5 rounded-2xl border-2 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm ${
+                    editableEmailConfig.enabled ? 'bg-emerald-50/70 border-emerald-300' : 'bg-rose-50/70 border-rose-300'
+                  }`}>
+                    <div className="flex items-start gap-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0 ${
+                        editableEmailConfig.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                      }`}>
+                        {editableEmailConfig.enabled ? '🔔' : '🔕'}
                       </div>
-                    ))}
-                    {blockedDates.length === 0 && (
-                      <span className="text-xs text-gray-400 italic">No blocked dates</span>
-                    )}
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-sm font-bold text-gray-900">
+                            Automated Enquiry Email Notifications
+                          </h4>
+                          <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full uppercase ${
+                            editableEmailConfig.enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                          }`}>
+                            {editableEmailConfig.enabled ? '● Active (Sending ON)' : '○ Disabled (Sending OFF)'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-600 mt-1">
+                          {editableEmailConfig.enabled
+                            ? 'Whenever a customer submits a booking enquiry on the website, formatted notification emails are automatically dispatched.'
+                            : 'Enquiry email dispatch is currently turned OFF. Enquiries will only be recorded into the Admin Dashboard.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setEditableEmailConfig(prev => ({ ...prev, enabled: !prev.enabled }))}
+                      className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer flex-shrink-0 ${
+                        editableEmailConfig.enabled
+                          ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                          : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                      }`}
+                    >
+                      <Icon name={editableEmailConfig.enabled ? 'EyeSlashIcon' : 'EyeIcon'} size={16} />
+                      <span>{editableEmailConfig.enabled ? 'Turn OFF Email Dispatch' : 'Turn ON Email Dispatch'}</span>
+                    </button>
+                  </div>
+
+                  {/* 2. Dynamic Recipients Manager Card */}
+                  <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-sm space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
+                      <div>
+                        <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                          <Icon name="UserGroupIcon" size={18} style={{ color: '#C8860A' }} />
+                          Notification Recipient Inboxes
+                        </h4>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Specify which email addresses should receive instant alerts when a booking enquiry is submitted.
+                        </p>
+                      </div>
+                      <span className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-900 self-start sm:self-auto">
+                        {editableEmailConfig.recipients.filter(r => r.enabled).length} Active Recipient(s)
+                      </span>
+                    </div>
+
+                    {/* Recipients List */}
+                    <div className="space-y-2.5">
+                      {editableEmailConfig.recipients.map((rec) => (
+                        <div
+                          key={rec.id}
+                          className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
+                            rec.enabled
+                              ? 'border-gray-200 bg-white shadow-2xs'
+                              : 'border-gray-200 bg-gray-50/70 opacity-60'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                              ✉️
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-gray-900">{rec.name || 'Recipient'}</span>
+                                <span className={`text-[10px] font-semibold px-2 py-0.2 rounded-full ${
+                                  rec.enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-600'
+                                }`}>
+                                  {rec.enabled ? 'Active' : 'Disabled'}
+                                </span>
+                              </div>
+                              <p className="text-xs font-mono text-gray-600 mt-0.5">{rec.email}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 self-end sm:self-auto">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleRecipient(rec.id)}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                                rec.enabled
+                                  ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                  : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                              }`}
+                              title={rec.enabled ? 'Click to disable notifications for this inbox' : 'Click to enable notifications'}
+                            >
+                              <Icon name={rec.enabled ? 'EyeIcon' : 'EyeSlashIcon'} size={14} />
+                              <span>{rec.enabled ? 'Active' : 'Disabled'}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (editableEmailConfig.recipients.length <= 1) {
+                                  setCustomAlert({ message: 'At least one recipient inbox must remain configured.', type: 'error' });
+                                  return;
+                                }
+                                if (confirm(`Remove ${rec.email} from enquiry notifications?`)) {
+                                  handleDeleteRecipient(rec.id);
+                                }
+                              }}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                              title="Delete recipient"
+                            >
+                              <Icon name="TrashIcon" size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Add Recipient Form */}
+                    <div className="bg-amber-50/50 border border-amber-200/70 rounded-xl p-4 mt-3">
+                      <h5 className="text-xs font-bold text-amber-950 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                        <Icon name="PlusIcon" size={14} />
+                        Add New Notification Inbox
+                      </h5>
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                        <div className="sm:col-span-4">
+                          <input
+                            type="text"
+                            placeholder="Recipient Label (e.g. Operations)"
+                            value={newRecipientInput.name}
+                            onChange={(e) => setNewRecipientInput(prev => ({ ...prev, name: e.target.value }))}
+                            className="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                          />
+                        </div>
+                        <div className="sm:col-span-5">
+                          <input
+                            type="email"
+                            placeholder="Email Address (e.g. catering@domain.com)"
+                            value={newRecipientInput.email}
+                            onChange={(e) => setNewRecipientInput(prev => ({ ...prev, email: e.target.value }))}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleAddRecipient();
+                              }
+                            }}
+                            className="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                          />
+                        </div>
+                        <div className="sm:col-span-3">
+                          <button
+                            type="button"
+                            onClick={handleAddRecipient}
+                            className="w-full bg-[#C8860A] hover:bg-[#B07508] text-white font-bold px-4 py-2 rounded-xl text-xs transition-colors shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <Icon name="PlusIcon" size={14} />
+                            <span>Add Inbox</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3. Outgoing Mail Server (SMTP / Zingbite / cPanel) Card */}
+                  <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-sm space-y-4">
+                    <div className="border-b border-gray-100 pb-3">
+                      <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                        <Icon name="ServerStackIcon" size={18} style={{ color: '#C8860A' }} />
+                        Outgoing Mail Server Credentials (Zingbite / cPanel SMTP)
+                      </h4>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Emails are dispatched directly through your own mail server. Enter your Zingbite or cPanel outgoing SMTP host and credentials below.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          SMTP Host
+                        </label>
+                        <input
+                          type="text"
+                          value={editableEmailConfig.smtp.host}
+                          onChange={(e) => setEditableEmailConfig(prev => ({
+                            ...prev,
+                            smtp: { ...prev.smtp, host: e.target.value }
+                          }))}
+                          placeholder="e.g. mail.vegchennaisrilalitha.co.uk or smtp.zingbite.com"
+                          className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs font-mono text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">
+                            Port
+                          </label>
+                          <input
+                            type="number"
+                            value={editableEmailConfig.smtp.port}
+                            onChange={(e) => setEditableEmailConfig(prev => ({
+                              ...prev,
+                              smtp: { ...prev.smtp, port: parseInt(e.target.value) || 465 }
+                            }))}
+                            placeholder="465"
+                            className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs font-mono text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">
+                            Security
+                          </label>
+                          <select
+                            value={editableEmailConfig.smtp.secure ? 'ssl' : 'tls'}
+                            onChange={(e) => setEditableEmailConfig(prev => ({
+                              ...prev,
+                              smtp: { ...prev.smtp, secure: e.target.value === 'ssl' }
+                            }))}
+                            className="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs font-medium text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                          >
+                            <option value="ssl">SSL (Port 465)</option>
+                            <option value="tls">TLS / STARTTLS (Port 587)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          SMTP Username / Email Address
+                        </label>
+                        <input
+                          type="text"
+                          value={editableEmailConfig.smtp.user}
+                          onChange={(e) => setEditableEmailConfig(prev => ({
+                            ...prev,
+                            smtp: { ...prev.smtp, user: e.target.value }
+                          }))}
+                          placeholder="e.g. admin@vegchennaisrilalitha.co.uk"
+                          className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs font-mono text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          SMTP Password
+                        </label>
+                        <div className="relative">
+                          <input
+                            type={showSmtpPassword ? 'text' : 'password'}
+                            value={editableEmailConfig.smtp.pass}
+                            onChange={(e) => setEditableEmailConfig(prev => ({
+                              ...prev,
+                              smtp: { ...prev.smtp, pass: e.target.value }
+                            }))}
+                            placeholder="Enter mail account password..."
+                            className="w-full border border-gray-300 rounded-xl pl-3.5 pr-10 py-2 text-xs font-mono text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowSmtpPassword(!showSmtpPassword)}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 cursor-pointer"
+                          >
+                            <Icon name={showSmtpPassword ? 'EyeSlashIcon' : 'EyeIcon'} size={16} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          Sender Display Name
+                        </label>
+                        <input
+                          type="text"
+                          value={editableEmailConfig.smtp.fromName}
+                          onChange={(e) => setEditableEmailConfig(prev => ({
+                            ...prev,
+                            smtp: { ...prev.smtp, fromName: e.target.value }
+                          }))}
+                          placeholder="SriLalitha Events & Catering"
+                          className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs font-medium text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          From / Reply-To Email
+                        </label>
+                        <input
+                          type="email"
+                          value={editableEmailConfig.smtp.fromEmail}
+                          onChange={(e) => setEditableEmailConfig(prev => ({
+                            ...prev,
+                            smtp: { ...prev.smtp, fromEmail: e.target.value }
+                          }))}
+                          placeholder="admin@vegchennaisrilalitha.co.uk"
+                          className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs font-mono text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 4. Customer Confirmation & Test Card */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Customer Confirmation */}
+                    <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm flex flex-col justify-between">
+                      <div>
+                        <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+                          <span>💌</span> Customer Acknowledgement
+                        </h4>
+                        <p className="text-xs text-gray-500 mb-4">
+                          Automatically send a confirmation receipt email to the customer who submitted the enquiry form.
+                        </p>
+                      </div>
+
+                      <label className="flex items-center gap-3 cursor-pointer select-none bg-gray-50 border border-gray-200 rounded-xl p-3">
+                        <input
+                          type="checkbox"
+                          checked={editableEmailConfig.sendCustomerConfirmation}
+                          onChange={(e) => setEditableEmailConfig(prev => ({
+                            ...prev,
+                            sendCustomerConfirmation: e.target.checked
+                          }))}
+                          className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
+                        />
+                        <span className="text-xs font-bold text-gray-800">
+                          {editableEmailConfig.sendCustomerConfirmation
+                            ? 'Send customer confirmation receipt (Enabled)'
+                            : 'Do not email customer (Disabled)'}
+                        </span>
+                      </label>
+                    </div>
+
+                    {/* Test Email Dispatch */}
+                    <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm flex flex-col justify-between space-y-3">
+                      <div>
+                        <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+                          <span>🧪</span> Send Test Email
+                        </h4>
+                        <p className="text-xs text-gray-500">
+                          Verify your SMTP mail server settings and recipient inbox connectivity immediately.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <input
+                          type="email"
+                          placeholder="Test recipient email..."
+                          value={testRecipientEmail}
+                          onChange={(e) => setTestRecipientEmail(e.target.value)}
+                          className="w-full border border-gray-300 rounded-xl px-3 py-1.5 text-xs font-mono text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleSendTestEmail}
+                          disabled={isSendingTestEmail}
+                          className="w-full py-2 px-4 rounded-xl text-xs font-bold text-white transition-all shadow-sm active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+                          style={{ background: 'linear-gradient(135deg, #1F2937, #111827)' }}
+                        >
+                          {isSendingTestEmail ? (
+                            <>
+                              <span className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent" />
+                              <span>Connecting &amp; Sending...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Icon name="PaperAirplaneIcon" size={14} />
+                              <span>Dispatch Test Email</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── SECTION 10: DYNAMIC MESSAGE & EMAIL TEMPLATES ── */}
+              {settingsSection === 'message_templates' && (
+                <div className="space-y-6 animate-in fade-in duration-300">
+                  {/* Top Action Bar */}
+                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                        <span className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center flex-shrink-0">
+                          <Icon name="ChatBubbleBottomCenterTextIcon" size={18} />
+                        </span>
+                        Dynamic WhatsApp &amp; Email Communication Templates
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Customize pre-filled email subjects, email bodies, and WhatsApp scripts used throughout enquiries, menu sharing, deposits, invoices, event reminders, and completed reviews.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={saveCommunicationTemplates}
+                        disabled={isSavingCommConfig}
+                        className="px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-md active:scale-95 disabled:opacity-50 flex items-center gap-2 cursor-pointer transition-all hover:brightness-105"
+                        style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                      >
+                        {isSavingCommConfig ? (
+                          <>
+                            <span className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />
+                            <span>Saving Templates...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Icon name="CheckIcon" size={16} />
+                            <span>Save Communication Templates</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Business Sender & Contact Info */}
+                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
+                    <div className="border-b border-gray-100 pb-3 flex items-center justify-between">
+                      <div>
+                        <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide flex items-center gap-1.5">
+                          <span>🏢</span> Business Contact Details in Messages
+                        </h4>
+                        <p className="text-xs text-gray-500">
+                          These details are dynamically injected into every email &amp; WhatsApp template via <code className="text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded font-mono text-[11px]">&#123;contactEmail&#125;</code> and <code className="text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded font-mono text-[11px]">&#123;contactWhatsApp&#125;</code>.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          Customer Support &amp; Enquiries Email
+                        </label>
+                        <input
+                          type="email"
+                          value={editableCommConfig.contactEmail || ''}
+                          onChange={(e) => setEditableCommConfig(prev => ({ ...prev, contactEmail: e.target.value }))}
+                          placeholder="e.g. admin@vegchennaisrilalitha.co.uk"
+                          className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs font-mono text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          Customer Support &amp; WhatsApp Phone Number
+                        </label>
+                        <input
+                          type="text"
+                          value={editableCommConfig.contactWhatsApp || ''}
+                          onChange={(e) => setEditableCommConfig(prev => ({ ...prev, contactWhatsApp: e.target.value }))}
+                          placeholder="e.g. +44 7700 900000"
+                          className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs font-mono text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Template Editor with Navigation */}
+                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-5">
+                    {/* Template Pills / Subnav */}
+                    <div>
+                      <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                        <span>📝</span> Select Communication Template to Edit
+                      </h4>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {Object.values(editableCommConfig.templates || {}).map((tmpl) => {
+                          const isSelected = selectedTemplateForEdit === tmpl.id;
+                          return (
+                            <button
+                              key={tmpl.id}
+                              type="button"
+                              onClick={() => setSelectedTemplateForEdit(tmpl.id)}
+                              className={`text-left p-3 rounded-xl border transition-all cursor-pointer ${
+                                isSelected
+                                  ? 'border-amber-500 bg-amber-50/70 shadow-2xs text-amber-950 font-bold'
+                                  : 'border-gray-200 bg-gray-50/60 hover:bg-gray-100/70 text-gray-700'
+                              }`}
+                            >
+                              <div className="text-xs font-bold truncate flex items-center justify-between">
+                                <span>{tmpl.name}</span>
+                                {isSelected && <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />}
+                              </div>
+                              <div className="text-[10px] text-gray-400 mt-1 line-clamp-1">
+                                {tmpl.description}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Active Template Editor Form */}
+                    {editableCommConfig.templates?.[selectedTemplateForEdit] && (() => {
+                      const activeTmpl = editableCommConfig.templates[selectedTemplateForEdit];
+                      return (
+                        <div className="space-y-5 border-t border-gray-100 pt-5">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                              <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                                <span>{activeTmpl.name}</span>
+                                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                                  {activeTmpl.id}
+                                </span>
+                              </h4>
+                              <p className="text-xs text-gray-500 mt-0.5">{activeTmpl.description}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const defaultTmpl = DEFAULT_COMMUNICATION_CONFIG.templates[selectedTemplateForEdit];
+                                if (defaultTmpl) {
+                                  setEditableCommConfig(prev => ({
+                                    ...prev,
+                                    templates: {
+                                      ...prev.templates,
+                                      [selectedTemplateForEdit]: { ...defaultTmpl },
+                                    }
+                                  }));
+                                  setCustomAlert({
+                                    message: `Reset "${activeTmpl.name}" to standard default template. Remember to click Save.`,
+                                    type: 'success',
+                                  });
+                                }
+                              }}
+                              className="text-xs text-gray-500 hover:text-gray-800 underline flex items-center gap-1 cursor-pointer self-start sm:self-auto"
+                            >
+                              <Icon name="ArrowPathIcon" size={13} />
+                              Reset to Default
+                            </button>
+                          </div>
+
+                          {/* Subject Line */}
+                          <div>
+                            <label className="block text-xs font-bold text-gray-700 mb-1">
+                              Email Subject Line
+                            </label>
+                            <input
+                              type="text"
+                              value={activeTmpl.subject}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setEditableCommConfig(prev => ({
+                                  ...prev,
+                                  templates: {
+                                    ...prev.templates,
+                                    [selectedTemplateForEdit]: {
+                                      ...prev.templates[selectedTemplateForEdit],
+                                      subject: val,
+                                    }
+                                  }
+                                }));
+                              }}
+                              placeholder="e.g. SriLalitha Events: Thank You for Your {eventType} Enquiry"
+                              className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs font-medium text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                            />
+                          </div>
+
+                          {/* Message Body Textarea */}
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="block text-xs font-bold text-gray-700">
+                                Email &amp; WhatsApp Message Body
+                              </label>
+                              <span className="text-[11px] text-gray-400">
+                                Multi-line text template with automatic placeholder interpolation
+                              </span>
+                            </div>
+                            <textarea
+                              rows={11}
+                              value={activeTmpl.body}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setEditableCommConfig(prev => ({
+                                  ...prev,
+                                  templates: {
+                                    ...prev.templates,
+                                    [selectedTemplateForEdit]: {
+                                      ...prev.templates[selectedTemplateForEdit],
+                                      body: val,
+                                    }
+                                  }
+                                }));
+                              }}
+                              className="w-full border border-gray-300 rounded-xl p-3.5 text-xs text-gray-900 leading-relaxed font-mono focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                            />
+                          </div>
+
+                          {/* Dynamic Variables Legend */}
+                          <div className="bg-amber-50/50 rounded-xl border border-amber-200/60 p-3.5 space-y-2">
+                            <span className="text-xs font-bold text-amber-950 flex items-center gap-1">
+                              <span>🏷️</span> Available Dynamic Placeholders (Click to Copy):
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {[
+                                '{customerName}',
+                                '{customerPhone}',
+                                '{eventType}',
+                                '{eventDate}',
+                                '{eventTime}',
+                                '{guests}',
+                                '{venueType}',
+                                '{bookingId}',
+                                '{deposit}',
+                                '{totalEstimatedAmount}',
+                                '{menuType}',
+                                '{menuDetails}',
+                                '{invoiceBreakdown}',
+                                '{extrasList}',
+                                '{extraTotal}',
+                                '{completedSummary}',
+                                '{bankAccountName}',
+                                '{bankSortCode}',
+                                '{bankAccountNumber}',
+                                '{contactEmail}',
+                                '{contactWhatsApp}',
+                              ].map((tag) => (
+                                <button
+                                  key={tag}
+                                  type="button"
+                                  onClick={() => {
+                                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                                      navigator.clipboard.writeText(tag);
+                                      setCustomAlert({ message: `Copied ${tag} to clipboard!`, type: 'success' });
+                                    }
+                                  }}
+                                  className="px-2 py-0.5 bg-white border border-amber-300 rounded-md text-[11px] font-mono font-semibold text-amber-900 hover:bg-amber-100 hover:border-amber-400 transition-colors cursor-pointer"
+                                  title={`Click to copy ${tag}`}
+                                >
+                                  {tag}
+                                </button>
+                              ))}
+                            </div>
+                            <p className="text-[10px] text-amber-800">
+                              When an email is sent or WhatsApp message launched, these tags are automatically populated with real customer and booking values.
+                            </p>
+                          </div>
+
+                          {/* Live Sample Preview */}
+                          <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/60 space-y-3">
+                            <h5 className="text-xs font-bold text-gray-800 uppercase tracking-wide flex items-center gap-1.5">
+                              <span>👁️</span> Live Customer Preview Sample
+                            </h5>
+                            <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-2 text-xs text-gray-800 shadow-2xs">
+                              <div className="flex items-center gap-2 border-b border-gray-100 pb-2">
+                                <span className="font-bold text-gray-500 w-16">Subject:</span>
+                                <span className="font-bold text-gray-900">
+                                  {renderCommunicationTemplate(activeTmpl.subject, {
+                                    customerName: 'Rahul Sharma',
+                                    eventType: 'Wedding Reception',
+                                    eventDate: '24/10/2026',
+                                    eventTime: '12:00 PM',
+                                    guests: 150,
+                                    bookingId: 'BK-2026-108',
+                                    deposit: 300,
+                                    menuType: 'Live Dosa Option 1',
+                                    totalEstimatedAmount: 1850,
+                                    bankAccountName: bankDetails.accountName || 'SriLalitha Events Ltd',
+                                    bankSortCode: bankDetails.sortCode || '20-00-00',
+                                    bankAccountNumber: bankDetails.accountNumber || '12345678',
+                                    contactEmail: editableCommConfig.contactEmail,
+                                    contactWhatsApp: editableCommConfig.contactWhatsApp,
+                                  })}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 border-b border-gray-100 pb-2">
+                                <span className="font-bold text-gray-500 w-16">To:</span>
+                                <span className="font-mono text-gray-600">rahul.sharma@example.com</span>
+                              </div>
+                              <div className="pt-2 whitespace-pre-wrap font-sans leading-relaxed text-gray-700">
+                                {renderCommunicationTemplate(activeTmpl.body, {
+                                  customerName: 'Rahul Sharma',
+                                  eventType: 'Wedding Reception',
+                                  eventDate: '24/10/2026',
+                                  eventTime: '12:00 PM',
+                                  guests: 150,
+                                  bookingId: 'BK-2026-108',
+                                  deposit: 300,
+                                  menuType: 'Live Dosa Option 1',
+                                  menuDetails: '• 12 Live Signature Dosas (Masala, Mysore, Ghee Podi, Spring Dosa...)\n• Fresh Chutneys, Sambar & Live Counter Service (2 Hours)',
+                                  totalEstimatedAmount: 1850,
+                                  invoiceBreakdown: '• Base Package (150 Guests): £1,500\n• Extra Live Station: £200\n• Travel & Logistics: £150\n• Total: £1,850 (Deposit Paid: £300, Remaining: £1,550)',
+                                  extrasList: '• 20 Additional Guests @ £12/person = £240\n• Extra 1 Hour Service Floor = £120',
+                                  extraTotal: 360,
+                                  completedSummary: 'Booking #BK-2026-108 on 24/10/2026 (Wedding Reception, 150 Guests). All invoices settled.',
+                                  bankAccountName: bankDetails.accountName || 'SriLalitha Events Ltd',
+                                  bankSortCode: bankDetails.sortCode || '20-00-00',
+                                  bankAccountNumber: bankDetails.accountNumber || '12345678',
+                                  contactEmail: editableCommConfig.contactEmail,
+                                  contactWhatsApp: editableCommConfig.contactWhatsApp,
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               )}
@@ -8388,13 +9681,26 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <div className="text-sm text-gray-500">{selectedBooking.email}</div>
                     <div className="text-sm text-gray-500">{selectedBooking.phone}</div>
                   </div>
-                  <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, this is SriLalitha regarding your ${selectedBooking.eventType} booking.`)}
-                    target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg"
-                    style={{ background: '#25D366', color: 'white' }}>
-                    <Icon name="ChatBubbleLeftRightIcon" size={14} />
-                    WhatsApp
-                  </a>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, this is SriLalitha regarding your ${selectedBooking.eventType} booking.`)}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg"
+                      style={{ background: '#25D366', color: 'white' }}>
+                      <Icon name="ChatBubbleLeftRightIcon" size={14} />
+                      WhatsApp
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const { subject, body } = getGeneralCustomerEmailContent(selectedBooking.name, selectedBooking.email, selectedBooking.id);
+                        openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id);
+                      }}
+                      className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 cursor-pointer shadow-2xs"
+                    >
+                      <Icon name="EnvelopeIcon" size={14} />
+                      Email
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -9208,62 +10514,67 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             <div className="text-sm font-medium text-gray-900">{pkg.name}</div>
                             <div className="text-xs text-gray-500">£{pkg.pricePerPerson}/person · Est. £{estTotal.toLocaleString()} for {totalGuests} guests</div>
                           </div>
-                          <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n🥗 Starters: ${pkg.starters.veg} Veg + ${pkg.starters.nonVeg} Non-Veg\n🍛 Mains: ${pkg.mains.veg} Veg + ${pkg.mains.nonVeg} Non-Veg\n🍮 Desserts: ${pkg.desserts.join(', ')}\n${pkg.drinks.length > 0 ? `🥤 Drinks: ${pkg.drinks.join(', ')}\n` : ''}${pkg.guestLabel ? `\n👥 ${pkg.guestLabel}` : ''}\n\nFor ${adults} Adults and ${kids4to10} Kids, estimated total: *£${estTotal.toLocaleString()}* (Excl. VAT)\n\n🧒 *Kids Pricing* (Over 50 Adults):\n${editableKidsPricing.map(kp => `${kp.ageRange}: ${kp.price}`).join('\\n')}\n\n🏢 *Venue Hire Charges:*\n${editableVenueCharges.map(vc => `• ${vc.day}: ${vc.charge}${vc.note ? ` (${vc.note})` : ''}`).join('\\n')}\n\n✨ *Upgrades Available:*\n${(editableUpgrades?.items || []).map((e: MenuUpgradeItem) => `• ${e.name}: ${e.priceLabel}`).join('\\n')}\n\nPlease reply with your selection! 🙏`)}
-                            target="_blank" rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg flex-shrink-0 ml-2"
-                            style={{ background: '#25D366', color: 'white' }}>
-                            <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                            Send
-                          </a>
+                          <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                            <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n🥗 Starters: ${pkg.starters.veg} Veg + ${pkg.starters.nonVeg} Non-Veg\n🍛 Mains: ${pkg.mains.veg} Veg + ${pkg.mains.nonVeg} Non-Veg\n🍮 Desserts: ${pkg.desserts.join(', ')}\n${pkg.drinks.length > 0 ? `🥤 Drinks: ${pkg.drinks.join(', ')}\n` : ''}${pkg.guestLabel ? `\n👥 ${pkg.guestLabel}` : ''}\n\nFor ${adults} Adults and ${kids4to10} Kids, estimated total: *£${estTotal.toLocaleString()}* (Excl. VAT)\n\n🧒 *Kids Pricing* (Over 50 Adults):\n${editableKidsPricing.map(kp => `${kp.ageRange}: ${kp.price}`).join('\\n')}\n\n🏢 *Venue Hire Charges:*\n${editableVenueCharges.map(vc => `• ${vc.day}: ${vc.charge}${vc.note ? ` (${vc.note})` : ''}`).join('\\n')}\n\n✨ *Upgrades Available:*\n${(editableUpgrades?.items || []).map((e: MenuUpgradeItem) => `• ${e.name}: ${e.priceLabel}`).join('\\n')}\n\nPlease reply with your selection! 🙏`)}
+                              target="_blank" rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-lg"
+                              style={{ background: '#25D366', color: 'white' }}
+                              title="Send via WhatsApp">
+                              <Icon name="ChatBubbleLeftRightIcon" size={12} />
+                              WhatsApp
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const { subject, body } = getMenuEmailContent(selectedBooking.name, selectedBooking.phone, selectedBooking.email, pkg.name, totalGuests, selectedBooking);
+                                openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id);
+                              }}
+                              className="flex items-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 cursor-pointer"
+                              title="Send via Email"
+                            >
+                              <Icon name="EnvelopeIcon" size={12} />
+                              Email
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
                     {/* Also offer Indian & Sri Lankan menus */}
                     <div className="mt-2 pt-2 border-t border-purple-100">
-                      <div className="text-xs text-purple-600 font-medium mb-2">Or send full menu list:</div>
+                      <div className="text-xs text-purple-600 font-medium mb-2">Or send full menu list (WhatsApp / Email):</div>
                       <div className="flex gap-2 flex-wrap">
-                        <a href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, 'Indian Menu', selectedBooking.guests)}
-                          target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
-                          style={{ background: '#25D366', color: 'white' }}>
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Indian Menu
-                        </a>
-                        <a href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, 'Sri Lankan Menu', selectedBooking.guests)}
-                          target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
-                          style={{ background: '#25D366', color: 'white' }}>
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Sri Lankan Menu
-                        </a>
-                        <a href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, 'Extras', selectedBooking.guests)}
-                          target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
-                          style={{ background: '#25D366', color: 'white' }}>
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Extras
-                        </a>
-                        <a href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, 'Venue Hall Charges', selectedBooking.guests)}
-                          target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
-                          style={{ background: '#25D366', color: 'white' }}>
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Venue Hall Charges
-                        </a>
-                        <a href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, 'Dry Hire', selectedBooking.guests)}
-                          target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
-                          style={{ background: '#25D366', color: 'white' }}>
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Dry Hire
-                        </a>
-                        <a href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, 'Kids Pricing', selectedBooking.guests)}
-                          target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
-                          style={{ background: '#25D366', color: 'white' }}>
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Kids Pricing
-                        </a>
+                        {[
+                          'Indian Menu',
+                          'Sri Lankan Menu',
+                          'Extras',
+                          'Venue Hall Charges',
+                          'Dry Hire',
+                          'Kids Pricing',
+                        ].map((menuTitle) => (
+                          <div key={menuTitle} className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-2 py-1 shadow-2xs">
+                            <span className="text-xs font-semibold text-gray-700">{menuTitle}</span>
+                            <a
+                              href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, menuTitle, selectedBooking.guests)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"
+                              title={`Send ${menuTitle} via WhatsApp`}
+                            >
+                              <Icon name="ChatBubbleLeftRightIcon" size={13} />
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const { subject, body } = getMenuEmailContent(selectedBooking.name, selectedBooking.phone, selectedBooking.email, menuTitle, selectedBooking.guests, selectedBooking);
+                                openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id);
+                              }}
+                              className="p-1 text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
+                              title={`Send ${menuTitle} via Email`}
+                            >
+                              <Icon name="EnvelopeIcon" size={13} />
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -9273,7 +10584,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {/* Step: Deposit Pending — send bank details */}
               {selectedBooking.status === 'deposit_pending' && (
                 <div className="border border-amber-200 rounded-xl p-4 bg-amber-50">
-                  <div className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">Send Deposit Request via WhatsApp</div>
+                  <div className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                    <span>💳</span> Send Deposit Request (WhatsApp &amp; Email)
+                  </div>
                   <div className="bg-white rounded-lg p-3 border border-amber-100 text-sm text-gray-700 mb-3 leading-relaxed">
                     <p className="font-medium text-gray-900 mb-1">Bank Transfer Details:</p>
                     <p>Account Name: {bankDetails.accountName}</p>
@@ -9281,13 +10594,26 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <p>Account No: {bankDetails.accountNumber}</p>
                     <p className="mt-1 font-semibold text-amber-700">Deposit Amount: £{selectedBooking.deposit.toLocaleString()}</p>
                   </div>
-                  <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, to confirm your ${selectedBooking.eventType} booking on ${selectedBooking.date}, please transfer the deposit of *£${selectedBooking.deposit.toLocaleString()}* to:\n\n🏦 Account Name: ${bankDetails.accountName}\n📋 Sort Code: ${bankDetails.sortCode}\n🔢 Account No: ${bankDetails.accountNumber}\n📌 Reference: ${selectedBooking.id}\n\nOnce paid, please send a screenshot of the transfer confirmation. Thank you!`)}
-                    target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl w-full justify-center"
-                    style={{ background: '#25D366', color: 'white' }}>
-                    <Icon name="ChatBubbleLeftRightIcon" size={16} />
-                    Send Bank Details via WhatsApp
-                  </a>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, to confirm your ${selectedBooking.eventType} booking on ${selectedBooking.date}, please transfer the deposit of *£${selectedBooking.deposit.toLocaleString()}* to:\n\n🏦 Account Name: ${bankDetails.accountName}\n📋 Sort Code: ${bankDetails.sortCode}\n🔢 Account No: ${bankDetails.accountNumber}\n📌 Reference: ${selectedBooking.id}\n\nOnce paid, please send a screenshot of the transfer confirmation. Thank you!`)}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold px-3 py-2.5 rounded-xl justify-center shadow-sm"
+                      style={{ background: '#25D366', color: 'white' }}>
+                      <Icon name="ChatBubbleLeftRightIcon" size={16} />
+                      WhatsApp Bank Details
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const { subject, body } = getDepositEmailContent(selectedBooking);
+                        openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id);
+                      }}
+                      className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold px-3 py-2.5 rounded-xl justify-center bg-blue-600 hover:bg-blue-700 text-white shadow-sm cursor-pointer"
+                    >
+                      <Icon name="EnvelopeIcon" size={16} />
+                      Email Bank Details
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -9624,13 +10950,26 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       <span className="font-bold text-lg" style={{ color: '#C8860A' }}>£{(getTotalAmount(selectedBooking) - selectedBooking.deposit).toLocaleString()}</span>
                     </div>
                   </div>
-                  <a href={buildWhatsAppLink(selectedBooking.phone, buildFinalInvoiceWhatsAppText(selectedBooking, bankDetails))}
-                    target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl w-full justify-center"
-                    style={{ background: '#25D366', color: 'white' }}>
-                    <Icon name="ChatBubbleLeftRightIcon" size={16} />
-                    Send Final Invoice via WhatsApp
-                  </a>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <a href={buildWhatsAppLink(selectedBooking.phone, buildFinalInvoiceWhatsAppText(selectedBooking, bankDetails))}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold px-3 py-2.5 rounded-xl justify-center shadow-sm"
+                      style={{ background: '#25D366', color: 'white' }}>
+                      <Icon name="ChatBubbleLeftRightIcon" size={16} />
+                      WhatsApp Invoice
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const { subject, body } = getFinalInvoiceEmailContent(selectedBooking);
+                        openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id);
+                      }}
+                      className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold px-3 py-2.5 rounded-xl justify-center bg-blue-600 hover:bg-blue-700 text-white shadow-sm cursor-pointer"
+                    >
+                      <Icon name="EnvelopeIcon" size={16} />
+                      Email Invoice
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -10027,15 +11366,28 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               )}
               {selectedBooking.status === 'event_scheduled' && (
                 <div className="space-y-2">
-                  <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, just a reminder — your ${selectedBooking.eventType} at SriLalitha is coming up on *${selectedBooking.date}* at ${selectedBooking.time}. We look forward to seeing you! 🎉`)}
-                    target="_blank" rel="noopener noreferrer"
-                    className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl"
-                    style={{ background: '#25D366', color: 'white' }}>
-                    <Icon name="ChatBubbleLeftRightIcon" size={16} />
-                    Send Event Reminder
-                  </a>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, just a reminder — your ${selectedBooking.eventType} at SriLalitha is coming up on *${selectedBooking.date}* at ${selectedBooking.time}. We look forward to seeing you! 🎉`)}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold px-3 py-2.5 rounded-xl shadow-sm"
+                      style={{ background: '#25D366', color: 'white' }}>
+                      <Icon name="ChatBubbleLeftRightIcon" size={16} />
+                      WhatsApp Reminder
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const { subject, body } = getEventReminderEmailContent(selectedBooking);
+                        openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id);
+                      }}
+                      className="flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold px-3 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm cursor-pointer"
+                    >
+                      <Icon name="EnvelopeIcon" size={16} />
+                      Email Reminder
+                    </button>
+                  </div>
                   <button onClick={() => updateStatus(selectedBooking.id, 'event_completed')}
-                    className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2">
+                    className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 cursor-pointer">
                     <Icon name="CheckCircleIcon" size={16} />
                     Mark Event as Completed
                   </button>
@@ -10058,13 +11410,26 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           Extra charges were added to this event. You must upload the payment screenshot for the remaining balance before closing the event.
                         </p>
                         
-                        <a href={buildWhatsAppLink(selectedBooking.phone, buildExtraInvoiceWhatsAppText(selectedBooking, bankDetails))}
-                          target="_blank" rel="noopener noreferrer"
-                          className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl mb-3 transition-colors hover:bg-green-600"
-                          style={{ background: '#25D366', color: 'white' }}>
-                          <Icon name="ChatBubbleLeftRightIcon" size={16} />
-                          Send Extra Invoice via WhatsApp
-                        </a>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+                          <a href={buildWhatsAppLink(selectedBooking.phone, buildExtraInvoiceWhatsAppText(selectedBooking, bankDetails))}
+                            target="_blank" rel="noopener noreferrer"
+                            className="flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold px-3 py-2.5 rounded-xl transition-colors hover:bg-green-600 shadow-sm"
+                            style={{ background: '#25D366', color: 'white' }}>
+                            <Icon name="ChatBubbleLeftRightIcon" size={16} />
+                            WhatsApp Extra Invoice
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const { subject, body } = getExtraInvoiceEmailContent(selectedBooking);
+                              openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id);
+                            }}
+                            className="flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold px-3 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm cursor-pointer"
+                          >
+                            <Icon name="EnvelopeIcon" size={16} />
+                            Email Extra Invoice
+                          </button>
+                        </div>
 
                         {selectedBooking.paymentProofExtra ? (
                           <div className="flex items-start gap-4">
@@ -10164,13 +11529,26 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <Icon name="CheckBadgeIcon" size={18} />
                     Booking Completed
                   </div>
-                  <a href={buildWhatsAppLink(selectedBooking.phone, buildCompletedWhatsAppText(selectedBooking))}
-                    target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl w-full justify-center"
-                    style={{ background: '#25D366', color: 'white' }}>
-                    <Icon name="ChatBubbleLeftRightIcon" size={16} />
-                    Send Final Summary via WhatsApp
-                  </a>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <a href={buildWhatsAppLink(selectedBooking.phone, buildCompletedWhatsAppText(selectedBooking))}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold px-3 py-2.5 rounded-xl shadow-sm"
+                      style={{ background: '#25D366', color: 'white' }}>
+                      <Icon name="ChatBubbleLeftRightIcon" size={16} />
+                      WhatsApp Summary
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const { subject, body } = getCompletedEmailContent(selectedBooking);
+                        openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id);
+                      }}
+                      className="flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold px-3 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm cursor-pointer"
+                    >
+                      <Icon name="EnvelopeIcon" size={16} />
+                      Email Summary
+                    </button>
+                  </div>
                   <button
                     onClick={() => downloadInvoicePDF(selectedBooking)}
                     className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl w-full justify-center border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 transition-colors shadow-sm"
@@ -10216,13 +11594,26 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   {selectedCustomer.phone}
                 </div>
               </div>
-              <a href={buildWhatsAppLink(selectedCustomer.phone, `Hi ${selectedCustomer.name.split(' ')[0]}, this is SriLalitha. How can we help you today?`)}
-                target="_blank" rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-xl w-full"
-                style={{ background: '#25D366', color: 'white' }}>
-                <Icon name="ChatBubbleLeftRightIcon" size={16} />
-                Open WhatsApp Chat
-              </a>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <a href={buildWhatsAppLink(selectedCustomer.phone, `Hi ${selectedCustomer.name.split(' ')[0]}, this is SriLalitha. How can we help you today?`)}
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold px-3 py-2.5 rounded-xl shadow-sm"
+                  style={{ background: '#25D366', color: 'white' }}>
+                  <Icon name="ChatBubbleLeftRightIcon" size={16} />
+                  WhatsApp
+                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const { subject, body } = getGeneralCustomerEmailContent(selectedCustomer.name, selectedCustomer.email);
+                    openEmailComposer(selectedCustomer.email, selectedCustomer.name, subject, body);
+                  }}
+                  className="flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold px-3 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm cursor-pointer"
+                >
+                  <Icon name="EnvelopeIcon" size={16} />
+                  Email
+                </button>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-gray-50 rounded-xl p-3 text-center">
                   <div className="text-2xl font-bold text-gray-900">{selectedCustomer.totalBookings}</div>
@@ -11152,6 +12543,155 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               >
                 Sign Out
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL: QUICK EMAIL COMPOSER (DISPATCH VIA SMTP / MAILTO) ─── */}
+      {emailModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-gray-100 overflow-hidden">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-blue-50/50 via-indigo-50/30 to-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
+                  <Icon name="EnvelopeIcon" size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
+                    Send Email to Customer
+                    {emailModalData.bookingId && (
+                      <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
+                        #{emailModalData.bookingId}
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    Send branded email via verified Zingbite SMTP or launch in your default mail app
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEmailModalOpen(false)}
+                className="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 flex items-center justify-center transition-colors cursor-pointer"
+                title="Close modal"
+              >
+                <Icon name="XMarkIcon" size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body / Form */}
+            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                    Recipient Email Address <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={emailModalData.to}
+                    onChange={(e) => setEmailModalData(prev => ({ ...prev, to: e.target.value }))}
+                    placeholder="customer@example.com"
+                    className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs font-mono text-gray-900 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                    Customer Name
+                  </label>
+                  <input
+                    type="text"
+                    value={emailModalData.customerName}
+                    onChange={(e) => setEmailModalData(prev => ({ ...prev, customerName: e.target.value }))}
+                    placeholder="e.g. Rahul Sharma"
+                    className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs text-gray-900 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Email Subject <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={emailModalData.subject}
+                  onChange={(e) => setEmailModalData(prev => ({ ...prev, subject: e.target.value }))}
+                  placeholder="Email subject..."
+                  className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs font-medium text-gray-900 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-gray-700">
+                    Message Content <span className="text-red-500">*</span>
+                  </label>
+                  <span className="text-[11px] text-gray-400">
+                    Will be rendered inside SriLalitha branded email template
+                  </span>
+                </div>
+                <textarea
+                  rows={10}
+                  value={emailModalData.body}
+                  onChange={(e) => setEmailModalData(prev => ({ ...prev, body: e.target.value }))}
+                  placeholder="Enter message content..."
+                  className="w-full border border-gray-300 rounded-xl p-3.5 text-xs text-gray-800 leading-relaxed font-sans focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"
+                />
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-start gap-2.5">
+                <span className="text-blue-600 text-sm">💡</span>
+                <p className="text-[11px] text-blue-900 leading-relaxed">
+                  <strong>Delivery options:</strong> You can send directly through the verified mail server (Zingbite SMTP) without leaving this dashboard, or click <em>Open in Mail App</em> to launch Outlook/Apple Mail/Thunderbird with this content pre-filled.
+                </p>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-gray-100 bg-gray-50/70 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setEmailModalOpen(false)}
+                className="w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-200/70 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <a
+                  href={buildMailtoLink(emailModalData.to, emailModalData.subject, emailModalData.body)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-bold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
+                  title="Open draft in your local email application"
+                >
+                  <Icon name="ArrowTopRightOnSquareIcon" size={13} />
+                  <span>Open in Mail App</span>
+                </a>
+
+                <button
+                  type="button"
+                  onClick={handleSendCustomEmailDirectly}
+                  disabled={isSendingCustomEmail}
+                  className="flex-1 sm:flex-initial px-5 py-2 rounded-xl text-xs font-bold text-white shadow-md active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 transition-all cursor-pointer hover:brightness-105"
+                  style={{ background: 'linear-gradient(135deg, #2563EB, #1D4ED8)' }}
+                >
+                  {isSendingCustomEmail ? (
+                    <>
+                      <span className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />
+                      <span>Dispatching Email...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Icon name="PaperAirplaneIcon" size={14} />
+                      <span>Send via Zingbite SMTP</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

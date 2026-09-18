@@ -60,6 +60,11 @@ import {
 } from '@/app/data/deliveryConfig';
 import GoogleLocationInput from '@/components/GoogleLocationInput';
 import InteractiveMenuOrderModal from '@/components/InteractiveMenuOrderModal';
+import {
+  WebsiteContentConfig,
+  DEFAULT_WEBSITE_CONTENT,
+  sanitizeWebsiteContent,
+} from '@/app/data/websiteContentConfig';
 
 type MenuTab = 'full-menu' | 'live-dosa-1' | 'live-dosa-2' | 'madras-thali' | 'tailor-menu' | 'dosa-festival' | 'canape' | 'north-indian' | 'gujarati' | 'punjabi' | 'live-dosa';
 
@@ -97,6 +102,15 @@ export default function HomePage() {
   const [deliveryConfig, setDeliveryConfig] = useState<DeliveryLocationConfig>(DEFAULT_DELIVERY_CONFIG);
   const [customerLocationCoords, setCustomerLocationCoords] = useState<{ lat: number; lng: number; postcode?: string } | null>(null);
   const [deliveryResult, setDeliveryResult] = useState<DeliveryCalculationResult | null>(null);
+  const [websiteContent, setWebsiteContent] = useState<WebsiteContentConfig>(DEFAULT_WEBSITE_CONTENT);
+
+  React.useEffect(() => {
+    return onSnapshot(doc(db, 'site_data', 'website_content'), (docSnap) => {
+      if (docSnap.exists()) {
+        setWebsiteContent(sanitizeWebsiteContent(docSnap.data()));
+      }
+    });
+  }, []);
 
   React.useEffect(() => {
     return onSnapshot(doc(db, 'site_data', 'booking_form_config'), (docSnap) => {
@@ -202,6 +216,14 @@ export default function HomePage() {
   }, []);
 
   const { INDIAN_MENU, SRI_LANKAN_MENU, LIVE_COUNTER_PACKAGE, BANQUET_PACKAGES, VENUE_HALL_CHARGES, TABLE_SERVICE, KIDS_PRICING, STANDARD_SETUP, TERMS_AND_CONDITIONS, DRY_HIRE_PRICES } = menus;
+
+  const activeLiveDosa1 = useMemo(() => {
+    return (menus.LIVE_DOSA_OPTION_1 || LIVE_DOSA_OPTION_1) as any;
+  }, [menus.LIVE_DOSA_OPTION_1]);
+
+  const activeLiveDosa2 = useMemo(() => {
+    return (menus.LIVE_DOSA_OPTION_2 || LIVE_DOSA_OPTION_2) as any;
+  }, [menus.LIVE_DOSA_OPTION_2]);
 
   const [timeCategory, setTimeCategory] = useState<'lunch' | 'dinner' | 'custom'>('lunch');
   const [customStartTime, setCustomStartTime] = useState<string>('12:00 PM');
@@ -600,6 +622,35 @@ export default function HomePage() {
       });
       setSubmitted(true);
       setPhoneError('');
+
+      // Asynchronously dispatch automated email notification to dynamic admin recipients
+      try {
+        fetch('/api/send-enquiry-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bookingId: docRef.id,
+            name: (bookingForm.name || '').trim(),
+            email: (bookingForm.email || '').trim().toLowerCase(),
+            phone: fullPhone,
+            eventType: bookingForm.eventType || 'Other',
+            location: bookingForm.location || '',
+            distanceMiles: deliveryResult ? deliveryResult.distanceMiles : 0,
+            deliveryCharge: deliveryFee,
+            totalEstimatedAmount: totalAmount,
+            date: bookingForm.date || '',
+            timeOfDay: bookingForm.timeOfDay || '',
+            guests: guestCount,
+            message: bookingForm.message || '',
+            selectedPackage: bookingForm.selectedPackage || 'Not Selected',
+            deposit: depositAmount,
+            customFields,
+            isWaitlist,
+          }),
+        }).catch((err) => console.warn('Enquiry email notification deferred:', err));
+      } catch (mailErr) {
+        console.warn('Email dispatch call skipped:', mailErr);
+      }
       // Reset form
       const resetObj: Record<string, any> = {
         name: '', email: '', phone: '', eventType: '', location: '', date: '', timeOfDay: '', guests: '', message: '', selectedPackage: '',
@@ -917,7 +968,7 @@ export default function HomePage() {
         {/* Cinematic Background Image */}
         <div 
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{ backgroundImage: "url('/assets/images/hero_live_catering_bg.jpg')" }}
+          style={{ backgroundImage: `url('${websiteContent.hero.backgroundImage || '/assets/images/hero_live_catering_bg.jpg'}')` }}
         />
         {/* Light & Transparent Overlay to keep the image clearly visible */}
         <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/30 to-black/10" />
@@ -925,48 +976,44 @@ export default function HomePage() {
 
         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-start justify-between gap-6 lg:gap-10 py-2 sm:py-4 relative z-10">
 
-          {/* ── Left: Original Text Content & Trust Badges ── */}
+          {/* ── Left: Dynamic Text Content & Trust Badges ── */}
           <div className="flex-1 text-center lg:text-left pt-2 lg:pt-4">
             <h1 className="text-4xl md:text-5xl lg:text-[3.25rem] font-extrabold text-white leading-tight mb-4 tracking-tight drop-shadow-[0_3px_12px_rgba(0,0,0,0.9)]">
-              Make Your Event<br />
-              <span style={{ color: '#FF334B' }} className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]">Unforgettable</span>
+              {websiteContent.hero.headlinePart1}<br />
+              <span style={{ color: websiteContent.hero.headlinePart2Color || '#FF334B' }} className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]">
+                {websiteContent.hero.headlinePart2}
+              </span>
             </h1>
             <p className="text-base md:text-lg mb-6 max-w-xl lg:mx-0 mx-auto text-white leading-relaxed font-medium drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]">
-              Authentic Pure Vegetarian Indian cuisine. Seamless outdoor catering for all occasions.
+              {websiteContent.hero.subtitle}
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start mb-8">
-              <a href="#menus" className="text-white font-semibold px-7 py-3 rounded-xl transition-all shadow-lg hover:shadow-xl bg-maroon-primary hover:bg-maroon-dark text-sm sm:text-base cursor-pointer">
-                View Menus &amp; Packages
-              </a>
-              <a href="#book" className="bg-black/40 backdrop-blur-md border border-white/60 font-semibold px-7 py-3 rounded-xl transition-all text-white hover:bg-white/20 text-sm sm:text-base shadow-md">
-                Book Now
-              </a>
+              {websiteContent.hero.primaryButton.enabled && (
+                <a href={websiteContent.hero.primaryButton.link || '#menus'} className="text-white font-semibold px-7 py-3 rounded-xl transition-all shadow-lg hover:shadow-xl bg-maroon-primary hover:bg-maroon-dark text-sm sm:text-base cursor-pointer">
+                  {websiteContent.hero.primaryButton.text}
+                </a>
+              )}
+              {websiteContent.hero.secondaryButton.enabled && (
+                <a href={websiteContent.hero.secondaryButton.link || '#book'} className="bg-black/40 backdrop-blur-md border border-white/60 font-semibold px-7 py-3 rounded-xl transition-all text-white hover:bg-white/20 text-sm sm:text-base shadow-md">
+                  {websiteContent.hero.secondaryButton.text}
+                </a>
+              )}
             </div>
 
             {/* Key Trust Badges */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-xl mx-auto lg:mx-0 pt-4 border-t border-white/30 text-left">
-              <div className="flex items-center gap-2.5 bg-black/50 backdrop-blur-md p-2.5 rounded-xl border border-white/20 shadow-md">
-                <span className="text-lg">⭐</span>
-                <div>
-                  <div className="text-xs font-bold text-white">4.9★ Rated</div>
-                  <div className="text-[11px] text-gray-200">500+ Happy Events</div>
-                </div>
+            {websiteContent.hero.trustBadges.filter(b => b.enabled).length > 0 && (
+              <div className={`grid grid-cols-1 sm:grid-cols-${Math.min(websiteContent.hero.trustBadges.filter(b => b.enabled).length, 3)} gap-3 max-w-xl mx-auto lg:mx-0 pt-4 border-t border-white/30 text-left`}>
+                {websiteContent.hero.trustBadges.filter(b => b.enabled).map((badge) => (
+                  <div key={badge.id} className="flex items-center gap-2.5 bg-black/50 backdrop-blur-md p-2.5 rounded-xl border border-white/20 shadow-md">
+                    <span className="text-lg">{badge.icon}</span>
+                    <div>
+                      <div className="text-xs font-bold text-white">{badge.title}</div>
+                      <div className="text-[11px] text-gray-200">{badge.subtitle}</div>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="flex items-center gap-2.5 bg-black/50 backdrop-blur-md p-2.5 rounded-xl border border-white/20 shadow-md">
-                <span className="text-lg">🍲</span>
-                <div>
-                  <div className="text-xs font-bold text-white">Authentic Taste</div>
-                  <div className="text-[11px] text-gray-200">Pure Indian Vegetarian</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2.5 bg-black/50 backdrop-blur-md p-2.5 rounded-xl border border-white/20 shadow-md">
-                <span className="text-lg">🏛️</span>
-                <div>
-                  <div className="text-xs font-bold text-white">500 Capacity</div>
-                  <div className="text-[11px] text-gray-200">Hall &amp; Outdoor</div>
-                </div>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* ── Right: Booking form card (Ultra-Premium Glass Finish) ── */}
@@ -1098,33 +1145,30 @@ export default function HomePage() {
       </section>
 
       {/* Quick Stats Ribbon */}
-      <div className="py-7 px-4 sm:px-6 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #A86208 0%, #C8860A 50%, #E69D24 100%)' }}>
-        <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6 text-center text-white">
-          {[
-            { value: '500+', label: 'Events Catered', icon: '🎪' },
-            { value: '34+', label: 'Dosa Varieties', icon: '🥞' },
-            { value: '16+ Yrs', label: 'Culinary Heritage', icon: '👑' },
-            { value: '4.9★', label: 'Customer Rating', icon: '⭐' },
-          ].map((stat) => (
-            <div key={stat.label} className="flex flex-col items-center">
-              <div className="text-xl mb-1">{stat.icon}</div>
-              <div className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white drop-shadow-xs">{stat.value}</div>
-              <div className="text-xs text-amber-100/90 font-medium mt-0.5">{stat.label}</div>
-            </div>
-          ))}
+      {websiteContent.statsRibbon.items.filter(s => s.enabled).length > 0 && (
+        <div className="py-7 px-4 sm:px-6 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #A86208 0%, #C8860A 50%, #E69D24 100%)' }}>
+          <div className={`max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-${Math.min(websiteContent.statsRibbon.items.filter(s => s.enabled).length, 4)} gap-6 text-center text-white`}>
+            {websiteContent.statsRibbon.items.filter(s => s.enabled).map((stat) => (
+              <div key={stat.id} className="flex flex-col items-center">
+                <div className="text-xl mb-1">{stat.icon}</div>
+                <div className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white drop-shadow-xs">{stat.value}</div>
+                <div className="text-xs text-amber-100/90 font-medium mt-0.5">{stat.label}</div>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ─── MENUS & PACKAGES SECTION ─── */}
       <section id="menus" className="py-16 px-4 md:px-6" style={{ background: '#FAFAF8' }}>
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-8">
             <span className="inline-block text-xs font-semibold uppercase tracking-widest px-4 py-1.5 rounded-full mb-3" style={{ background: 'rgba(200,134,10,0.1)', color: '#C8860A' }}>
-              Authentic Culinary Experience
+              {websiteContent.menuHeader.badgeText}
             </span>
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">Our Menus &amp; Specials</h2>
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">{websiteContent.menuHeader.title}</h2>
             <p className="text-gray-500 max-w-2xl mx-auto text-sm sm:text-base">
-              Explore our freshly prepared vegetarian delicacies and live dosa stations.
+              {websiteContent.menuHeader.subtitle}
             </p>
           </div>
 
@@ -1518,20 +1562,20 @@ export default function HomePage() {
                 <div className="relative z-10 max-w-3xl">
                   <div className="flex flex-wrap gap-2 mb-3">
                     <span className="inline-block text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                      🔥 2 Hours Live Station
+                      🔥 {activeLiveDosa1.serviceDuration || `${activeLiveDosa1.durationHours || 2} Hours Live Station`}
                     </span>
                     <span className="inline-block text-[11px] font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-emerald-400/20 text-emerald-300 border border-emerald-400/30">
-                      12 Live Dishes
+                      {(activeLiveDosa1.items || []).length} Live Dishes
                     </span>
                   </div>
                   <h3 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white mb-2">
-                    {LIVE_DOSA_OPTION_1.title}
+                    {activeLiveDosa1.title || LIVE_DOSA_OPTION_1.title}
                   </h3>
                   <p className="text-amber-200 font-medium text-sm sm:text-base mb-3">
-                    {LIVE_DOSA_OPTION_1.tagline}
+                    {activeLiveDosa1.tagline || LIVE_DOSA_OPTION_1.tagline}
                   </p>
                   <p className="text-xs sm:text-sm text-gray-300 leading-relaxed mb-4">
-                    Our master chefs prepare fresh, crispy, golden dosas, live meduvada, and fluffy uthappams live in front of your guests for 2 continuous hours.
+                    {activeLiveDosa1.description || LIVE_DOSA_OPTION_1.description}
                   </p>
 
                   {/* Pricing Tiers Highlight */}
@@ -1539,67 +1583,67 @@ export default function HomePage() {
                     <div className="bg-white/10 backdrop-blur-xs border border-white/20 p-3.5 rounded-2xl text-left">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-xs font-bold text-amber-300">📅 Week days (Mon – Fri)</span>
-                        <span className="text-sm font-extrabold text-white">£11.00 <span className="text-[10px] font-normal text-gray-300">/ person</span></span>
+                        <span className="text-sm font-extrabold text-white">£{Number(activeLiveDosa1.pricing?.weekday?.pricePerPerson ?? 11).toFixed(2)} <span className="text-[10px] font-normal text-gray-300">/ person</span></span>
                       </div>
-                      <p className="text-[11px] text-gray-300 mb-1">35 people minimum guarantee</p>
+                      <p className="text-[11px] text-gray-300 mb-1">{activeLiveDosa1.pricing?.weekday?.minGuests ?? 35} people minimum guarantee</p>
                       <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-400/20 text-amber-200 border border-amber-400/30">
-                        Min. call out: £385
+                        Min. call out: £{Number(activeLiveDosa1.pricing?.weekday?.minCallOutCharge ?? 385).toFixed(2)}
                       </span>
                     </div>
 
                     <div className="bg-white/10 backdrop-blur-xs border border-white/20 p-3.5 rounded-2xl text-left">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-xs font-bold text-amber-300">🌟 Week Ends &amp; Bank Holidays</span>
-                        <span className="text-sm font-extrabold text-white">£12.00 <span className="text-[10px] font-normal text-gray-300">/ person</span></span>
+                        <span className="text-sm font-extrabold text-white">£{Number(activeLiveDosa1.pricing?.weekend?.pricePerPerson ?? 12).toFixed(2)} <span className="text-[10px] font-normal text-gray-300">/ person</span></span>
                       </div>
-                      <p className="text-[11px] text-gray-300 mb-1">40 people minimum guarantee</p>
+                      <p className="text-[11px] text-gray-300 mb-1">{activeLiveDosa1.pricing?.weekend?.minGuests ?? 40} people minimum guarantee</p>
                       <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-400/20 text-amber-200 border border-amber-400/30">
-                        Min. call out: £480
+                        Min. call out: £{Number(activeLiveDosa1.pricing?.weekend?.minCallOutCharge ?? 480).toFixed(2)}
                       </span>
                     </div>
                   </div>
 
                   <p className="text-[11px] text-amber-200/90 italic mb-5">
-                    ℹ️ Minimum call out charge (£385 on Weekdays / £480 on Weekends) can be reached by the number of people or by the menu &amp; upgrades.
+                    ℹ️ {activeLiveDosa1.pricing?.disclaimer || `Minimum call out charge (£${activeLiveDosa1.pricing?.weekday?.minCallOutCharge ?? 385} on Weekdays / £${activeLiveDosa1.pricing?.weekend?.minCallOutCharge ?? 480} on Weekends) can be reached by the number of people or by the menu & upgrades.`}
                   </p>
 
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={() => {
-                        setSelectedPackageForModal('Live Dosa Option 1');
+                        setSelectedPackageForModal(activeLiveDosa1.title || 'Live Dosa Option 1');
                         setIsMenuOrderModalOpen(true);
                       }}
                       className="px-6 py-3 rounded-xl font-bold text-gray-900 bg-amber-400 hover:bg-amber-300 transition-all text-xs sm:text-sm shadow-md cursor-pointer flex items-center gap-2"
                     >
-                      <span>Book Live Dosa Option 1</span>
+                      <span>Book {activeLiveDosa1.title || 'Live Dosa Option 1'}</span>
                       <span>→</span>
                     </button>
                     <button
                       onClick={() => setActiveMenuTab('live-dosa-2')}
                       className="px-5 py-3 rounded-xl font-bold text-white bg-white/10 hover:bg-white/20 border border-white/20 transition-all text-xs sm:text-sm cursor-pointer flex items-center gap-1.5"
                     >
-                      <span>👑 View Option 2 (3 Hours + Main + Dessert) →</span>
+                      <span>👑 View {activeLiveDosa2.title || 'Option 2'} (3 Hours + Main + Dessert) →</span>
                     </button>
                   </div>
                 </div>
               </div>
 
-              {/* 12 Live Dosa Items Grid */}
+              {/* Dynamic Live Dosa Items Grid */}
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h4 className="text-xl font-bold text-gray-900">12 Live Dishes Included (Option 1)</h4>
-                    <p className="text-xs text-gray-500">Every item is prepared live to order with authentic chutneys and piping hot sambar</p>
+                    <h4 className="text-xl font-bold text-gray-900">{(activeLiveDosa1.items || []).length} Live Dishes Included ({activeLiveDosa1.title || 'Option 1'})</h4>
+                    <p className="text-xs text-gray-500">{activeLiveDosa1.subtitle || 'Every item is prepared live to order with authentic chutneys and piping hot sambar'}</p>
                   </div>
                   <span className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
-                    2 Hours Live Service
+                    {activeLiveDosa1.serviceDuration || `${activeLiveDosa1.durationHours || 2} Hours Live Service`}
                   </span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {LIVE_DOSA_OPTION_1.items.map((item, idx) => (
+                  {(activeLiveDosa1.items || []).map((item: any, idx: number) => (
                     <div
-                      key={item.name}
+                      key={item.name + '-' + idx}
                       className="bg-white rounded-2xl border-2 border-amber-200/80 p-5 shadow-sm hover:shadow-md transition-all hover:border-amber-400 relative overflow-hidden flex flex-col justify-between"
                     >
                       <div className="absolute top-0 right-0 bg-gradient-to-l from-amber-500 to-amber-400 text-white font-bold text-[9px] uppercase tracking-wider px-3 py-0.5 rounded-bl-xl shadow-xs">
@@ -1621,7 +1665,7 @@ export default function HomePage() {
 
                       <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
                         <div className="flex items-center gap-1.5">
-                          {item.tags?.map((t) => (
+                          {item.tags?.map((t: string) => (
                             <span key={t} className="text-xs font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200">
                               {t}
                             </span>
@@ -1743,23 +1787,23 @@ export default function HomePage() {
                 <div className="relative z-10 max-w-3xl">
                   <div className="flex flex-wrap gap-2 mb-3">
                     <span className="inline-block text-xs font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-purple-400/20 text-purple-200 border border-purple-400/30">
-                      👑 Premium Live Dosa Package
+                      {activeLiveDosa2.badge || '👑 Premium Live Dosa Package'}
                     </span>
                     <span className="inline-block text-xs font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-amber-400/20 text-amber-200 border border-amber-400/30">
-                      ⏱️ 3 Hours Service Duration
+                      ⏱️ {activeLiveDosa2.serviceDuration || `${activeLiveDosa2.durationHours || 3} Hours Service Duration`}
                     </span>
                     <span className="inline-block text-xs font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-emerald-400/20 text-emerald-200 border border-emerald-400/30">
                       + 1 Main Course + 1 Dessert
                     </span>
                   </div>
                   <h3 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white mb-2">
-                    {LIVE_DOSA_OPTION_2.title}
+                    {activeLiveDosa2.title || LIVE_DOSA_OPTION_2.title}
                   </h3>
                   <p className="text-amber-200 font-semibold text-base sm:text-lg mb-3">
-                    {LIVE_DOSA_OPTION_2.tagline}
+                    {activeLiveDosa2.tagline || LIVE_DOSA_OPTION_2.tagline}
                   </p>
                   <p className="text-sm sm:text-base text-gray-200 leading-relaxed mb-4">
-                    The ultimate live dining spectacle. Includes the full standard 12 live dishes (Idly Or Veg Biryani, Live Meduvada, Dosas, Uthappams, Chutneys and Sambar) plus <strong>One Main Course Dish</strong> and <strong>One Dessert</strong> with our master chefs staying for <strong>Three (3) Hours</strong> instead of Two Hours.
+                    {activeLiveDosa2.description || LIVE_DOSA_OPTION_2.description}
                   </p>
 
                   {/* Option 2 Pricing Tiers Highlight */}
@@ -1767,46 +1811,46 @@ export default function HomePage() {
                     <div className="bg-white/10 backdrop-blur-xs border border-white/20 p-4 rounded-2xl text-left">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-sm font-bold text-amber-300">📅 Week days (Mon – Fri)</span>
-                        <span className="text-base font-extrabold text-white">£16.50 <span className="text-xs font-normal text-gray-300">/ person</span></span>
+                        <span className="text-base font-extrabold text-white">£{Number(activeLiveDosa2.pricing?.weekday?.pricePerPerson ?? 16.50).toFixed(2)} <span className="text-xs font-normal text-gray-300">/ person</span></span>
                       </div>
-                      <p className="text-xs text-gray-300 mb-1.5">35 people minimum guarantee</p>
+                      <p className="text-xs text-gray-300 mb-1.5">{activeLiveDosa2.pricing?.weekday?.minGuests ?? 35} people minimum guarantee</p>
                       <span className="inline-block text-xs font-bold px-2.5 py-0.5 rounded-md bg-amber-400/20 text-amber-200 border border-amber-400/30">
-                        Min. call out: £577.50
+                        Min. call out: £{Number(activeLiveDosa2.pricing?.weekday?.minCallOutCharge ?? 577.50).toFixed(2)}
                       </span>
                     </div>
 
                     <div className="bg-white/10 backdrop-blur-xs border border-white/20 p-4 rounded-2xl text-left">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-sm font-bold text-amber-300">🌟 Week Ends &amp; Bank Holidays</span>
-                        <span className="text-base font-extrabold text-white">£17.50 <span className="text-xs font-normal text-gray-300">/ person</span></span>
+                        <span className="text-base font-extrabold text-white">£{Number(activeLiveDosa2.pricing?.weekend?.pricePerPerson ?? 17.50).toFixed(2)} <span className="text-xs font-normal text-gray-300">/ person</span></span>
                       </div>
-                      <p className="text-xs text-gray-300 mb-1.5">40 people minimum guarantee</p>
+                      <p className="text-xs text-gray-300 mb-1.5">{activeLiveDosa2.pricing?.weekend?.minGuests ?? 40} people minimum guarantee</p>
                       <span className="inline-block text-xs font-bold px-2.5 py-0.5 rounded-md bg-amber-400/20 text-amber-200 border border-amber-400/30">
-                        Min. call out: £700.00
+                        Min. call out: £{Number(activeLiveDosa2.pricing?.weekend?.minCallOutCharge ?? 700.00).toFixed(2)}
                       </span>
                     </div>
                   </div>
 
                   <p className="text-xs text-amber-200/90 italic mb-5">
-                    ℹ️ Minimum call out charge (£577.50 on Weekdays / £700 on Weekends) can be reached by the number of people or by the menu &amp; upgrades.
+                    ℹ️ {activeLiveDosa2.pricing?.disclaimer || `Minimum call out charge (£${activeLiveDosa2.pricing?.weekday?.minCallOutCharge ?? 577.50} on Weekdays / £${activeLiveDosa2.pricing?.weekend?.minCallOutCharge ?? 700} on Weekends) can be reached by the number of people or by the menu & upgrades.`}
                   </p>
 
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={() => {
-                        setSelectedPackageForModal('Live Dosa Option 2');
+                        setSelectedPackageForModal(activeLiveDosa2.title || 'Live Dosa Option 2');
                         setIsMenuOrderModalOpen(true);
                       }}
                       className="px-6 py-3.5 rounded-xl font-bold text-gray-900 bg-amber-400 hover:bg-amber-300 transition-all text-sm shadow-md cursor-pointer flex items-center gap-2"
                     >
-                      <span>Book Live Dosa Option 2</span>
+                      <span>Book {activeLiveDosa2.title || 'Live Dosa Option 2'}</span>
                       <span>→</span>
                     </button>
                     <button
                       onClick={() => setActiveMenuTab('live-dosa-1')}
                       className="px-5 py-3.5 rounded-xl font-bold text-white bg-white/10 hover:bg-white/20 border border-white/20 transition-all text-sm cursor-pointer flex items-center gap-1.5"
                     >
-                      <span>← Switch to Option 1 (£11 / £12)</span>
+                      <span>← Switch to {activeLiveDosa1.title || 'Option 1'} (£{Number(activeLiveDosa1.pricing?.weekday?.pricePerPerson ?? 11).toFixed(0)} / £{Number(activeLiveDosa1.pricing?.weekend?.pricePerPerson ?? 12).toFixed(0)})</span>
                     </button>
                   </div>
                 </div>
@@ -1817,7 +1861,7 @@ export default function HomePage() {
                 <div className="bg-white p-6 rounded-3xl border-2 border-amber-200 shadow-sm space-y-2.5">
                   <div className="flex items-center gap-2 text-[#C8860A] font-bold text-base">
                     <span className="text-2xl">🥞</span>
-                    <span>12 Live Dishes Included</span>
+                    <span>{(activeLiveDosa1.items || []).length} Live Dishes Included</span>
                   </div>
                   <p className="text-sm font-medium text-gray-600 leading-relaxed">
                     Idly Or Veg Biryani, Live Meduvada, 5 Live Dosa Varieties, 5 Live Uthappam Varieties, Chutneys &amp; Sambar.
@@ -1845,22 +1889,22 @@ export default function HomePage() {
                 </div>
               </div>
 
-              {/* 12 Live Dosa Items Grid */}
+              {/* Dynamic Option 2 Items Grid */}
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h4 className="text-xl sm:text-2xl font-bold text-gray-900">Standard 12 Live Dishes (Option 2)</h4>
-                    <p className="text-sm text-gray-500">Includes Idly Or Veg Biryani and on-the-spot live dosas and uthappams</p>
+                    <h4 className="text-xl sm:text-2xl font-bold text-gray-900">Standard {(activeLiveDosa2.items || []).length} Live Dishes ({activeLiveDosa2.title || 'Option 2'})</h4>
+                    <p className="text-sm text-gray-500">{activeLiveDosa2.subtitle || 'Includes Idly Or Veg Biryani and on-the-spot live dosas and uthappams'}</p>
                   </div>
                   <span className="text-xs font-bold px-3.5 py-1.5 rounded-full bg-purple-100 text-purple-900 border border-purple-200">
-                    3 Hours Extended Cooking
+                    {activeLiveDosa2.serviceDuration || `${activeLiveDosa2.durationHours || 3} Hours Extended Cooking`}
                   </span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {LIVE_DOSA_OPTION_2.items.map((item, idx) => (
+                  {(activeLiveDosa2.items || []).map((item: any, idx: number) => (
                     <div
-                      key={item.name}
+                      key={item.name + '-' + idx}
                       className="bg-white rounded-2xl border-2 border-purple-200/80 p-5 shadow-sm hover:shadow-md transition-all hover:border-purple-400 relative overflow-hidden flex flex-col justify-between"
                     >
                       <div className="absolute top-0 right-0 bg-gradient-to-l from-purple-600 to-purple-400 text-white font-bold text-[10px] uppercase tracking-wider px-3 py-0.5 rounded-bl-xl shadow-xs">
@@ -1882,7 +1926,7 @@ export default function HomePage() {
 
                       <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
                         <div className="flex items-center gap-1.5">
-                          {item.tags?.map((t) => (
+                          {item.tags?.map((t: string) => (
                             <span key={t} className="text-xs font-bold px-2 py-0.5 rounded-md bg-purple-50 text-purple-900 border border-purple-200">
                               {t}
                             </span>
@@ -3042,55 +3086,54 @@ export default function HomePage() {
       </section>
 
       {/* ─── TERMS & CONDITIONS ─── */}
-      <section id="terms" className="py-16 px-4 md:px-6 bg-white">
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-10">
-            <span className="inline-block text-xs font-semibold uppercase tracking-widest px-4 py-1.5 rounded-full mb-3" style={{ background: 'rgba(200,134,10,0.1)', color: '#C8860A' }}>
-              Legal
-            </span>
-            <h2 className="text-3xl font-bold text-gray-900">Terms &amp; Conditions</h2>
-          </div>
+      {Boolean(websiteContent?.termsAndConditions?.enabled) && (
+        <section id="terms" className="py-16 px-4 md:px-6 bg-white">
+          <div className="max-w-4xl mx-auto">
+            <div className="text-center mb-10">
+              <span className="inline-block text-xs font-semibold uppercase tracking-widest px-4 py-1.5 rounded-full mb-3" style={{ background: 'rgba(200,134,10,0.1)', color: '#C8860A' }}>
+                {websiteContent.termsAndConditions.badgeText || 'Legal'}
+              </span>
+              <h2 className="text-3xl font-bold text-gray-900">{websiteContent.termsAndConditions.title || 'Terms & Conditions'}</h2>
+            </div>
 
-          <div className="space-y-3">
-            {[
-              { key: 'payments', title: TERMS_AND_CONDITIONS.payments.title, items: TERMS_AND_CONDITIONS.payments.items },
-              { key: 'menu', title: TERMS_AND_CONDITIONS.menuGuests.title, items: TERMS_AND_CONDITIONS.menuGuests.items },
-              { key: 'client', title: TERMS_AND_CONDITIONS.clientResponsibilities.title, items: TERMS_AND_CONDITIONS.clientResponsibilities.items },
-              { key: 'sound', title: TERMS_AND_CONDITIONS.soundLimiter.title, items: TERMS_AND_CONDITIONS.soundLimiter.items },
-            ].map((section) => (
-              <div key={section.key} className="border border-gray-200 rounded-xl overflow-hidden">
-                <button
-                  onClick={() => toggleSection(section.key)}
-                  className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-50 transition-colors"
-                >
-                  <span className="font-semibold text-sm" style={{ color: '#C8860A' }}>{section.title}</span>
-                  <Icon name={expandedSection === section.key ? 'ChevronUpIcon' : 'ChevronDownIcon'} size={18} className="text-gray-400 flex-shrink-0" />
-                </button>
-                {expandedSection === section.key && (
-                  <div className="px-5 pb-5 border-t border-gray-100">
-                    <ul className="space-y-2 mt-3">
-                      {section.items.map((item, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                          <span className="text-amber-500 mt-0.5 flex-shrink-0">•</span>
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+            <div className="space-y-3">
+              {websiteContent.termsAndConditions.sections.filter(s => s.enabled).map((section) => (
+                <div key={section.id} className="border border-gray-200 rounded-xl overflow-hidden">
+                  <button
+                    onClick={() => toggleSection(section.id)}
+                    className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-50 transition-colors cursor-pointer"
+                  >
+                    <span className="font-semibold text-sm" style={{ color: '#C8860A' }}>{section.title}</span>
+                    <Icon name={expandedSection === section.id ? 'ChevronUpIcon' : 'ChevronDownIcon'} size={18} className="text-gray-400 flex-shrink-0" />
+                  </button>
+                  {expandedSection === section.id && (
+                    <div className="px-5 pb-5 border-t border-gray-100">
+                      <ul className="space-y-2 mt-3">
+                        {section.items.map((item, i) => (
+                          <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                            <span className="text-amber-500 mt-0.5 flex-shrink-0">•</span>
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Notes */}
+            {websiteContent.termsAndConditions.notes && websiteContent.termsAndConditions.notes.length > 0 && (
+              <div className="mt-6 bg-gray-50 border border-gray-200 rounded-xl p-5">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">{websiteContent.termsAndConditions.notesTitle || 'NOTE'}</p>
+                {websiteContent.termsAndConditions.notes.map((note, i) => (
+                  <p key={i} className="text-sm text-gray-700 mb-1">{note}</p>
+                ))}
               </div>
-            ))}
+            )}
           </div>
-
-          {/* Notes */}
-          <div className="mt-6 bg-gray-50 border border-gray-200 rounded-xl p-5">
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">NOTE</p>
-            {TERMS_AND_CONDITIONS.notes.map((note, i) => (
-              <p key={i} className="text-sm text-gray-700 mb-1">{note}</p>
-            ))}
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* ─── BOOKING FORM ─── */}
       <section id="book" className="py-16 px-6" style={{ background: '#FAFAF8' }}>
@@ -3128,6 +3171,27 @@ export default function HomePage() {
                     <span className="text-sm font-mono font-bold text-gray-800 break-all">{submittedBookingId}</span>
                   </div>
                 )}
+                
+                {/* Instant Communication Actions */}
+                <div className="flex flex-wrap items-center justify-center gap-2.5 mb-4">
+                  <a
+                    href={`https://wa.me/447700900000?text=${encodeURIComponent(`Hi SriLalitha Events, I submitted a booking enquiry #${submittedBookingId || ''} for ${submittedDetails?.date || 'my event'}. Could you please check availability?`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#25D366] hover:opacity-95 shadow-sm transition-all"
+                  >
+                    <Icon name="ChatBubbleLeftRightIcon" size={15} />
+                    WhatsApp Us
+                  </a>
+                  <a
+                    href={`mailto:admin@vegchennaisrilalitha.co.uk?subject=${encodeURIComponent(`Enquiry Follow-up #${submittedBookingId || ''} - SriLalitha Events`)}&body=${encodeURIComponent(`Hi SriLalitha Events Team,\n\nI have just submitted a booking request (Ref: #${submittedBookingId || ''}) for ${submittedDetails?.date || 'an event'}.\n\nLooking forward to hearing from you!`)}`}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-all"
+                  >
+                    <Icon name="EnvelopeIcon" size={15} />
+                    Email Us
+                  </a>
+                </div>
+
                 <div>
                   <button
                     onClick={() => { setSubmitted(false); setSubmittedBookingId(''); setSubmittedIsWaitlist(false); }}
@@ -3144,14 +3208,35 @@ export default function HomePage() {
                   <Icon name="CheckCircleIcon" size={32} style={{ color: '#C8860A' }} />
                 </div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">Request Received!</h3>
-                <p className="text-gray-500">We'll contact you within 24 hours to confirm your booking.</p>
+                <p className="text-gray-500 mb-2">We'll contact you within 24 hours to confirm your booking.</p>
                 {submittedBookingId && (
-                  <div className="bg-white border border-amber-200 rounded-xl p-3 inline-block max-w-full text-left mt-3 mb-2 shadow-2xs">
+                  <div className="bg-white border border-amber-200 rounded-xl p-3 inline-block max-w-full text-left mt-1 mb-4 shadow-2xs">
                     <span className="text-xs text-gray-400 block uppercase font-semibold">Booking Reference</span>
                     <span className="text-sm font-mono font-bold text-gray-800 break-all">{submittedBookingId}</span>
                   </div>
                 )}
-                <div className="mt-4">
+
+                {/* Instant Communication Actions */}
+                <div className="flex flex-wrap items-center justify-center gap-2.5 mb-4">
+                  <a
+                    href={`https://wa.me/447700900000?text=${encodeURIComponent(`Hi SriLalitha Events, I submitted a booking request #${submittedBookingId || ''}. Let's discuss my event!`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#25D366] hover:opacity-95 shadow-sm transition-all"
+                  >
+                    <Icon name="ChatBubbleLeftRightIcon" size={15} />
+                    WhatsApp Us
+                  </a>
+                  <a
+                    href={`mailto:admin@vegchennaisrilalitha.co.uk?subject=${encodeURIComponent(`Booking Request #${submittedBookingId || ''} - SriLalitha Events`)}&body=${encodeURIComponent(`Hi SriLalitha Events Team,\n\nI have just submitted a booking request (Ref: #${submittedBookingId || ''}).\n\nPlease let me know when we can finalize the details.\n\nThank you!`)}`}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-all"
+                  >
+                    <Icon name="EnvelopeIcon" size={15} />
+                    Email Us
+                  </a>
+                </div>
+
+                <div className="mt-2">
                   <button onClick={() => { setSubmitted(false); setSubmittedBookingId(''); setSubmittedIsWaitlist(false); }} className="font-medium hover:underline" style={{ color: '#C8860A' }}>
                     Submit another request
                   </button>

@@ -110,6 +110,16 @@ export default function InteractiveMenuOrderModal({
     });
   }, []);
 
+  // ─── 5. REAL-TIME BLOCKED DATES FROM DASHBOARD ───
+  const [blockedDates, setBlockedDates] = useState<string[]>([]);
+
+  useEffect(() => {
+    return onSnapshot(collection(db, 'blocked_dates'), (snapshot) => {
+      const dates = snapshot.docs.map(doc => doc.id);
+      setBlockedDates(dates);
+    });
+  }, []);
+
   const lunchSlots = formConfig?.timeSlotsConfig?.lunchSlots?.length
     ? formConfig.timeSlotsConfig.lunchSlots
     : DEFAULT_LUNCH_SLOTS;
@@ -451,13 +461,17 @@ export default function InteractiveMenuOrderModal({
 
   // Live Dosa Calculation
   const liveDosaCalc = useMemo(() => {
+    const customPricing = isLiveDosa2
+      ? (dynamicMenus?.LIVE_DOSA_OPTION_2?.pricing || LIVE_DOSA_OPTION_2.pricing)
+      : (dynamicMenus?.LIVE_DOSA_OPTION_1?.pricing || LIVE_DOSA_OPTION_1.pricing);
     return calculateLiveDosaPrice(
       eventDate || 'weekday',
       guests,
       upgradesTotal,
-      isLiveDosa2 ? 'live-dosa-2' : 'live-dosa-1'
+      isLiveDosa2 ? 'live-dosa-2' : 'live-dosa-1',
+      customPricing
     );
-  }, [eventDate, guests, upgradesTotal, isLiveDosa2]);
+  }, [eventDate, guests, upgradesTotal, isLiveDosa2, dynamicMenus]);
 
   const packageRatePerPerson = isLiveDosa
     ? liveDosaCalc.pricePerPerson
@@ -655,6 +669,10 @@ export default function InteractiveMenuOrderModal({
       setErrorMessage('Please select your Event Date.');
       return;
     }
+    if (blockedDates.includes(eventDate)) {
+      setErrorMessage('The selected event date is unavailable or fully booked. Please choose another date.');
+      return;
+    }
     setErrorMessage(null);
     setStep(2);
   };
@@ -688,6 +706,10 @@ export default function InteractiveMenuOrderModal({
       setErrorMessage('Please select your Event Date.');
       return;
     }
+    if (blockedDates.includes(eventDate)) {
+      setErrorMessage('The selected event date is unavailable or fully booked. Please choose another date.');
+      return;
+    }
 
     setIsSubmitting(true);
     setErrorMessage(null);
@@ -703,9 +725,13 @@ export default function InteractiveMenuOrderModal({
       ].filter(Boolean) as { name: string; amount: number }[];
 
       // 1. Prepare menu details
+      const currentLiveDosaItems = isLiveDosa2
+        ? (dynamicMenus?.LIVE_DOSA_OPTION_2?.items || LIVE_DOSA_OPTION_2.items)
+        : (dynamicMenus?.LIVE_DOSA_OPTION_1?.items || LIVE_DOSA_OPTION_1.items);
+
       const liveDosaMenuDetails = isLiveDosa ? {
         starterChoice: liveDosaStarterChoice,
-        liveDosaItems: LIVE_DOSA_OPTION_1.items.map(i => i.name),
+        liveDosaItems: currentLiveDosaItems.map((i: any) => i.name),
         selectedMain: isLiveDosa2 ? selectedDishes.mainsVeg : [],
         selectedDessert: isLiveDosa2 ? selectedDishes.desserts : [],
         durationHours: liveDosaCalc.durationHours,
@@ -1322,12 +1348,23 @@ export default function InteractiveMenuOrderModal({
                       setEventDate(e.target.value);
                       setErrorMessage(null);
                     }}
-                    className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-white"
+                    className={`w-full border rounded-xl px-3.5 py-2.5 text-xs font-medium focus:outline-none focus:ring-2 bg-white ${
+                      eventDate && blockedDates.includes(eventDate)
+                        ? 'border-red-500 ring-2 ring-red-100 bg-red-50/10 text-red-900'
+                        : 'border-gray-300 text-gray-900 focus:ring-[#C8860A]'
+                    }`}
                   />
                   {eventDate && (
-                    <span className="text-[10px] text-gray-500 font-semibold mt-1 block">
-                      {isWeekendOrBankHoliday(eventDate) ? '🌟 Weekend / Bank Holiday' : '📅 Weekday (Mon–Fri)'}
-                    </span>
+                    blockedDates.includes(eventDate) ? (
+                      <span className="text-red-500 text-xs font-semibold mt-1 flex items-center gap-1">
+                        <Icon name="ExclamationTriangleIcon" size={12} className="text-red-500 flex-shrink-0" />
+                        Unavailable / Fully Booked Date
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-gray-500 font-semibold mt-1 block">
+                        {isWeekendOrBankHoliday(eventDate) ? '🌟 Weekend / Bank Holiday' : '📅 Weekday (Mon–Fri)'}
+                      </span>
+                    )
                   )}
                 </div>
 
@@ -1722,8 +1759,8 @@ export default function InteractiveMenuOrderModal({
                         </div>
                       </div>
 
-                      {/* Remaining 11 Live Items */}
-                      {LIVE_DOSA_OPTION_1.items.slice(1).map((dish, i) => (
+                      {/* Remaining Live Items */}
+                      {(dynamicMenus?.LIVE_DOSA_OPTION_1?.items || LIVE_DOSA_OPTION_1.items).slice(1).map((dish: any, i: number) => (
                         <div
                           key={dish.name}
                           className="p-3 rounded-xl border border-amber-200 bg-amber-50/30 flex items-center gap-2.5"

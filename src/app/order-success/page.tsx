@@ -87,6 +87,18 @@ function OrderSuccessContent() {
     return `https://wa.me/447700900000?text=${encodeURIComponent(text)}`;
   };
 
+  const buildEmailShare = () => {
+    const subject = `Booking & Payment Confirmation - Order #${orderDoc?.id || orderId || 'SL-ORD'}`;
+    const body = `Hi SriLalitha Events,\n\nI have completed my online payment for Order #${orderDoc?.id || orderId || 'N/A'}.\n\n` +
+      `👤 Name: ${customerName}\n` +
+      `📅 Event Date: ${eventDate} (${eventTime})\n` +
+      `📦 Package: ${packageName} (${guests} Guests)\n` +
+      `💳 Amount Paid: £${amountPaid.toFixed(2)}\n` +
+      `📍 Location: ${location}\n\n` +
+      `Please confirm my booking details.\n\nThank you,\n${customerName}`;
+    return `mailto:admin@vegchennaisrilalitha.co.uk?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-surface flex flex-col items-center justify-center p-6 text-center">
@@ -144,22 +156,29 @@ function OrderSuccessContent() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 flex-shrink-0">
+          <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2.5 flex-shrink-0">
             <button
               onClick={handlePrint}
-              className="px-4 py-2.5 rounded-xl bg-white text-emerald-950 font-bold text-xs shadow-md hover:bg-emerald-50 transition-all flex items-center gap-1.5 cursor-pointer"
+              className="px-3.5 py-2.5 rounded-xl bg-white text-emerald-950 font-bold text-xs shadow-md hover:bg-emerald-50 transition-all flex items-center gap-1.5 cursor-pointer"
             >
               <Icon name="PrinterIcon" size={15} />
-              Print Receipt
+              Print
             </button>
             <a
               href={buildWhatsAppShare()}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-4 py-2.5 rounded-xl bg-[#25D366] text-white font-bold text-xs shadow-md hover:opacity-95 transition-all flex items-center gap-1.5"
+              className="px-3.5 py-2.5 rounded-xl bg-[#25D366] text-white font-bold text-xs shadow-md hover:opacity-95 transition-all flex items-center gap-1.5"
             >
               <Icon name="ChatBubbleLeftRightIcon" size={15} />
               WhatsApp
+            </a>
+            <a
+              href={buildEmailShare()}
+              className="px-3.5 py-2.5 rounded-xl bg-blue-600 text-white font-bold text-xs shadow-md hover:bg-blue-700 transition-all flex items-center gap-1.5"
+            >
+              <Icon name="EnvelopeIcon" size={15} />
+              Email Us
             </a>
           </div>
         </div>
@@ -350,7 +369,7 @@ function OrderSuccessContent() {
               What Happens Next?
             </div>
             <p className="leading-relaxed">
-              Our head catering coordinator will review your exact selected menu dishes and timing requirements. You will receive a confirmation call and WhatsApp summary from us. If you need any adjustments to guest count or dietary options, feel free to reply to our WhatsApp support anytime.
+              Our head catering coordinator will review your exact selected menu dishes and timing requirements. You will receive a confirmation call, email receipt, and WhatsApp summary from us. If you need any adjustments to guest count or dietary options, feel free to contact our team on WhatsApp or email <a href="mailto:admin@vegchennaisrilalitha.co.uk" className="text-amber-700 font-bold hover:underline">admin@vegchennaisrilalitha.co.uk</a> anytime.
             </p>
           </div>
 

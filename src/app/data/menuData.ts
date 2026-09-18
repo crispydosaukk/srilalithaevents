@@ -34,6 +34,8 @@ export const LIVE_DOSA_OPTION_1 = {
   tagline: 'Each item is prepared fresh on the spot with theatrical flair',
   subtitle: 'Crisp & golden, the classic live counter experience (2 Hours Service)',
   durationHours: 2,
+  serviceDuration: '2 Hours Live Station',
+  description: 'Our master chefs prepare fresh, crispy, golden dosas, live meduvada, and fluffy uthappams live in front of your guests for 2 continuous hours.',
   pricing: {
     weekday: {
       days: 'Week days (Monday to Friday)',
@@ -73,6 +75,9 @@ export const LIVE_DOSA_OPTION_2 = {
   tagline: 'Standard Live Dosa Station + 1 Main Course + 1 Dessert (3 Hours Service)',
   subtitle: 'Full theatrical live station with extra courses & 3 hours chef service',
   durationHours: 3,
+  badge: 'Premium Live Dosa Package',
+  serviceDuration: '3 Hours Service Duration',
+  description: 'The ultimate live dining spectacle. Includes the full standard 12 live dishes (Idly Or Veg Biryani, Live Meduvada, Dosas, Uthappams, Chutneys and Sambar) plus One Main Course Dish and One Dessert with our master chefs staying for Three (3) Hours instead of Two Hours.',
   pricing: {
     weekday: {
       days: 'Week days (Monday to Friday)',
