@@ -21,10 +21,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const port = Number(smtp.port) || 587;
+    const isSecure = port === 465 ? true : Boolean(smtp.secure);
+
     const transporter = nodemailer.createTransport({
-      host: smtp.host,
-      port: Number(smtp.port) || 465,
-      secure: smtp.secure !== false,
+      host: smtp.host || 'smtp.gmail.com',
+      port: port,
+      secure: isSecure,
       auth: {
         user: smtp.user,
         pass: smtp.pass,

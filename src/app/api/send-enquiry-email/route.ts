@@ -75,10 +75,13 @@ export async function POST(req: NextRequest) {
     }
 
     // 5. Create Nodemailer Transporter with connection pooling
+    const port = Number(smtp.port) || 587;
+    const isSecure = port === 465 ? true : Boolean(smtp.secure);
+
     const transporter = nodemailer.createTransport({
-      host: smtp.host || 'mail.vegchennaisrilalitha.co.uk',
-      port: smtp.port || 465,
-      secure: smtp.secure !== false,
+      host: smtp.host || 'smtp.gmail.com',
+      port: port,
+      secure: isSecure,
       pool: true,
       maxConnections: 3,
       auth: {
