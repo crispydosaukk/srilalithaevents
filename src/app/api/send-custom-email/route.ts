@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import {
@@ -45,31 +45,19 @@ export async function POST(req: NextRequest) {
       console.warn('Could not read email_settings from Firestore, using default:', e);
     }
 
-    const smtp = emailConfig.smtp;
-    if (!smtp || !smtp.user || !smtp.pass) {
+    const resendApiKey = process.env.RESEND_API_KEY;
+    if (!resendApiKey) {
       return NextResponse.json(
-        { success: false, error: 'SMTP credentials not configured. Please check Admin Dashboard settings.' },
+        { success: false, error: 'RESEND_API_KEY not configured. Please add it in GoDaddy environment variables.' },
         { status: 500 }
       );
     }
 
-    const port = Number(smtp.port) || 587;
-    const isSecure = port === 465 ? true : Boolean(smtp.secure);
-
-    const transporter = nodemailer.createTransport({
-      host: smtp.host || 'smtp.gmail.com',
-      port: port,
-      secure: isSecure,
-      auth: {
-        user: smtp.user,
-        pass: smtp.pass,
-      },
-      tls: {
-        rejectUnauthorized: false,
-      },
-    });
-
-    const sender = `"${smtp.fromName || 'SriLalitha Events & Catering'}" <${smtp.fromEmail || smtp.user}>`;
+    const resend = new Resend(resendApiKey);
+    const smtp = emailConfig.smtp;
+    const fromName = smtp?.fromName || 'SriLalitha Events & Catering';
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+    const sender = `${fromName} <${fromEmail}>`;
 
     // Format HTML email with branding and clean typography
     const formattedBody = message
@@ -128,20 +116,25 @@ export async function POST(req: NextRequest) {
 </html>
     `;
 
-    const mailOptions = {
+    const { data, error } = await resend.emails.send({
       from: sender,
-      to: to.trim(),
+      to: [to.trim()],
       subject: subject.trim(),
       html: htmlContent,
-      replyTo: smtp.fromEmail || smtp.user,
-    };
+      replyTo: fromEmail,
+    });
 
-    const info = await transporter.sendMail(mailOptions);
+    if (error) {
+      return NextResponse.json(
+        { success: false, error: error.message || 'Resend API error.' },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
       message: `Email successfully sent to ${to}!`,
-      messageId: info.messageId,
+      messageId: data?.id,
     });
   } catch (err: any) {
     console.error('Error sending custom email:', err);

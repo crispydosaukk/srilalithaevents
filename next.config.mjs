@@ -6,7 +6,6 @@ const nextConfig = {
     appIsrStatus: false,
   },
   productionBrowserSourceMaps: false,
-  output: 'standalone',
   distDir: process.env.DIST_DIR || '.next',
   typescript: {
     ignoreBuildErrors: true,

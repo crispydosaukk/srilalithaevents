@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import {
@@ -62,38 +62,25 @@ export async function POST(req: NextRequest) {
       activeRecipients.push('admin@vegchennaisrilalitha.co.uk');
     }
 
-    // 4. Verify SMTP configuration
-    const smtp = emailConfig.smtp;
-    if (!smtp || !smtp.user || !smtp.pass) {
-      console.warn('SMTP credentials not configured. Enquiry saved in database, skipping email dispatch.');
+    // 4. Initialise Resend (works over HTTPS — bypasses GoDaddy SMTP port firewall)
+    const resendApiKey = process.env.RESEND_API_KEY;
+    if (!resendApiKey) {
+      console.warn('RESEND_API_KEY not set. Enquiry saved to database, skipping email dispatch.');
       return NextResponse.json({
         success: false,
-        reason: 'smtp_not_configured',
-        message: 'Enquiry saved in database. Outgoing SMTP credentials (user/password) not yet filled in Admin Dashboard.',
+        reason: 'resend_not_configured',
+        message: 'Enquiry saved in database. Add RESEND_API_KEY environment variable in GoDaddy to enable email notifications.',
         activeRecipients,
       });
     }
 
-    // 5. Create Nodemailer Transporter with connection pooling
-    const port = Number(smtp.port) || 587;
-    const isSecure = port === 465 ? true : Boolean(smtp.secure);
-
-    const transporter = nodemailer.createTransport({
-      host: smtp.host || 'smtp.gmail.com',
-      port: port,
-      secure: isSecure,
-      pool: true,
-      maxConnections: 3,
-      auth: {
-        user: smtp.user,
-        pass: smtp.pass,
-      },
-      tls: {
-        rejectUnauthorized: false, // Prevents self-signed cert issues on cPanel/custom mail servers
-      },
-    });
-
-    const sender = `"${smtp.fromName || 'SriLalitha Events'}" <${smtp.fromEmail || smtp.user}>`;
+    const resend = new Resend(resendApiKey);
+    const smtp = emailConfig.smtp;
+    const fromName = smtp?.fromName || 'SriLalitha Events & Catering';
+    // Use RESEND_FROM_EMAIL once your domain is verified in Resend dashboard
+    // Until then, use onboarding@resend.dev for testing
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+    const sender = `${fromName} <${fromEmail}>`;
 
     // 6. Format Admin Notification Email
     const adminSubject = `✨ New Enquiry: ${name || 'Customer'} - ${eventType || 'Catering'} on ${date || 'TBD'}`;
@@ -569,21 +556,31 @@ export async function POST(req: NextRequest) {
       };
     }
 
-    // 9. Dispatch concurrently to avoid timeouts and dropped requests
+    // 9. Dispatch concurrently via Resend (HTTPS — no SMTP port blocks)
     const tasks: Promise<any>[] = [];
-    
+
     // Add a task for each admin recipient
     activeRecipients.forEach(recipientEmail => {
       tasks.push(
-        transporter.sendMail({
-          ...adminMailOptionsBase,
-          to: recipientEmail,
+        resend.emails.send({
+          from: sender,
+          to: [recipientEmail],
+          subject: adminMailOptionsBase.subject,
+          html: adminMailOptionsBase.html,
+          replyTo: adminMailOptionsBase.replyTo,
         })
       );
     });
 
     if (customerMailOptions) {
-      tasks.push(transporter.sendMail(customerMailOptions));
+      tasks.push(
+        resend.emails.send({
+          from: sender,
+          to: [customerMailOptions.to],
+          subject: customerMailOptions.subject,
+          html: customerMailOptions.html,
+        })
+      );
     }
 
     const results = await Promise.allSettled(tasks);
@@ -591,9 +588,9 @@ export async function POST(req: NextRequest) {
     // Consider admin sent if at least one admin email succeeded
     const adminResults = results.slice(0, activeRecipients.length);
     const adminSent = adminResults.some(r => r.status === 'fulfilled');
-    const firstSuccessfulAdmin = adminResults.find(r => r.status === 'fulfilled');
-    const adminMessageId = firstSuccessfulAdmin ? (firstSuccessfulAdmin as any).value?.messageId : null;
-    
+    const firstSuccessfulAdmin = adminResults.find(r => r.status === 'fulfilled') as any;
+    const adminMessageId = firstSuccessfulAdmin?.value?.data?.id || null;
+
     let customerSent = false;
     if (customerMailOptions) {
       const customerResult = results[results.length - 1];

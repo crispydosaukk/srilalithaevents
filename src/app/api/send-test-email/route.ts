@@ -1,18 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { SmtpConfig } from '@/app/data/emailNotificationConfig';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { smtp, testRecipient }: { smtp: SmtpConfig; testRecipient: string } = body;
-
-    if (!smtp || !smtp.host || !smtp.user || !smtp.pass) {
-      return NextResponse.json(
-        { success: false, error: 'Please enter SMTP Host, Username/Email, and Password.' },
-        { status: 400 }
-      );
-    }
 
     if (!testRecipient || !testRecipient.includes('@')) {
       return NextResponse.json(
@@ -21,23 +14,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const port = Number(smtp.port) || 587;
-    const isSecure = port === 465 ? true : Boolean(smtp.secure);
+    const resendApiKey = process.env.RESEND_API_KEY;
+    if (!resendApiKey) {
+      return NextResponse.json(
+        { success: false, error: 'RESEND_API_KEY environment variable is not set. Please add it in GoDaddy → Manage App → Environment Variables.' },
+        { status: 500 }
+      );
+    }
 
-    const transporter = nodemailer.createTransport({
-      host: smtp.host || 'smtp.gmail.com',
-      port: port,
-      secure: isSecure,
-      auth: {
-        user: smtp.user,
-        pass: smtp.pass,
-      },
-      tls: {
-        rejectUnauthorized: false,
-      },
-    });
-
-    const sender = `"${smtp.fromName || 'SriLalitha Test'}" <${smtp.fromEmail || smtp.user}>`;
+    const resend = new Resend(resendApiKey);
+    const fromName = smtp?.fromName || 'SriLalitha Events & Catering';
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+    const sender = `${fromName} <${fromEmail}>`;
 
     const testHtml = `
 <!DOCTYPE html>
@@ -49,11 +37,10 @@ export async function POST(req: NextRequest) {
     </div>
     <h2 style="margin: 0 0 8px 0; color: #111827;">Email Integration Working!</h2>
     <p style="color: #4B5563; font-size: 14px; margin: 0 0 16px 0;">
-      This test message confirms that your SMTP mail server settings are configured correctly.
+      This test message confirms that your Resend email integration is configured correctly.
     </p>
     <div style="background: #F9FAFB; border-radius: 8px; padding: 12px; font-size: 12px; text-align: left; color: #6B7280;">
-      <p style="margin: 2px 0;"><strong>Host:</strong> ${smtp.host}:${smtp.port}</p>
-      <p style="margin: 2px 0;"><strong>User:</strong> ${smtp.user}</p>
+      <p style="margin: 2px 0;"><strong>Service:</strong> Resend API (HTTPS)</p>
       <p style="margin: 2px 0;"><strong>Sent To:</strong> ${testRecipient}</p>
       <p style="margin: 2px 0;"><strong>Timestamp:</strong> ${new Date().toLocaleString()}</p>
     </div>
@@ -62,24 +49,31 @@ export async function POST(req: NextRequest) {
 </html>
     `;
 
-    const info = await transporter.sendMail({
+    const { data, error } = await resend.emails.send({
       from: sender,
-      to: testRecipient.trim(),
-      subject: '✅ SriLalitha Events: SMTP Test Email Succeeded',
+      to: [testRecipient.trim()],
+      subject: '✅ SriLalitha Events: Email Test Succeeded',
       html: testHtml,
     });
+
+    if (error) {
+      return NextResponse.json(
+        { success: false, error: error.message || 'Resend API returned an error.' },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
       message: `Test email successfully sent to ${testRecipient}!`,
-      messageId: info.messageId,
+      messageId: data?.id,
     });
   } catch (err: any) {
     console.error('Error sending test email:', err);
     return NextResponse.json(
       {
         success: false,
-        error: err?.message || 'Failed to connect to SMTP mail server. Please check your credentials.',
+        error: err?.message || 'Failed to send test email.',
       },
       { status: 500 }
     );
