@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import {
@@ -52,35 +52,46 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 3. Get active recipient emails
+    // 3. Validate SMTP credentials
+    const smtp = emailConfig.smtp;
+    if (!smtp || !smtp.user || !smtp.pass) {
+      console.warn('SMTP credentials not configured — skipping enquiry email dispatch.');
+      return NextResponse.json({
+        success: false,
+        reason: 'smtp_not_configured',
+        message: 'Enquiry saved. Configure SMTP credentials in Admin Dashboard → Email Settings to enable email notifications.',
+      });
+    }
+
+    // 4. Get active recipient emails
     const activeRecipients = (emailConfig.recipients || [])
       .filter((r) => r.enabled && r.email && r.email.includes('@'))
       .map((r) => r.email.trim());
 
     if (activeRecipients.length === 0) {
-      // Fallback to default admin email
-      activeRecipients.push('admin@vegchennaisrilalitha.co.uk');
+      // Fallback to SMTP sender/admin email
+      activeRecipients.push(smtp.fromEmail || smtp.user || 'admin@vegchennaisrilalitha.co.uk');
     }
 
-    // 4. Initialise Resend (works over HTTPS — bypasses GoDaddy SMTP port firewall)
-    const resendApiKey = process.env.RESEND_API_KEY;
-    if (!resendApiKey) {
-      console.warn('RESEND_API_KEY not set. Enquiry saved to database, skipping email dispatch.');
-      return NextResponse.json({
-        success: false,
-        reason: 'resend_not_configured',
-        message: 'Enquiry saved in database. Add RESEND_API_KEY environment variable in GoDaddy to enable email notifications.',
-        activeRecipients,
-      });
-    }
+    // 5. Create Nodemailer transporter using stored SMTP settings
+    const transporter = nodemailer.createTransport({
+      host: smtp.host || 'mail.vegchennaisrilalitha.co.uk',
+      port: smtp.port || 465,
+      secure: smtp.secure !== false,
+      pool: true,
+      maxConnections: 3,
+      auth: {
+        user: smtp.user,
+        pass: smtp.pass,
+      },
+      tls: {
+        rejectUnauthorized: false,
+      },
+    });
 
-    const resend = new Resend(resendApiKey);
-    const smtp = emailConfig.smtp;
-    const fromName = smtp?.fromName || 'SriLalitha Events & Catering';
-    // Use RESEND_FROM_EMAIL once your domain is verified in Resend dashboard
-    // Until then, use onboarding@resend.dev for testing
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
-    const sender = `${fromName} <${fromEmail}>`;
+    const fromName = smtp.fromName || 'SriLalitha Events & Catering';
+    const fromEmail = smtp.fromEmail || smtp.user;
+    const sender = `"${fromName}" <${fromEmail}>`;
 
     // 6. Format Admin Notification Email
     const adminSubject = `✨ New Enquiry: ${name || 'Customer'} - ${eventType || 'Catering'} on ${date || 'TBD'}`;
@@ -174,7 +185,7 @@ export async function POST(req: NextRequest) {
                     </span>
                   </td>
                 </tr>
-                <!-- Body Items (Full 100% width stacked - never squishes!) -->
+                <!-- Body Items -->
                 <tr>
                   <td class="mobile-card-padding" style="padding: 16px;">
 
@@ -198,7 +209,7 @@ export async function POST(req: NextRequest) {
                       </div>
                     </div>
 
-                    <!-- Email (100% width, break-all, NEVER cuts off!) -->
+                    <!-- Email -->
                     <div style="padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid #E2E8F0;">
                       <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #64748B; margin-bottom: 2px;">
                         Email Address
@@ -556,15 +567,15 @@ export async function POST(req: NextRequest) {
       };
     }
 
-    // 9. Dispatch concurrently via Resend (HTTPS — no SMTP port blocks)
+    // 9. Dispatch emails concurrently via Nodemailer (native SMTP)
     const tasks: Promise<any>[] = [];
 
     // Add a task for each admin recipient
     activeRecipients.forEach(recipientEmail => {
       tasks.push(
-        resend.emails.send({
-          from: sender,
-          to: [recipientEmail],
+        transporter.sendMail({
+          from: adminMailOptionsBase.from,
+          to: recipientEmail,
           subject: adminMailOptionsBase.subject,
           html: adminMailOptionsBase.html,
           replyTo: adminMailOptionsBase.replyTo,
@@ -574,9 +585,9 @@ export async function POST(req: NextRequest) {
 
     if (customerMailOptions) {
       tasks.push(
-        resend.emails.send({
-          from: sender,
-          to: [customerMailOptions.to],
+        transporter.sendMail({
+          from: customerMailOptions.from,
+          to: customerMailOptions.to,
           subject: customerMailOptions.subject,
           html: customerMailOptions.html,
         })
@@ -589,21 +600,21 @@ export async function POST(req: NextRequest) {
     const adminResults = results.slice(0, activeRecipients.length);
     const adminSent = adminResults.some(r => r.status === 'fulfilled');
     const firstSuccessfulAdmin = adminResults.find(r => r.status === 'fulfilled') as any;
-    const adminMessageId = firstSuccessfulAdmin?.value?.data?.id || null;
+    const adminMessageId = firstSuccessfulAdmin?.value?.messageId || null;
 
     let customerSent = false;
     if (customerMailOptions) {
       const customerResult = results[results.length - 1];
       customerSent = customerResult.status === 'fulfilled';
       if (customerResult.status === 'rejected') {
-        console.warn('Failed to deliver customer confirmation email:', customerResult.reason);
+        console.warn('Failed to deliver customer confirmation email:', (customerResult as any).reason);
       }
     }
 
     // Log any admin failures
     adminResults.forEach((result, idx) => {
       if (result.status === 'rejected') {
-        console.error(`Failed to deliver admin notification to ${activeRecipients[idx]}:`, result.reason);
+        console.error(`Failed to deliver admin notification to ${activeRecipients[idx]}:`, (result as any).reason);
       }
     });
 

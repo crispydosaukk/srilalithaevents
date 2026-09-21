@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import { SmtpConfig } from '@/app/data/emailNotificationConfig';
 
 export async function POST(req: NextRequest) {
@@ -14,18 +14,31 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const resendApiKey = process.env.RESEND_API_KEY;
-    if (!resendApiKey) {
+    // Validate SMTP credentials sent from the Admin Dashboard form
+    if (!smtp || !smtp.user || !smtp.pass) {
       return NextResponse.json(
-        { success: false, error: 'RESEND_API_KEY environment variable is not set. Please add it in GoDaddy → Manage App → Environment Variables.' },
-        { status: 500 }
+        { success: false, error: 'SMTP credentials are required. Please fill in the SMTP Username and Password fields in Admin Dashboard → Email Settings.' },
+        { status: 400 }
       );
     }
 
-    const resend = new Resend(resendApiKey);
-    const fromName = smtp?.fromName || 'SriLalitha Events & Catering';
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
-    const sender = `${fromName} <${fromEmail}>`;
+    // Create Nodemailer transporter using the SMTP settings submitted by the admin
+    const transporter = nodemailer.createTransport({
+      host: smtp.host || 'mail.vegchennaisrilalitha.co.uk',
+      port: smtp.port || 465,
+      secure: smtp.secure !== false,
+      auth: {
+        user: smtp.user,
+        pass: smtp.pass,
+      },
+      tls: {
+        rejectUnauthorized: false,
+      },
+    });
+
+    const fromName = smtp.fromName || 'SriLalitha Events & Catering';
+    const fromEmail = smtp.fromEmail || smtp.user;
+    const sender = `"${fromName}" <${fromEmail}>`;
 
     const testHtml = `
 <!DOCTYPE html>
@@ -37,10 +50,13 @@ export async function POST(req: NextRequest) {
     </div>
     <h2 style="margin: 0 0 8px 0; color: #111827;">Email Integration Working!</h2>
     <p style="color: #4B5563; font-size: 14px; margin: 0 0 16px 0;">
-      This test message confirms that your Resend email integration is configured correctly.
+      This test message confirms that your SMTP email integration is configured correctly.
     </p>
     <div style="background: #F9FAFB; border-radius: 8px; padding: 12px; font-size: 12px; text-align: left; color: #6B7280;">
-      <p style="margin: 2px 0;"><strong>Service:</strong> Resend API (HTTPS)</p>
+      <p style="margin: 2px 0;"><strong>Service:</strong> Native SMTP (Nodemailer)</p>
+      <p style="margin: 2px 0;"><strong>SMTP Host:</strong> ${smtp.host || 'mail.vegchennaisrilalitha.co.uk'}</p>
+      <p style="margin: 2px 0;"><strong>SMTP Port:</strong> ${smtp.port || 465}</p>
+      <p style="margin: 2px 0;"><strong>Sent From:</strong> ${fromEmail}</p>
       <p style="margin: 2px 0;"><strong>Sent To:</strong> ${testRecipient}</p>
       <p style="margin: 2px 0;"><strong>Timestamp:</strong> ${new Date().toLocaleString()}</p>
     </div>
@@ -49,31 +65,34 @@ export async function POST(req: NextRequest) {
 </html>
     `;
 
-    const { data, error } = await resend.emails.send({
+    // Attempt to send test email — any SMTP error will be caught below
+    const info = await transporter.sendMail({
       from: sender,
-      to: [testRecipient.trim()],
+      to: testRecipient.trim(),
       subject: '✅ SriLalitha Events: Email Test Succeeded',
       html: testHtml,
     });
 
-    if (error) {
-      return NextResponse.json(
-        { success: false, error: error.message || 'Resend API returned an error.' },
-        { status: 500 }
-      );
-    }
-
     return NextResponse.json({
       success: true,
       message: `Test email successfully sent to ${testRecipient}!`,
-      messageId: data?.id,
+      messageId: info.messageId,
     });
   } catch (err: any) {
     console.error('Error sending test email:', err);
+    // Return a helpful error message based on common SMTP errors
+    let errorMessage = err?.message || 'Failed to send test email.';
+    if (err?.code === 'ECONNREFUSED') {
+      errorMessage = `Connection refused. GoDaddy may be blocking outbound SMTP on port ${(err as any)?.port || 'the configured port'}. Try using port 25 or localhost as the SMTP host if your email is hosted on the same server.`;
+    } else if (err?.code === 'ETIMEDOUT') {
+      errorMessage = 'Connection timed out. Check that the SMTP host and port are correct and that GoDaddy allows outbound connections on this port.';
+    } else if (err?.responseCode === 535 || err?.responseCode === 534) {
+      errorMessage = 'Authentication failed. Please check your SMTP username and password are correct.';
+    }
     return NextResponse.json(
       {
         success: false,
-        error: err?.message || 'Failed to send test email.',
+        error: errorMessage,
       },
       { status: 500 }
     );

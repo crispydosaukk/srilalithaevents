@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import {
@@ -45,21 +45,36 @@ export async function POST(req: NextRequest) {
       console.warn('Could not read email_settings from Firestore, using default:', e);
     }
 
-    const resendApiKey = process.env.RESEND_API_KEY;
-    if (!resendApiKey) {
+    // 2. Validate SMTP credentials
+    const smtp = emailConfig.smtp;
+    if (!smtp || !smtp.user || !smtp.pass) {
       return NextResponse.json(
-        { success: false, error: 'RESEND_API_KEY not configured. Please add it in GoDaddy environment variables.' },
+        { success: false, error: 'SMTP credentials not configured. Please set them in Admin Dashboard → Email Settings.' },
         { status: 500 }
       );
     }
 
-    const resend = new Resend(resendApiKey);
-    const smtp = emailConfig.smtp;
-    const fromName = smtp?.fromName || 'SriLalitha Events & Catering';
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
-    const sender = `${fromName} <${fromEmail}>`;
+    // 3. Create Nodemailer transporter
+    const transporter = nodemailer.createTransport({
+      host: smtp.host || 'mail.vegchennaisrilalitha.co.uk',
+      port: smtp.port || 465,
+      secure: smtp.secure !== false,
+      pool: true,
+      maxConnections: 3,
+      auth: {
+        user: smtp.user,
+        pass: smtp.pass,
+      },
+      tls: {
+        rejectUnauthorized: false,
+      },
+    });
 
-    // Format HTML email with branding and clean typography
+    const fromName = smtp.fromName || 'SriLalitha Events & Catering';
+    const fromEmail = smtp.fromEmail || smtp.user;
+    const sender = `"${fromName}" <${fromEmail}>`;
+
+    // 4. Format HTML email with branding and clean typography
     const formattedBody = message
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
@@ -116,25 +131,19 @@ export async function POST(req: NextRequest) {
 </html>
     `;
 
-    const { data, error } = await resend.emails.send({
+    // 5. Send email via Nodemailer
+    const info = await transporter.sendMail({
       from: sender,
-      to: [to.trim()],
+      to: to.trim(),
       subject: subject.trim(),
       html: htmlContent,
       replyTo: fromEmail,
     });
 
-    if (error) {
-      return NextResponse.json(
-        { success: false, error: error.message || 'Resend API error.' },
-        { status: 500 }
-      );
-    }
-
     return NextResponse.json({
       success: true,
       message: `Email successfully sent to ${to}!`,
-      messageId: data?.id,
+      messageId: info.messageId,
     });
   } catch (err: any) {
     console.error('Error sending custom email:', err);
