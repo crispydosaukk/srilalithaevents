@@ -405,6 +405,36 @@ export default function AdminPage() {
   const [showInvoiceModal, setShowInvoiceModal] = useState<Booking | null>(null);
   const [onlineOrderFilter, setOnlineOrderFilter] = useState<'all' | 'paid' | 'deposit' | 'kitchen' | 'completed'>('all');
   const [onlineOrderSearch, setOnlineOrderSearch] = useState('');
+  const [onlineOrderStartDate, setOnlineOrderStartDate] = useState('');
+  const [onlineOrderEndDate, setOnlineOrderEndDate] = useState('');
+  const [onlineOrderMonthFilter, setOnlineOrderMonthFilter] = useState('all');
+  const [selectedOnlineOrderIds, setSelectedOnlineOrderIds] = useState<string[]>([]);
+
+  // Enquiries Filter & Selection State
+  const [enquirySearch, setEnquirySearch] = useState('');
+  const [enquiryMonthFilter, setEnquiryMonthFilter] = useState('all');
+  const [enquiryStartDate, setEnquiryStartDate] = useState('');
+  const [enquiryEndDate, setEnquiryEndDate] = useState('');
+  const [selectedEnquiryIds, setSelectedEnquiryIds] = useState<string[]>([]);
+
+  // Bookings Filter & Selection State
+  const [bookingSearch, setBookingSearch] = useState('');
+  const [bookingMonthFilter, setBookingMonthFilter] = useState('all');
+  const [bookingStartDate, setBookingStartDate] = useState('');
+  const [bookingEndDate, setBookingEndDate] = useState('');
+  const [selectedBookingIds, setSelectedBookingIds] = useState<string[]>([]);
+
+  // Unified Deletion Confirmation Modal State
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState<{
+    isOpen: boolean;
+    type: 'single' | 'bulk';
+    category: 'online_order' | 'enquiry' | 'booking';
+    targetIds: string[];
+    title: string;
+    description: string;
+    itemsPreview: Array<{ id: string; name: string; date?: string; amount?: number; eventType?: string }>;
+  } | null>(null);
+  const [isDeletingRecords, setIsDeletingRecords] = useState(false);
 
   // Payment Gateway Settings State
   const [paymentGatewaySettings, setPaymentGatewaySettings] = useState<PaymentGatewayConfig>(DEFAULT_PAYMENT_CONFIG);
@@ -3058,26 +3088,67 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     }
   };
 
+  const executePermanentDeletion = async (ids: string[], categoryLabel: string) => {
+    if (!ids || ids.length === 0) return;
+    setIsDeletingRecords(true);
+    try {
+      const deletePromises = ids.flatMap(id => [
+        deleteDoc(doc(db, 'booking_requests', id)).catch(e => console.warn(`Error deleting booking_requests ${id}:`, e)),
+        deleteDoc(doc(db, 'bookings', id)).catch(e => console.warn(`Error deleting bookings ${id}:`, e))
+      ]);
+      await Promise.all(deletePromises);
+
+      const idSet = new Set(ids);
+      setBookings(prev => prev.filter(b => !idSet.has(b.id)));
+
+      if (selectedBooking && idSet.has(selectedBooking.id)) {
+        setSelectedBooking(null);
+      }
+      if (selectedOnlineOrder && idSet.has(selectedOnlineOrder.id)) {
+        setSelectedOnlineOrder(null);
+      }
+
+      // Clear selections
+      setSelectedOnlineOrderIds(prev => prev.filter(id => !idSet.has(id)));
+      setSelectedEnquiryIds(prev => prev.filter(id => !idSet.has(id)));
+      setSelectedBookingIds(prev => prev.filter(id => !idSet.has(id)));
+
+      setCustomAlert({
+        message: `${ids.length === 1 ? categoryLabel : `${ids.length} ${categoryLabel}s`} permanently deleted across the entire system.`,
+        type: 'success'
+      });
+    } catch (error: any) {
+      console.error('Error during permanent deletion:', error);
+      setCustomAlert({ message: `Error deleting: ${error.message || 'Please try again.'}`, type: 'error' });
+    } finally {
+      setIsDeletingRecords(false);
+      setDeleteConfirmModal(null);
+      setBookingToDelete(null);
+    }
+  };
+
   const handleDeleteBooking = (id: string, name: string) => {
-    setBookingToDelete({ id, name });
+    const booking = bookings.find(b => b.id === id);
+    setDeleteConfirmModal({
+      isOpen: true,
+      type: 'single',
+      category: 'booking',
+      targetIds: [id],
+      title: `Delete Booking #${id.slice(-6).toUpperCase()}`,
+      description: `Are you sure you want to permanently delete the booking for "${name}"? This action will permanently remove it from the database, calendar, customer records, and payment history.`,
+      itemsPreview: [{
+        id,
+        name: name || 'Customer',
+        date: booking?.date,
+        amount: booking ? getTotalAmount(booking) : undefined,
+        eventType: booking?.eventType
+      }]
+    });
   };
 
   const confirmDeleteBooking = async () => {
     if (!bookingToDelete) return;
-    try {
-      await deleteDoc(doc(db, 'booking_requests', bookingToDelete.id));
-      await deleteDoc(doc(db, 'bookings', bookingToDelete.id));
-      setBookings(prev => prev.filter(b => b.id !== bookingToDelete.id));
-      if (selectedBooking?.id === bookingToDelete.id) {
-        setSelectedBooking(null);
-      }
-      setCustomAlert({ message: 'Booking deleted successfully', type: 'success' });
-    } catch (error) {
-      console.error('Error deleting booking:', error);
-      setCustomAlert({ message: 'Error deleting booking. Please try again.', type: 'error' });
-    } finally {
-      setBookingToDelete(null);
-    }
+    await executePermanentDeletion([bookingToDelete.id], 'Booking');
   };
 
   const addExtraCharge = async (id: string) => {
@@ -3948,11 +4019,61 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
   const eventTypes = [...new Set(bookings.filter(b => !isOnlineOrder(b)).map(b => b.eventType))];
 
+  const availableMonths = useMemo(() => {
+    const monthsSet = new Set<string>();
+    const now = new Date();
+    for (let i = -6; i <= 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      monthsSet.add(key);
+    }
+    bookings.forEach(b => {
+      if (b.date && b.date.length >= 7) {
+        monthsSet.add(b.date.slice(0, 7));
+      }
+    });
+    return Array.from(monthsSet).sort();
+  }, [bookings]);
+
+  const formatMonthLabel = (monthKey: string) => {
+    if (!monthKey || monthKey === 'all') return 'All Months';
+    const [year, month] = monthKey.split('-');
+    const monthIndex = parseInt(month, 10) - 1;
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    return `${monthNames[monthIndex] || month} ${year}`;
+  };
+
   const filtered = bookings.filter(b => {
     if (isOnlineOrder(b)) return false;
     const statusMatch = filterStatus === 'all' || b.status === filterStatus;
     const eventMatch = filterEvent === 'all' || b.eventType === filterEvent;
-    return statusMatch && eventMatch;
+
+    let monthMatch = true;
+    if (bookingMonthFilter !== 'all') {
+      monthMatch = Boolean(b.date && b.date.startsWith(bookingMonthFilter));
+    }
+
+    let dateRangeMatch = true;
+    if (bookingStartDate && b.date) {
+      dateRangeMatch = dateRangeMatch && b.date >= bookingStartDate;
+    }
+    if (bookingEndDate && b.date) {
+      dateRangeMatch = dateRangeMatch && b.date <= bookingEndDate;
+    }
+
+    let searchMatch = true;
+    if (bookingSearch.trim()) {
+      const q = bookingSearch.toLowerCase();
+      searchMatch =
+        (b.name || '').toLowerCase().includes(q) ||
+        (b.phone || '').toLowerCase().includes(q) ||
+        (b.email || '').toLowerCase().includes(q) ||
+        (b.id || '').toLowerCase().includes(q) ||
+        (b.package || '').toLowerCase().includes(q) ||
+        (b.location || '').toLowerCase().includes(q);
+    }
+
+    return statusMatch && eventMatch && monthMatch && dateRangeMatch && searchMatch;
   });
 
   const daysInMonth = getDaysInMonth(calendarYear, calendarMonth);
@@ -3971,6 +4092,66 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
   const onlineOrdersList = useMemo(() => {
     return bookings.filter(b => isOnlineOrder(b));
   }, [bookings]);
+
+  const filteredOnlineOrders = useMemo(() => {
+    return onlineOrdersList.filter(order => {
+      if (onlineOrderFilter === 'paid' && !order.depositPaid) return false;
+      if (onlineOrderFilter === 'deposit' && order.depositPaid) return false;
+      if (onlineOrderFilter === 'kitchen' && order.kitchenStatus !== 'prep') return false;
+      if (onlineOrderFilter === 'completed' && order.kitchenStatus !== 'ready' && order.status !== 'completed') return false;
+
+      if (onlineOrderMonthFilter !== 'all') {
+        const orderDate = order.date || (order.createdAt ? order.createdAt.split('T')[0] : '');
+        if (!orderDate.startsWith(onlineOrderMonthFilter)) return false;
+      }
+
+      const targetDate = order.date || (order.createdAt ? order.createdAt.split('T')[0] : '');
+      if (onlineOrderStartDate && targetDate && targetDate < onlineOrderStartDate) return false;
+      if (onlineOrderEndDate && targetDate && targetDate > onlineOrderEndDate) return false;
+
+      if (onlineOrderSearch.trim()) {
+        const q = onlineOrderSearch.toLowerCase();
+        const matches =
+          (order.name || '').toLowerCase().includes(q) ||
+          (order.phone || '').toLowerCase().includes(q) ||
+          (order.email || '').toLowerCase().includes(q) ||
+          (order.id || '').toLowerCase().includes(q) ||
+          (order.package || '').toLowerCase().includes(q) ||
+          (order.location || '').toLowerCase().includes(q);
+        if (!matches) return false;
+      }
+
+      return true;
+    });
+  }, [onlineOrdersList, onlineOrderFilter, onlineOrderMonthFilter, onlineOrderStartDate, onlineOrderEndDate, onlineOrderSearch]);
+
+  const filteredEnquiries = useMemo(() => {
+    return enquiries.filter(b => {
+      if (enquiryMonthFilter !== 'all') {
+        const enquiryDateStr = b.date || b.enquiryDate || (b.createdAt ? b.createdAt.split('T')[0] : '');
+        if (!enquiryDateStr.startsWith(enquiryMonthFilter)) return false;
+      }
+
+      const targetDate = b.date || b.enquiryDate || (b.createdAt ? b.createdAt.split('T')[0] : '');
+      if (enquiryStartDate && targetDate && targetDate < enquiryStartDate) return false;
+      if (enquiryEndDate && targetDate && targetDate > enquiryEndDate) return false;
+
+      if (enquirySearch.trim()) {
+        const q = enquirySearch.toLowerCase();
+        const matches =
+          (b.name || '').toLowerCase().includes(q) ||
+          (b.phone || '').toLowerCase().includes(q) ||
+          (b.email || '').toLowerCase().includes(q) ||
+          (b.id || '').toLowerCase().includes(q) ||
+          (b.eventType || '').toLowerCase().includes(q) ||
+          (b.package || '').toLowerCase().includes(q) ||
+          (b.location || '').toLowerCase().includes(q);
+        if (!matches) return false;
+      }
+
+      return true;
+    });
+  }, [enquiries, enquiryMonthFilter, enquiryStartDate, enquiryEndDate, enquirySearch]);
   
   const navItems: { id: AdminTab; label: string; icon: string; badge?: number; requiredPerm?: string }[] = [
     { id: 'overview', label: 'Overview', icon: 'Squares2X2Icon' },
@@ -4379,163 +4560,376 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               </div>
 
               {/* Filter & Search Bar */}
-              <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
-                <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto">
-                  {(['all', 'paid', 'deposit', 'kitchen', 'completed'] as const).map((f) => (
-                    <button
-                      key={f}
-                      type="button"
-                      onClick={() => setOnlineOrderFilter(f)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold capitalize transition-all cursor-pointer ${
-                        onlineOrderFilter === f
-                          ? 'bg-[#C8860A] text-white shadow-sm'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      {f === 'all' && `All Orders (${onlineOrdersList.length})`}
-                      {f === 'paid' && `Paid Online (${onlineOrdersList.filter(o => o.depositPaid).length})`}
-                      {f === 'deposit' && `Deposit Pending (${onlineOrdersList.filter(o => !o.depositPaid).length})`}
-                      {f === 'kitchen' && `In Kitchen (${onlineOrdersList.filter(o => o.kitchenStatus === 'prep').length})`}
-                      {f === 'completed' && `Ready / Done (${onlineOrdersList.filter(o => o.kitchenStatus === 'ready' || o.status === 'completed').length})`}
-                    </button>
-                  ))}
+              <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm space-y-3">
+                <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                  <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto">
+                    {(['all', 'paid', 'deposit', 'kitchen', 'completed'] as const).map((f) => (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => setOnlineOrderFilter(f)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold capitalize transition-all cursor-pointer ${
+                          onlineOrderFilter === f
+                            ? 'bg-[#C8860A] text-white shadow-sm'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {f === 'all' && `All Orders (${onlineOrdersList.length})`}
+                        {f === 'paid' && `Paid Online (${onlineOrdersList.filter(o => o.depositPaid).length})`}
+                        {f === 'deposit' && `Deposit Pending (${onlineOrdersList.filter(o => !o.depositPaid).length})`}
+                        {f === 'kitchen' && `In Kitchen (${onlineOrdersList.filter(o => o.kitchenStatus === 'prep').length})`}
+                        {f === 'completed' && `Ready / Done (${onlineOrdersList.filter(o => o.kitchenStatus === 'ready' || o.status === 'completed').length})`}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="w-full md:w-72">
+                    <input
+                      type="text"
+                      placeholder="Search customer, phone, email, order ID..."
+                      value={onlineOrderSearch}
+                      onChange={(e) => setOnlineOrderSearch(e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-gray-50"
+                    />
+                  </div>
                 </div>
 
-                <div className="w-full md:w-72">
-                  <input
-                    type="text"
-                    placeholder="Search by customer, phone, or order ID..."
-                    value={onlineOrderSearch}
-                    onChange={(e) => setOnlineOrderSearch(e.target.value)}
-                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-gray-50"
-                  />
+                {/* Date & Month Filters Row */}
+                <div className="pt-2 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Month selector */}
+                    <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5">
+                      <span className="text-gray-500 font-semibold">📅 Month:</span>
+                      <select
+                        value={onlineOrderMonthFilter}
+                        onChange={(e) => setOnlineOrderMonthFilter(e.target.value)}
+                        className="bg-transparent font-bold text-gray-800 focus:outline-none cursor-pointer"
+                      >
+                        <option value="all">All Months</option>
+                        {availableMonths.map((m) => (
+                          <option key={m} value={m}>{formatMonthLabel(m)}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Date Range */}
+                    <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5">
+                      <span className="text-gray-500 font-semibold">Date Range:</span>
+                      <input
+                        type="date"
+                        value={onlineOrderStartDate}
+                        onChange={(e) => setOnlineOrderStartDate(e.target.value)}
+                        className="bg-transparent text-gray-800 font-medium focus:outline-none cursor-pointer"
+                      />
+                      <span className="text-gray-400">to</span>
+                      <input
+                        type="date"
+                        value={onlineOrderEndDate}
+                        onChange={(e) => setOnlineOrderEndDate(e.target.value)}
+                        className="bg-transparent text-gray-800 font-medium focus:outline-none cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Quick presets */}
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const now = new Date();
+                          const currentM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                          setOnlineOrderMonthFilter(currentM);
+                          setOnlineOrderStartDate('');
+                          setOnlineOrderEndDate('');
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors"
+                      >
+                        This Month
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const now = new Date();
+                          const nextM = `${now.getFullYear()}-${String(now.getMonth() + 2).padStart(2, '0')}`;
+                          setOnlineOrderMonthFilter(nextM);
+                          setOnlineOrderStartDate('');
+                          setOnlineOrderEndDate('');
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors"
+                      >
+                        Next Month
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const now = new Date();
+                          const endStr = now.toISOString().split('T')[0];
+                          const pastDate = new Date();
+                          pastDate.setDate(pastDate.getDate() - 30);
+                          const startStr = pastDate.toISOString().split('T')[0];
+                          setOnlineOrderStartDate(startStr);
+                          setOnlineOrderEndDate(endStr);
+                          setOnlineOrderMonthFilter('all');
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors"
+                      >
+                        Last 30 Days
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Clear button */}
+                  {(onlineOrderFilter !== 'all' || onlineOrderSearch || onlineOrderMonthFilter !== 'all' || onlineOrderStartDate || onlineOrderEndDate) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOnlineOrderFilter('all');
+                        setOnlineOrderSearch('');
+                        setOnlineOrderMonthFilter('all');
+                        setOnlineOrderStartDate('');
+                        setOnlineOrderEndDate('');
+                      }}
+                      className="text-red-600 hover:text-red-700 font-bold px-2.5 py-1 rounded-lg hover:bg-red-50 transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <Icon name="XMarkIcon" size={13} />
+                      Reset Filters
+                    </button>
+                  )}
                 </div>
               </div>
 
+              {/* Master Select All & Bulk Actions Bar */}
+              {filteredOnlineOrders.length > 0 && (
+                <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-3 px-4 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-gray-800">
+                      <input
+                        type="checkbox"
+                        checked={filteredOnlineOrders.length > 0 && filteredOnlineOrders.every(o => selectedOnlineOrderIds.includes(o.id))}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            const allFilteredIds = filteredOnlineOrders.map(o => o.id);
+                            setSelectedOnlineOrderIds(prev => Array.from(new Set([...prev, ...allFilteredIds])));
+                          } else {
+                            const filteredSet = new Set(filteredOnlineOrders.map(o => o.id));
+                            setSelectedOnlineOrderIds(prev => prev.filter(id => !filteredSet.has(id)));
+                          }
+                        }}
+                        className="w-4 h-4 rounded text-[#C8860A] focus:ring-[#C8860A] border-gray-300 cursor-pointer"
+                      />
+                      <span>Select All Filtered ({filteredOnlineOrders.length} orders)</span>
+                    </label>
+
+                    {selectedOnlineOrderIds.length > 0 && (
+                      <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-[#C8860A] text-white">
+                        {selectedOnlineOrderIds.length} Selected
+                      </span>
+                    )}
+                  </div>
+
+                  {selectedOnlineOrderIds.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedOnlineOrderIds([])}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-xl border border-gray-300 text-gray-700 hover:bg-white transition-colors cursor-pointer"
+                      >
+                        Clear Selection
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const previewItems = selectedOnlineOrderIds.map(id => {
+                            const o = onlineOrdersList.find(x => x.id === id);
+                            return {
+                              id,
+                              name: o?.name || 'Customer',
+                              date: o?.date,
+                              amount: o ? (o.totalEstimatedAmount || o.baseAmount || 0) : undefined,
+                              eventType: o?.package
+                            };
+                          });
+                          setDeleteConfirmModal({
+                            isOpen: true,
+                            type: 'bulk',
+                            category: 'online_order',
+                            targetIds: selectedOnlineOrderIds,
+                            title: `Delete ${selectedOnlineOrderIds.length} Online Orders`,
+                            description: `Are you sure you want to permanently delete these ${selectedOnlineOrderIds.length} online orders? This will permanently erase them from the database, calendar, customer records, and payment tracker.`,
+                            itemsPreview: previewItems
+                          });
+                        }}
+                        className="text-xs font-bold px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                      >
+                        <Icon name="TrashIcon" size={14} />
+                        Delete Selected ({selectedOnlineOrderIds.length})
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Online Orders List */}
-              {onlineOrdersList.length === 0 ? (
+              {filteredOnlineOrders.length === 0 ? (
                 <div className="bg-white rounded-2xl border border-gray-200 py-16 text-center space-y-3">
                   <div className="w-14 h-14 rounded-2xl bg-amber-50 text-[#C8860A] flex items-center justify-center mx-auto">
                     <Icon name="ShoppingBagIcon" size={28} />
                   </div>
-                  <h3 className="font-bold text-gray-900 text-base">No Online Menu Orders Yet</h3>
+                  <h3 className="font-bold text-gray-900 text-base">
+                    {onlineOrdersList.length === 0 ? 'No Online Menu Orders Yet' : 'No Online Orders Match Your Filters'}
+                  </h3>
                   <p className="text-xs text-gray-500 max-w-md mx-auto">
-                    When customers customize their menu dishes and pay their deposit online via Stripe on your website, orders will instantly appear here with complete dish lists, kitchen slips, and digital invoices.
+                    {onlineOrdersList.length === 0
+                      ? 'When customers customize their menu dishes and pay their deposit online via Stripe on your website, orders will instantly appear here with complete dish lists, kitchen slips, and digital invoices.'
+                      : 'Try adjusting your date range, month selector, or search keyword to view other orders.'}
                   </p>
+                  {onlineOrdersList.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOnlineOrderFilter('all');
+                        setOnlineOrderSearch('');
+                        setOnlineOrderMonthFilter('all');
+                        setOnlineOrderStartDate('');
+                        setOnlineOrderEndDate('');
+                      }}
+                      className="text-xs font-bold text-[#C8860A] hover:underline"
+                    >
+                      Reset all filters
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-5">
-                  {onlineOrdersList
-                    .filter(order => {
-                      if (onlineOrderFilter === 'paid') return order.depositPaid;
-                      if (onlineOrderFilter === 'deposit') return !order.depositPaid;
-                      if (onlineOrderFilter === 'kitchen') return order.kitchenStatus === 'prep';
-                      if (onlineOrderFilter === 'completed') return order.kitchenStatus === 'ready' || order.status === 'completed';
-                      return true;
-                    })
-                    .filter(order => {
-                      if (!onlineOrderSearch.trim()) return true;
-                      const q = onlineOrderSearch.toLowerCase();
-                      return (
-                        order.name.toLowerCase().includes(q) ||
-                        (order.phone || '').toLowerCase().includes(q) ||
-                        (order.email || '').toLowerCase().includes(q) ||
-                        (order.id || '').toLowerCase().includes(q) ||
-                        (order.package || '').toLowerCase().includes(q)
-                      );
-                    })
-                    .map((order) => {
-                      const totalAmt = order.totalEstimatedAmount || order.baseAmount || 0;
-                      const paidAmt = order.depositPaid ? (order.amountPaidSoFar || order.deposit || 0) : 0;
-                      const remAmt = Math.max(0, totalAmt - paidAmt);
-                      const dishes = order.selectedMenuDishes || {};
+                  {filteredOnlineOrders.map((order) => {
+                    const totalAmt = order.totalEstimatedAmount || order.baseAmount || 0;
+                    const paidAmt = order.depositPaid ? (order.amountPaidSoFar || order.deposit || 0) : 0;
+                    const remAmt = Math.max(0, totalAmt - paidAmt);
+                    const dishes = order.selectedMenuDishes || {};
 
-                      return (
-                        <div
-                          key={order.id}
-                          className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-sm hover:shadow-md transition-all space-y-5"
-                        >
-                          {/* Order Card Top Bar */}
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-2xl bg-amber-100 text-[#C8860A] flex items-center justify-center font-bold text-sm flex-shrink-0">
-                                {order.name ? order.name.charAt(0).toUpperCase() : 'O'}
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <h3 className="font-bold text-gray-900 text-sm sm:text-base">{order.name}</h3>
-                                  <span className="font-mono text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
-                                    #{order.id.slice(-6).toUpperCase()}
-                                  </span>
-                                  {order.depositPaid && (
-                                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                      Stripe Paid
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="text-xs text-gray-500 mt-0.5 flex flex-wrap items-center gap-3">
-                                  <span>{order.email}</span>
-                                  <span>•</span>
-                                  <span>{order.phone}</span>
-                                  {order.createdAt && (
-                                    <>
-                                      <span>•</span>
-                                      <span className="text-gray-400">
-                                        Ordered {new Date(order.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                                      </span>
-                                    </>
-                                  )}
-                                </div>
-                              </div>
+                    return (
+                      <div
+                        key={order.id}
+                        className={`bg-white rounded-2xl border p-5 sm:p-6 shadow-sm hover:shadow-md transition-all space-y-5 ${
+                          selectedOnlineOrderIds.includes(order.id) ? 'border-amber-400 ring-2 ring-amber-200/60' : 'border-gray-200'
+                        }`}
+                      >
+                        {/* Order Card Top Bar */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedOnlineOrderIds.includes(order.id)}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                setSelectedOnlineOrderIds(prev =>
+                                  e.target.checked ? [...prev, order.id] : prev.filter(x => x !== order.id)
+                                );
+                              }}
+                              className="w-4 h-4 rounded text-[#C8860A] focus:ring-[#C8860A] border-gray-300 cursor-pointer flex-shrink-0"
+                            />
+                            <div className="w-10 h-10 rounded-2xl bg-amber-100 text-[#C8860A] flex items-center justify-center font-bold text-sm flex-shrink-0">
+                              {order.name ? order.name.charAt(0).toUpperCase() : 'O'}
                             </div>
-
-                            {/* Quick Action Buttons */}
-                            <div className="flex items-center gap-2 self-start sm:self-center flex-wrap">
-                              <a
-                                href={buildWhatsAppLink(
-                                  order.phone,
-                                  `Hi ${order.name}, thank you for your order with SriLalitha Catering (Order #${order.id})! We have received your menu selection for ${order.date} (${order.guests} guests). Everything is in our kitchen schedule!`
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h3 className="font-bold text-gray-900 text-sm sm:text-base">{order.name}</h3>
+                                <span className="font-mono text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
+                                  #{order.id.slice(-6).toUpperCase()}
+                                </span>
+                                {order.depositPaid && (
+                                  <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                    Stripe Paid
+                                  </span>
                                 )}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="px-3 py-1.5 rounded-xl bg-[#25D366]/10 text-[#128C7E] hover:bg-[#25D366]/20 font-bold text-xs flex items-center gap-1.5 transition-colors"
-                              >
-                                <Icon name="ChatBubbleLeftRightIcon" size={14} />
-                                WhatsApp
-                              </a>
-
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const { subject, body } = getOrderEmailContent(order);
-                                  openEmailComposer(order.email, order.name, subject, body, order.id);
-                                }}
-                                className="px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-blue-200"
-                              >
-                                <Icon name="EnvelopeIcon" size={14} />
-                                Email
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => setShowKitchenSlipModal(order)}
-                                className="px-3 py-1.5 rounded-xl bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-                              >
-                                <Icon name="ClipboardDocumentCheckIcon" size={14} className="text-[#C8860A]" />
-                                Kitchen Slip
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => setShowInvoiceModal(order)}
-                                className="px-3 py-1.5 rounded-xl bg-gray-100 text-gray-800 hover:bg-gray-200 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-                              >
-                                <Icon name="PrinterIcon" size={14} />
-                                Invoice
-                              </button>
+                              </div>
+                              <div className="text-xs text-gray-500 mt-0.5 flex flex-wrap items-center gap-3">
+                                <span>{order.email}</span>
+                                <span>•</span>
+                                <span>{order.phone}</span>
+                                {order.createdAt && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="text-gray-400">
+                                      Ordered {new Date(order.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
                             </div>
                           </div>
+
+                          {/* Quick Action Buttons */}
+                          <div className="flex items-center gap-2 self-start sm:self-center flex-wrap">
+                            <a
+                              href={buildWhatsAppLink(
+                                order.phone,
+                                `Hi ${order.name}, thank you for your order with SriLalitha Catering (Order #${order.id})! We have received your menu selection for ${order.date} (${order.guests} guests). Everything is in our kitchen schedule!`
+                              )}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-3 py-1.5 rounded-xl bg-[#25D366]/10 text-[#128C7E] hover:bg-[#25D366]/20 font-bold text-xs flex items-center gap-1.5 transition-colors"
+                            >
+                              <Icon name="ChatBubbleLeftRightIcon" size={14} />
+                              WhatsApp
+                            </a>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const { subject, body } = getOrderEmailContent(order);
+                                openEmailComposer(order.email, order.name, subject, body, order.id);
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-blue-200"
+                            >
+                              <Icon name="EnvelopeIcon" size={14} />
+                              Email
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setShowKitchenSlipModal(order)}
+                              className="px-3 py-1.5 rounded-xl bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                            >
+                              <Icon name="ClipboardDocumentCheckIcon" size={14} className="text-[#C8860A]" />
+                              Kitchen Slip
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setShowInvoiceModal(order)}
+                              className="px-3 py-1.5 rounded-xl bg-gray-100 text-gray-800 hover:bg-gray-200 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                            >
+                              <Icon name="PrinterIcon" size={14} />
+                              Invoice
+                            </button>
+
+                            {/* Individual Delete Order Button */}
+                            <button
+                              type="button"
+                              onClick={() => setDeleteConfirmModal({
+                                isOpen: true,
+                                type: 'single',
+                                category: 'online_order',
+                                targetIds: [order.id],
+                                title: `Delete Online Order #${order.id.slice(-6).toUpperCase()}`,
+                                description: `Are you sure you want to permanently delete the online order for "${order.name}"? This action will permanently remove it from the database, calendar bookings, customer records, and payment history.`,
+                                itemsPreview: [{
+                                  id: order.id,
+                                  name: order.name,
+                                  date: order.date,
+                                  amount: totalAmt,
+                                  eventType: order.package
+                                }]
+                              })}
+                              className="px-3 py-1.5 rounded-xl bg-red-50 text-red-700 hover:bg-red-100 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-red-200 shadow-2xs"
+                              title="Delete Online Order"
+                            >
+                              <Icon name="TrashIcon" size={14} className="text-red-500" />
+                              Delete
+                            </button>
+                          </div>
+                        </div>
 
                           {/* Event & Delivery Info Row */}
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-gray-50 p-4 rounded-xl text-xs">
@@ -4668,19 +5062,191 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
           {/* ─── ENQUIRIES ─── */}
           {activeTab === 'enquiries' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-gray-500">{enquiries.length} new enquiries awaiting your response</p>
+              {/* Header & Filter Controls */}
+              <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm space-y-3">
+                <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-base font-bold text-gray-900">Event Enquiries</h2>
+                    <p className="text-xs text-gray-500">{enquiries.length} total new enquiries awaiting your review</p>
+                  </div>
+
+                  <div className="w-full md:w-72">
+                    <input
+                      type="text"
+                      placeholder="Search enquiry name, phone, email, event..."
+                      value={enquirySearch}
+                      onChange={(e) => setEnquirySearch(e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-gray-50"
+                    />
+                  </div>
+                </div>
+
+                {/* Date & Month Filters Row */}
+                <div className="pt-2 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5">
+                      <span className="text-gray-500 font-semibold">📅 Month:</span>
+                      <select
+                        value={enquiryMonthFilter}
+                        onChange={(e) => setEnquiryMonthFilter(e.target.value)}
+                        className="bg-transparent font-bold text-gray-800 focus:outline-none cursor-pointer"
+                      >
+                        <option value="all">All Months</option>
+                        {availableMonths.map((m) => (
+                          <option key={m} value={m}>{formatMonthLabel(m)}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5">
+                      <span className="text-gray-500 font-semibold">Date Range:</span>
+                      <input
+                        type="date"
+                        value={enquiryStartDate}
+                        onChange={(e) => setEnquiryStartDate(e.target.value)}
+                        className="bg-transparent text-gray-800 font-medium focus:outline-none cursor-pointer"
+                      />
+                      <span className="text-gray-400">to</span>
+                      <input
+                        type="date"
+                        value={enquiryEndDate}
+                        onChange={(e) => setEnquiryEndDate(e.target.value)}
+                        className="bg-transparent text-gray-800 font-medium focus:outline-none cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  {(enquirySearch || enquiryMonthFilter !== 'all' || enquiryStartDate || enquiryEndDate) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEnquirySearch('');
+                        setEnquiryMonthFilter('all');
+                        setEnquiryStartDate('');
+                        setEnquiryEndDate('');
+                      }}
+                      className="text-red-600 hover:text-red-700 font-bold px-2.5 py-1 rounded-lg hover:bg-red-50 transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <Icon name="XMarkIcon" size={13} />
+                      Reset Filters
+                    </button>
+                  )}
+                </div>
               </div>
-              {enquiries.length === 0 && (
-                <div className="bg-white rounded-xl border border-gray-200 py-16 text-center">
-                  <Icon name="InboxIcon" size={36} className="mx-auto mb-3 text-gray-300" />
-                  <p className="text-gray-400 text-sm">No new enquiries right now</p>
+
+              {/* Master Select All & Bulk Actions Bar for Enquiries */}
+              {filteredEnquiries.length > 0 && (
+                <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-3 px-4 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-gray-800">
+                      <input
+                        type="checkbox"
+                        checked={filteredEnquiries.length > 0 && filteredEnquiries.every(b => selectedEnquiryIds.includes(b.id))}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            const allIds = filteredEnquiries.map(b => b.id);
+                            setSelectedEnquiryIds(prev => Array.from(new Set([...prev, ...allIds])));
+                          } else {
+                            const filteredSet = new Set(filteredEnquiries.map(b => b.id));
+                            setSelectedEnquiryIds(prev => prev.filter(id => !filteredSet.has(id)));
+                          }
+                        }}
+                        className="w-4 h-4 rounded text-[#C8860A] focus:ring-[#C8860A] border-gray-300 cursor-pointer"
+                      />
+                      <span>Select All Filtered ({filteredEnquiries.length} enquiries)</span>
+                    </label>
+
+                    {selectedEnquiryIds.length > 0 && (
+                      <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-[#C8860A] text-white">
+                        {selectedEnquiryIds.length} Selected
+                      </span>
+                    )}
+                  </div>
+
+                  {selectedEnquiryIds.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedEnquiryIds([])}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-xl border border-gray-300 text-gray-700 hover:bg-white transition-colors cursor-pointer"
+                      >
+                        Clear Selection
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const previewItems = selectedEnquiryIds.map(id => {
+                            const b = enquiries.find(x => x.id === id);
+                            return {
+                              id,
+                              name: b?.name || 'Customer',
+                              date: b?.date || b?.enquiryDate,
+                              eventType: b?.eventType
+                            };
+                          });
+                          setDeleteConfirmModal({
+                            isOpen: true,
+                            type: 'bulk',
+                            category: 'enquiry',
+                            targetIds: selectedEnquiryIds,
+                            title: `Delete ${selectedEnquiryIds.length} Enquiries`,
+                            description: `Are you sure you want to permanently delete these ${selectedEnquiryIds.length} enquiries? This will permanently remove them from the database, calendar, customer records, and bookings.`,
+                            itemsPreview: previewItems
+                          });
+                        }}
+                        className="text-xs font-bold px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                      >
+                        <Icon name="TrashIcon" size={14} />
+                        Delete Selected ({selectedEnquiryIds.length})
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
-              {enquiries.map((b) => (
-                <div key={b.id} className="bg-white rounded-xl border border-gray-200 p-5">
+
+              {filteredEnquiries.length === 0 && (
+                <div className="bg-white rounded-xl border border-gray-200 py-16 text-center space-y-2">
+                  <Icon name="InboxIcon" size={36} className="mx-auto mb-2 text-gray-300" />
+                  <p className="text-gray-500 font-semibold text-sm">
+                    {enquiries.length === 0 ? 'No new enquiries right now' : 'No enquiries match your current filters'}
+                  </p>
+                  {enquiries.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEnquirySearch('');
+                        setEnquiryMonthFilter('all');
+                        setEnquiryStartDate('');
+                        setEnquiryEndDate('');
+                      }}
+                      className="text-xs font-bold text-[#C8860A] hover:underline"
+                    >
+                      Clear search & filters
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {filteredEnquiries.map((b) => (
+                <div
+                  key={b.id}
+                  className={`bg-white rounded-xl border p-5 transition-all ${
+                    selectedEnquiryIds.includes(b.id) ? 'border-amber-400 ring-2 ring-amber-200/60' : 'border-gray-200'
+                  }`}
+                >
                   <div className="flex items-start justify-between gap-4 flex-wrap">
                     <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedEnquiryIds.includes(b.id)}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          setSelectedEnquiryIds(prev =>
+                            e.target.checked ? [...prev, b.id] : prev.filter(x => x !== b.id)
+                          );
+                        }}
+                        className="w-4 h-4 rounded text-[#C8860A] focus:ring-[#C8860A] border-gray-300 cursor-pointer flex-shrink-0"
+                      />
                       <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(200,134,10,0.1)' }}>
                         <span className="text-base font-bold" style={{ color: '#C8860A' }}>{b.name.charAt(0)}</span>
                       </div>
@@ -4715,6 +5281,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       </div>
                     ))}
                   </div>
+
                   {/* Package Selection Banner */}
                   <div className="mt-3">
                     {b.package && b.package !== 'Not Selected' ? (
@@ -4793,6 +5360,30 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       <Icon name="EyeIcon" size={14} />
                       Full Details
                     </button>
+
+                    {/* Delete Enquiry Button */}
+                    <button
+                      type="button"
+                      onClick={() => setDeleteConfirmModal({
+                        isOpen: true,
+                        type: 'single',
+                        category: 'enquiry',
+                        targetIds: [b.id],
+                        title: `Delete Enquiry from ${b.name}`,
+                        description: `Are you sure you want to permanently delete the enquiry from "${b.name}"? This action will permanently remove it across the entire platform, including calendar reservations, customer profiles, and bookings.`,
+                        itemsPreview: [{
+                          id: b.id,
+                          name: b.name,
+                          date: b.date || b.enquiryDate,
+                          eventType: b.eventType
+                        }]
+                      })}
+                      className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-colors bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 cursor-pointer shadow-2xs ml-auto sm:ml-0"
+                      title="Delete Enquiry"
+                    >
+                      <Icon name="TrashIcon" size={14} className="text-red-500" />
+                      Delete
+                    </button>
                   </div>
                 </div>
               ))}
@@ -4827,29 +5418,216 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 </div>
               )}
 
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-3 py-1.5 flex-wrap">
-                  <Icon name="FunnelIcon" size={14} className="text-gray-400" />
-                  <span className="text-xs text-gray-500 font-medium">Status:</span>
-                  {['all', 'new_enquiry', ...STATUS_FLOW.filter(s => s !== 'new_enquiry' && s !== 'completed')].map((s) => (
-                    <button key={s} onClick={() => setFilterStatus(s)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-medium capitalize transition-colors ${filterStatus === s ? 'text-white' : 'text-gray-500 hover:bg-gray-100'}`}
-                      style={filterStatus === s ? { background: 'linear-gradient(135deg, #C8860A, #F0A830)' } : {}}>
-                      {s === 'all' ? 'All Active' : STATUS_LABELS[s as BookingStatus]}
-                    </button>
-                  ))}
+              {/* Enhanced Filter Bar */}
+              <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm space-y-3">
+                <div className="flex flex-col md:flex-row items-center justify-between gap-3">
+                  <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1.5 flex-wrap w-full md:w-auto">
+                    <Icon name="FunnelIcon" size={14} className="text-gray-400" />
+                    <span className="text-xs text-gray-500 font-medium">Status:</span>
+                    {['all', 'new_enquiry', ...STATUS_FLOW.filter(s => s !== 'new_enquiry' && s !== 'completed')].map((s) => (
+                      <button key={s} onClick={() => setFilterStatus(s)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium capitalize transition-colors cursor-pointer ${filterStatus === s ? 'text-white' : 'text-gray-500 hover:bg-gray-200'}`}
+                        style={filterStatus === s ? { background: 'linear-gradient(135deg, #C8860A, #F0A830)' } : {}}>
+                        {s === 'all' ? 'All Active' : STATUS_LABELS[s as BookingStatus]}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="w-full md:w-72">
+                    <input
+                      type="text"
+                      placeholder="Search booking customer, phone, ID, venue..."
+                      value={bookingSearch}
+                      onChange={(e) => setBookingSearch(e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-gray-50"
+                    />
+                  </div>
                 </div>
-                <select value={filterEvent} onChange={(e) => setFilterEvent(e.target.value)} className="bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-600 focus:outline-none">
-                  <option value="all">All Event Types</option>
-                  {eventTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
+
+                {/* Second row: Event Type, Month, Date Range, Clear */}
+                <div className="pt-2 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Event Type selector */}
+                    <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1.5">
+                      <span className="text-gray-500 font-semibold">🎉 Event:</span>
+                      <select
+                        value={filterEvent}
+                        onChange={(e) => setFilterEvent(e.target.value)}
+                        className="bg-transparent font-bold text-gray-800 focus:outline-none cursor-pointer"
+                      >
+                        <option value="all">All Event Types</option>
+                        {eventTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+
+                    {/* Month selector */}
+                    <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1.5">
+                      <span className="text-gray-500 font-semibold">📅 Month:</span>
+                      <select
+                        value={bookingMonthFilter}
+                        onChange={(e) => setBookingMonthFilter(e.target.value)}
+                        className="bg-transparent font-bold text-gray-800 focus:outline-none cursor-pointer"
+                      >
+                        <option value="all">All Months</option>
+                        {availableMonths.map((m) => (
+                          <option key={m} value={m}>{formatMonthLabel(m)}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Date Range */}
+                    <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1.5">
+                      <span className="text-gray-500 font-semibold">From:</span>
+                      <input
+                        type="date"
+                        value={bookingStartDate}
+                        onChange={(e) => setBookingStartDate(e.target.value)}
+                        className="bg-transparent text-gray-800 font-medium focus:outline-none cursor-pointer"
+                      />
+                      <span className="text-gray-400">to</span>
+                      <input
+                        type="date"
+                        value={bookingEndDate}
+                        onChange={(e) => setBookingEndDate(e.target.value)}
+                        className="bg-transparent text-gray-800 font-medium focus:outline-none cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Quick Presets */}
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const now = new Date();
+                          const currentM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                          setBookingMonthFilter(currentM);
+                          setBookingStartDate('');
+                          setBookingEndDate('');
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors"
+                      >
+                        This Month
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const now = new Date();
+                          const nextM = `${now.getFullYear()}-${String(now.getMonth() + 2).padStart(2, '0')}`;
+                          setBookingMonthFilter(nextM);
+                          setBookingStartDate('');
+                          setBookingEndDate('');
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors"
+                      >
+                        Next Month
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const today = new Date().toISOString().split('T')[0];
+                          setBookingStartDate(today);
+                          setBookingEndDate('');
+                          setBookingMonthFilter('all');
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors"
+                      >
+                        Upcoming
+                      </button>
+                    </div>
+                  </div>
+
+                  {(filterStatus !== 'all' || filterEvent !== 'all' || bookingSearch || bookingMonthFilter !== 'all' || bookingStartDate || bookingEndDate) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilterStatus('all');
+                        setFilterEvent('all');
+                        setBookingSearch('');
+                        setBookingMonthFilter('all');
+                        setBookingStartDate('');
+                        setBookingEndDate('');
+                      }}
+                      className="text-red-600 hover:text-red-700 font-bold px-2.5 py-1 rounded-lg hover:bg-red-50 transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <Icon name="XMarkIcon" size={13} />
+                      Reset Filters
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {/* Master Select All & Bulk Actions Bar for Bookings */}
+              {selectedBookingIds.length > 0 && (
+                <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-3 px-4 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-[#C8860A] text-white">
+                      {selectedBookingIds.length} Bookings Selected
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedBookingIds([])}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-xl border border-gray-300 text-gray-700 hover:bg-white transition-colors cursor-pointer"
+                    >
+                      Clear Selection
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const previewItems = selectedBookingIds.map(id => {
+                          const b = bookings.find(x => x.id === id);
+                          return {
+                            id,
+                            name: b?.name || 'Customer',
+                            date: b?.date,
+                            amount: b ? getTotalAmount(b) : undefined,
+                            eventType: b?.eventType
+                          };
+                        });
+                        setDeleteConfirmModal({
+                          isOpen: true,
+                          type: 'bulk',
+                          category: 'booking',
+                          targetIds: selectedBookingIds,
+                          title: `Delete ${selectedBookingIds.length} Bookings`,
+                          description: `Are you sure you want to permanently delete these ${selectedBookingIds.length} bookings? This action cannot be undone and will permanently remove them from the database, calendar, customer records, and payment history.`,
+                          itemsPreview: previewItems
+                        });
+                      }}
+                      className="text-xs font-bold px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                    >
+                      <Icon name="TrashIcon" size={14} />
+                      Delete Selected ({selectedBookingIds.length})
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm min-w-[750px]">
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
+                        <th className="px-3 py-3 w-8">
+                          <input
+                            type="checkbox"
+                            checked={filtered.filter(b => (filterStatus === 'all' ? b.status !== 'completed' : b.status === filterStatus)).length > 0 && filtered.filter(b => (filterStatus === 'all' ? b.status !== 'completed' : b.status === filterStatus)).every(b => selectedBookingIds.includes(b.id))}
+                            onChange={(e) => {
+                              const visibleBookings = filtered.filter(b => (filterStatus === 'all' ? b.status !== 'completed' : b.status === filterStatus));
+                              if (e.target.checked) {
+                                const allIds = visibleBookings.map(b => b.id);
+                                setSelectedBookingIds(prev => Array.from(new Set([...prev, ...allIds])));
+                              } else {
+                                const visibleSet = new Set(visibleBookings.map(b => b.id));
+                                setSelectedBookingIds(prev => prev.filter(id => !visibleSet.has(id)));
+                              }
+                            }}
+                            className="w-4 h-4 rounded text-[#C8860A] focus:ring-[#C8860A] border-gray-300 cursor-pointer"
+                            title="Select All"
+                          />
+                        </th>
                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Customer</th>
                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Event</th>
                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Date</th>
@@ -4857,12 +5635,25 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Discount</th>
                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Status</th>
                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Contact</th>
-                        <th className="px-4 py-3"></th>
+                        <th className="px-4 py-3 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                       {filtered.filter(b => (filterStatus === 'all' ? b.status !== 'completed' : b.status === filterStatus)).map((booking) => (
-                        <tr key={booking.id} className="hover:bg-gray-50/80 transition-colors">
+                        <tr key={booking.id} className={`hover:bg-gray-50/80 transition-colors ${selectedBookingIds.includes(booking.id) ? 'bg-amber-50/40' : ''}`}>
+                          <td className="px-3 py-3.5">
+                            <input
+                              type="checkbox"
+                              checked={selectedBookingIds.includes(booking.id)}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                setSelectedBookingIds(prev =>
+                                  e.target.checked ? [...prev, booking.id] : prev.filter(x => x !== booking.id)
+                                );
+                              }}
+                              className="w-4 h-4 rounded text-[#C8860A] focus:ring-[#C8860A] border-gray-300 cursor-pointer"
+                            />
+                          </td>
                           <td className="px-4 py-3.5">
                             <div className="flex items-center gap-2.5">
                               <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(200,134,10,0.1)' }}>
@@ -4923,23 +5714,25 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               </button>
                             </div>
                           </td>
-                          <td className="px-4 py-3.5">
-                            <div className="flex items-center gap-3">
+                          <td className="px-4 py-3.5 text-right">
+                            <div className="flex items-center justify-end gap-3">
                               <button onClick={() => setSelectedBooking(booking)} className="text-xs font-semibold flex items-center gap-1 hover:underline whitespace-nowrap" style={{ color: '#C8860A' }}>
                                 Manage <Icon name="ChevronRightIcon" size={12} />
                               </button>
-                              {currentUser?.role === 'Super Admin' && (
-                                <button onClick={() => handleDeleteBooking(booking.id, booking.name)} className="text-red-400 hover:text-red-600 p-1 rounded-lg hover:bg-red-50 transition-colors" title="Delete Booking">
-                                  <Icon name="TrashIcon" size={14} />
-                                </button>
-                              )}
+                              <button
+                                onClick={() => handleDeleteBooking(booking.id, booking.name)}
+                                className="text-red-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                                title="Delete Booking"
+                              >
+                                <Icon name="TrashIcon" size={15} />
+                              </button>
                             </div>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                  {filtered.filter(b => b.status !== 'new_enquiry' && b.status !== 'completed').length === 0 && (
+                  {filtered.filter(b => (filterStatus === 'all' ? b.status !== 'completed' : b.status === filterStatus)).length === 0 && (
                     <div className="text-center py-12 text-gray-400 text-sm">
                       <Icon name="CalendarDaysIcon" size={32} className="mx-auto mb-2 text-gray-300" />
                       No bookings match your filters
@@ -14732,27 +15525,113 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
         </div>
       )}
 
-      {/* ─── DELETE CONFIRMATION MODAL ─── */}
-      {bookingToDelete && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm border border-gray-100 flex flex-col items-center text-center animate-in fade-in zoom-in duration-200">
-            <div className="w-12 h-12 rounded-full flex items-center justify-center mb-4 bg-rose-50 text-rose-500">
-              <Icon name="TrashIcon" size={24} />
+      {/* ─── UNIFIED DELETE CONFIRMATION MODAL ─── */}
+      {(deleteConfirmModal || bookingToDelete) && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-7 w-full max-w-md border border-gray-100 animate-in fade-in zoom-in-95 duration-200 space-y-4 my-8">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-rose-100 text-rose-600 flex-shrink-0 shadow-inner">
+                <Icon name="TrashIcon" size={24} />
+              </div>
+              <div>
+                <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">
+                  {deleteConfirmModal?.category === 'online_order'
+                    ? 'Online Order'
+                    : deleteConfirmModal?.category === 'enquiry'
+                    ? 'Enquiry'
+                    : 'Booking Record'}
+                </span>
+                <h3 className="text-base font-bold text-gray-900 mt-0.5">
+                  {deleteConfirmModal?.title || `Delete Booking`}
+                </h3>
+              </div>
             </div>
-            <h3 className="text-base font-bold text-gray-900 mb-1">Delete Booking</h3>
-            <p className="text-sm text-gray-500 mb-6">Are you sure you want to permanently delete the booking for <span className="font-semibold text-gray-900">{bookingToDelete.name}</span>? This action cannot be undone.</p>
-            <div className="flex gap-3 w-full">
+
+            <p className="text-xs text-gray-600 leading-relaxed">
+              {deleteConfirmModal?.description || `Are you sure you want to permanently delete the booking for "${bookingToDelete?.name}"?`}
+            </p>
+
+            {/* Cascading Notice Box */}
+            <div className="bg-rose-50/80 border border-rose-200/80 rounded-2xl p-3.5 flex items-start gap-2.5 text-xs text-rose-950">
+              <Icon name="ExclamationTriangleIcon" size={18} className="text-rose-600 flex-shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <span className="font-bold block text-rose-900 text-xs">⚠️ System-Wide Deletion</span>
+                <p className="text-[11px] text-rose-800 leading-normal">
+                  This record will be permanently deleted from the database. It will immediately disappear from:
+                </p>
+                <ul className="text-[11px] text-rose-800 list-disc list-inside space-y-0.5 font-medium pl-1">
+                  <li>Calendar schedule &amp; reserved time slots</li>
+                  <li>Customer profile &amp; metrics calculation</li>
+                  <li>Payment tracking &amp; history records</li>
+                  <li>Active bookings &amp; enquiries lists</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Items Preview */}
+            {deleteConfirmModal && deleteConfirmModal.itemsPreview && deleteConfirmModal.itemsPreview.length > 0 && (
+              <div className="bg-gray-50 border border-gray-200/80 rounded-2xl p-3 max-h-36 overflow-y-auto space-y-2 text-xs">
+                <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">
+                  {deleteConfirmModal.itemsPreview.length === 1 ? 'Target Record' : `Target Records (${deleteConfirmModal.itemsPreview.length})`}:
+                </span>
+                {deleteConfirmModal.itemsPreview.map((item, idx) => (
+                  <div key={item.id || idx} className="flex items-center justify-between gap-2 border-b border-gray-200/50 pb-1.5 last:border-b-0 last:pb-0">
+                    <div className="truncate">
+                      <span className="font-bold text-gray-900 block truncate">{item.name}</span>
+                      <span className="text-[11px] text-gray-500">
+                        {item.date ? `📅 ${item.date}` : ''} {item.eventType ? `· ${item.eventType}` : ''}
+                      </span>
+                    </div>
+                    {item.amount !== undefined && item.amount > 0 && (
+                      <span className="font-bold text-gray-900 whitespace-nowrap text-xs">
+                        £{item.amount.toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-2">
               <button
-                onClick={() => setBookingToDelete(null)}
-                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
+                type="button"
+                disabled={isDeletingRecords}
+                onClick={() => {
+                  setDeleteConfirmModal(null);
+                  setBookingToDelete(null);
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors disabled:opacity-50 cursor-pointer"
               >
                 Cancel
               </button>
               <button
-                onClick={confirmDeleteBooking}
-                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 transition-colors shadow-sm"
+                type="button"
+                disabled={isDeletingRecords}
+                onClick={async () => {
+                  if (deleteConfirmModal) {
+                    const label = deleteConfirmModal.category === 'online_order'
+                      ? 'Online Order'
+                      : deleteConfirmModal.category === 'enquiry'
+                      ? 'Enquiry'
+                      : 'Booking';
+                    await executePermanentDeletion(deleteConfirmModal.targetIds, label);
+                  } else if (bookingToDelete) {
+                    await executePermanentDeletion([bookingToDelete.id], 'Booking');
+                  }
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition-colors shadow-sm disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                Delete
+                {isDeletingRecords ? (
+                  <>
+                    <Icon name="ArrowPathIcon" size={14} className="animate-spin text-white" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Icon name="TrashIcon" size={14} />
+                    <span>Permanently Delete</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
