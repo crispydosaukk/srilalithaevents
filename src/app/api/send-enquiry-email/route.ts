@@ -297,7 +297,7 @@ export async function POST(req: NextRequest) {
                           </a>
                         </td>` : ''}
                         <td class="mobile-btn-cell" width="${whatsappLink ? '50%' : '100%'}" style="padding-left: ${whatsappLink ? '5px' : '0'};">
-                          <a href="mailto:${email}?subject=${encodeURIComponent(`SriLalitha Events: Follow-up on Your ${eventType || 'Catering'} Enquiry (#${bookingId || 'Web'})`)}&body=${encodeURIComponent(`Hi ${name || 'Customer'},\n\nThank you for reaching out to SriLalitha Events regarding your ${eventType || 'event'} on ${date || 'your requested date'}.\n\nWe would be delighted to assist you. Could you please confirm your preferred timings and estimated guest count?\n\nWarm regards,\nSriLalitha Events & Catering\nLondon, United Kingdom`)}" style="display: block; background-color: #2563EB; color: #FFFFFF; text-align: center; font-size: 12px; font-weight: 800; padding: 10px 14px; border-radius: 8px; text-decoration: none; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.25);">
+                          <a href="mailto:${email}?subject=${encodeURIComponent(`SriLalitha Events: Follow-up on Your ${eventType || 'Catering'} Enquiry (#${bookingId || 'Web'})`)}&body=${encodeURIComponent(`Hi ${name || 'Customer'},\n\nThank you for reaching out to SriLalitha Events regarding your ${eventType || 'event'} on ${date || 'your requested date'}.\n\nWe would be delighted to assist you. Could you please confirm your preferred timings and estimated guest count?\n\nWarm regards,\nSriLalitha Events & Catering`)}" style="display: block; background-color: #2563EB; color: #FFFFFF; text-align: center; font-size: 12px; font-weight: 800; padding: 10px 14px; border-radius: 8px; text-decoration: none; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.25);">
                             ✉️ Reply by Email
                           </a>
                         </td>
@@ -446,13 +446,13 @@ export async function POST(req: NextRequest) {
           <tr>
             <td style="background-color: #F8FAFC; padding: 20px; text-align: center; border-top: 1px solid #E2E8F0; font-size: 11px; color: #64748B; line-height: 1.5;">
               <div style="font-weight: 800; color: #0F172A; font-size: 12px; margin-bottom: 4px;">
-                SriLalitha Events &amp; Catering London
+                SriLalitha Events &amp; Catering
               </div>
               <div style="color: #94A3B8; margin-bottom: 6px;">
                 This automated notification was dispatched to registered administrators.
               </div>
-              <div style="color: #94A3B8;">
-                London, United Kingdom • <a href="https://vegchennaisrilalitha.events" style="color: #C8860A; text-decoration: none; font-weight: 700;">vegchennaisrilalitha.events</a>
+              <div>
+                <a href="https://vegchennaisrilalitha.events" style="color: #C8860A; text-decoration: none; font-weight: 700;">vegchennaisrilalitha.events</a>
               </div>
             </td>
           </tr>
@@ -596,7 +596,7 @@ export async function POST(req: NextRequest) {
               <!-- Sign-off -->
               <div style="border-top: 1px solid #E2E8F0; padding-top: 14px;">
                 <p style="margin: 0; font-size: 13px; font-weight: 800; color: #0F172A;">SriLalitha Events &amp; Catering Team</p>
-                <p style="margin: 2px 0 0 0; font-size: 12px; color: #64748B;">London, United Kingdom • <a href="https://vegchennaisrilalitha.events" style="color: #C8860A; text-decoration: none; font-weight: 700;">vegchennaisrilalitha.events</a></p>
+                <p style="margin: 2px 0 0 0; font-size: 12px; color: #64748B;"><a href="https://vegchennaisrilalitha.events" style="color: #C8860A; text-decoration: none; font-weight: 700;">vegchennaisrilalitha.events</a></p>
               </div>
 
             </td>

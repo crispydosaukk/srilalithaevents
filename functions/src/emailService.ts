@@ -381,7 +381,7 @@ export async function sendCustomEmailDirect(to: string, subject: string, message
         ${formattedBody}
       </div>
       <div style="border-top:1px solid #E5E7EB; padding-top:14px; margin-top:20px; font-size:12px; color:#6B7280;">
-        SriLalitha Events &amp; Catering London<br />
+        SriLalitha Events &amp; Catering<br />
         📞 +44 7700 900000 | ✉️ admin@vegchennaisrilalitha.co.uk | 🌐 vegchennaisrilalitha.events
       </div>
     </div>

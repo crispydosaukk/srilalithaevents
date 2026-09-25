@@ -319,8 +319,8 @@ export function generateAdminEnquiryHtml(data: BookingEmailData, bookingId?: str
           <!-- Footer -->
           <tr>
             <td style="background:#F8FAFC; padding:18px; text-align:center; border-top:1px solid #E2E8F0; font-size:11px; color:#94A3B8; line-height:1.5;">
-              <strong style="color:#0F172A; font-size:12px;">SriLalitha Events &amp; Catering London</strong><br />
-              London, United Kingdom • <a href="${WEBSITE_URL}" style="color:#C8860A; text-decoration:none; font-weight:700;">vegchennaisrilalitha.events</a>
+              <strong style="color:#0F172A; font-size:12px;">SriLalitha Events &amp; Catering</strong><br />
+              <a href="${WEBSITE_URL}" style="color:#C8860A; text-decoration:none; font-weight:700;">vegchennaisrilalitha.events</a>
             </td>
           </tr>
 
@@ -460,7 +460,7 @@ export function generateCustomerConfirmationHtml(data: BookingEmailData, booking
               <div style="border-top:1px solid #E2E8F0; padding-top:16px;">
                 <p style="margin:0; font-size:13px; font-weight:800; color:#0F172A;">SriLalitha Events &amp; Catering Team</p>
                 <p style="margin:2px 0 0 0; font-size:12px; color:#64748B;">
-                  London, United Kingdom • 📞 <a href="tel:${BRAND_PHONE}" style="color:#C8860A; text-decoration:none;">${BRAND_PHONE}</a> • <a href="${WEBSITE_URL}" style="color:#C8860A; text-decoration:none; font-weight:700;">vegchennaisrilalitha.events</a>
+                  📞 <a href="tel:${BRAND_PHONE}" style="color:#C8860A; text-decoration:none;">${BRAND_PHONE}</a> • <a href="${WEBSITE_URL}" style="color:#C8860A; text-decoration:none; font-weight:700;">vegchennaisrilalitha.events</a>
                 </p>
               </div>
 
@@ -470,7 +470,7 @@ export function generateCustomerConfirmationHtml(data: BookingEmailData, booking
           <!-- Footer -->
           <tr>
             <td style="background:#F8FAFC; padding:16px; text-align:center; border-top:1px solid #E2E8F0; font-size:11px; color:#94A3B8;">
-              Thank you for trusting SriLalitha Events &amp; Catering London.
+              Thank you for trusting SriLalitha Events &amp; Catering.
             </td>
           </tr>
 
@@ -663,7 +663,7 @@ export function generatePaymentInvoiceHtml(params: InvoiceEmailData, isAdminCopy
 
               <!-- Company Contact & Terms -->
               <div style="border-top:1px solid #E2E8F0; padding-top:16px; font-size:12px; color:#64748B; line-height:1.6;">
-                <strong style="color:#0F172A;">SriLalitha Events &amp; Catering London</strong><br />
+                <strong style="color:#0F172A;">SriLalitha Events &amp; Catering</strong><br />
                 📞 Phone: <a href="tel:${BRAND_PHONE}" style="color:#C8860A; text-decoration:none;">${BRAND_PHONE}</a> | ✉️ Email: <a href="mailto:${BRAND_EMAIL}" style="color:#C8860A; text-decoration:none;">${BRAND_EMAIL}</a><br />
                 🌐 Website: <a href="${WEBSITE_URL}" style="color:#C8860A; text-decoration:none; font-weight:700;">vegchennaisrilalitha.events</a>
               </div>
