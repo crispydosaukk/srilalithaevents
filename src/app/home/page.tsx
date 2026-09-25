@@ -737,6 +737,7 @@ export default function HomePage() {
         capacityStatus: isWaitlist ? 'exceeded_capacity' : 'normal',
         waitlistNote: isWaitlist ? 'Submitted for high-demand / full-capacity slot - Customer requesting schedule adjustment' : '',
         status: 'new_enquiry',
+        emailSent: false,
         createdAt: new Date().toISOString(),
       });
 

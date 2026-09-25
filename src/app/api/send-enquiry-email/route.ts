@@ -32,7 +32,51 @@ export async function POST(req: NextRequest) {
       isWaitlist,
     } = body;
 
-    // 1. Fetch dynamic email notification settings from Firestore
+    // 0. Check if this booking was already dispatched by the Firebase Cloud Function trigger
+    if (bookingId) {
+      try {
+        const orderSnap = await getDoc(doc(db, 'booking_requests', bookingId));
+        if (orderSnap.exists() && orderSnap.data()?.emailSent === true) {
+          return NextResponse.json({
+            success: true,
+            method: 'firebase_cloud_function_trigger',
+            message: 'Email already dispatched via Firebase Cloud Function trigger',
+            customerNotified: orderSnap.data()?.customerNotified ?? true,
+          });
+        }
+      } catch (checkErr) {
+        console.warn('Could not check booking_requests for existing email status:', checkErr);
+      }
+    }
+
+    // 1. Primary: Delegate to Firebase Cloud Function HTTPS endpoint (bypasses cPanel SMTP port restrictions)
+    const cloudFunctionsBaseUrl = process.env.FIREBASE_FUNCTIONS_URL || 
+      process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_URL ||
+      `https://us-central1-${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'srilalitha-a0cff'}.cloudfunctions.net`;
+
+    try {
+      const cfRes = await fetch(`${cloudFunctionsBaseUrl}/sendEnquiryEmailHttp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(8000),
+      });
+
+      if (cfRes.ok) {
+        const cfData = await cfRes.json();
+        if (cfData && cfData.success) {
+          return NextResponse.json({
+            success: true,
+            method: 'firebase_cloud_function_http',
+            ...cfData,
+          });
+        }
+      }
+    } catch (cfErr: any) {
+      console.warn('Firebase Cloud Function HTTP call timed out or unreachable, falling back to local SMTP:', cfErr?.message);
+    }
+
+    // 2. Fallback: Fetch dynamic email notification settings from Firestore for local dispatch
     let emailConfig: EmailNotificationConfig = { ...DEFAULT_EMAIL_NOTIFICATION_CONFIG };
     try {
       const snap = await getDoc(doc(db, 'site_data', 'email_settings'));
@@ -136,6 +180,9 @@ export async function POST(req: NextRequest) {
               <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
                 <tr>
                   <td align="center">
+                    <a href="https://vegchennaisrilalitha.events" target="_blank" style="text-decoration:none; display:inline-block;">
+                      <img src="https://vegchennaisrilalitha.events/assets/images/srilalitha.png" alt="SriLalitha Events &amp; Catering" width="220" style="max-width:220px; width:100%; height:auto; display:block; margin:0 auto 12px auto;" border="0" />
+                    </a>
                     <span style="display: inline-block; background: rgba(200, 134, 10, 0.2); color: #F59E0B; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; padding: 4px 14px; border-radius: 9999px; border: 1px solid rgba(245, 158, 11, 0.35); margin-bottom: 10px;">
                       ✨ NEW WEBSITE ENQUIRY
                     </span>
@@ -463,6 +510,9 @@ export async function POST(req: NextRequest) {
           <!-- Header Banner -->
           <tr>
             <td style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); padding: 30px 20px; text-align: center; border-bottom: 3px solid #C8860A;">
+              <a href="https://vegchennaisrilalitha.events" target="_blank" style="text-decoration:none; display:inline-block;">
+                <img src="https://vegchennaisrilalitha.events/assets/images/srilalitha.png" alt="SriLalitha Events &amp; Catering" width="220" style="max-width:220px; width:100%; height:auto; display:block; margin:0 auto 12px auto;" border="0" />
+              </a>
               <span style="display: inline-block; background: rgba(200, 134, 10, 0.2); color: #F59E0B; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; padding: 4px 14px; border-radius: 9999px; border: 1px solid rgba(245, 158, 11, 0.35); margin-bottom: 10px;">
                 CATERING ENQUIRY RECEIVED
               </span>

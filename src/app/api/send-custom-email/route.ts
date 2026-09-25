@@ -34,7 +34,35 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 1. Fetch SMTP settings from Firestore
+    // 1. Primary: Delegate to Firebase Cloud Function HTTPS endpoint
+    const cloudFunctionsBaseUrl = process.env.FIREBASE_FUNCTIONS_URL || 
+      process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_URL ||
+      `https://us-central1-${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'srilalitha-a0cff'}.cloudfunctions.net`;
+
+    try {
+      const cfRes = await fetch(`${cloudFunctionsBaseUrl}/sendCustomEmailHttp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(8000),
+      });
+
+      if (cfRes.ok) {
+        const cfData = await cfRes.json();
+        if (cfData && cfData.success) {
+          return NextResponse.json({
+            success: true,
+            method: 'firebase_cloud_function_http',
+            message: `Email successfully sent to ${to}!`,
+            messageId: cfData.messageId,
+          });
+        }
+      }
+    } catch (cfErr: any) {
+      console.warn('Firebase Cloud Function HTTP call failed or timed out, trying local fallback:', cfErr?.message);
+    }
+
+    // 2. Fallback: Fetch SMTP settings from Firestore for local Nodemailer
     let emailConfig: EmailNotificationConfig = { ...DEFAULT_EMAIL_NOTIFICATION_CONFIG };
     try {
       const snap = await getDoc(doc(db, 'site_data', 'email_settings'));

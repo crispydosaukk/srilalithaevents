@@ -14,7 +14,35 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Validate SMTP credentials sent from the Admin Dashboard form
+    // 1. Primary: Delegate to Firebase Cloud Function HTTPS endpoint
+    const cloudFunctionsBaseUrl = process.env.FIREBASE_FUNCTIONS_URL || 
+      process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_URL ||
+      `https://us-central1-${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'srilalitha-a0cff'}.cloudfunctions.net`;
+
+    try {
+      const cfRes = await fetch(`${cloudFunctionsBaseUrl}/sendTestEmailHttp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(8000),
+      });
+
+      if (cfRes.ok) {
+        const cfData = await cfRes.json();
+        if (cfData && cfData.success) {
+          return NextResponse.json({
+            success: true,
+            method: 'firebase_cloud_function_http',
+            message: cfData.message || `Test email successfully sent to ${testRecipient}!`,
+            messageId: cfData.messageId,
+          });
+        }
+      }
+    } catch (cfErr: any) {
+      console.warn('Firebase Cloud Function test email failed or timed out, trying local fallback:', cfErr?.message);
+    }
+
+    // 2. Fallback: Validate SMTP credentials sent from the Admin Dashboard form for local Nodemailer
     if (!smtp || !smtp.user || !smtp.pass) {
       return NextResponse.json(
         { success: false, error: 'SMTP credentials are required. Please fill in the SMTP Username and Password fields in Admin Dashboard → Email Settings.' },

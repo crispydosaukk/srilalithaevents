@@ -925,6 +925,7 @@ export default function InteractiveMenuOrderModal({
           amountToPay,
           status: isDirectSubmit ? 'new_enquiry' : 'deposit_pending',
           isOnlineOrder: true,
+          emailSent: false,
           notes,
           extraCharges: upgradesSummaryList,
           createdAt: new Date().toISOString(),

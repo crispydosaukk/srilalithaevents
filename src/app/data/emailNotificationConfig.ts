@@ -60,14 +60,36 @@ export function sanitizeEmailNotificationConfig(data: any): EmailNotificationCon
     : [...DEFAULT_EMAIL_NOTIFICATION_CONFIG.recipients];
 
   const smtpData = data.smtp || {};
+  let rawUser = String(smtpData.user || process.env.SMTP_USER || DEFAULT_EMAIL_NOTIFICATION_CONFIG.smtp.user).trim();
+  let cleanPass = String(smtpData.pass || process.env.SMTP_PASS || DEFAULT_EMAIL_NOTIFICATION_CONFIG.smtp.pass).replace(/\s+/g, '');
+  let host = String(smtpData.host || process.env.SMTP_HOST || DEFAULT_EMAIL_NOTIFICATION_CONFIG.smtp.host).trim();
+
+  const isInvalidGmailUser = host === 'smtp.gmail.com' && !rawUser.toLowerCase().includes('@gmail.com');
+  const isLegacyDomainUser = rawUser.includes('vegchennaisrilalitha.events');
+  const isLegacyHost = !host || host.includes('vegchennaisrilalitha.events');
+
+  if (isInvalidGmailUser || isLegacyDomainUser || isLegacyHost) {
+    rawUser = DEFAULT_EMAIL_NOTIFICATION_CONFIG.smtp.user;
+    cleanPass = DEFAULT_EMAIL_NOTIFICATION_CONFIG.smtp.pass;
+    host = 'smtp.gmail.com';
+  }
+
+  if (rawUser.toLowerCase() === 'zingbiteuk@gmail.com' && (!cleanPass || cleanPass.length !== 16 || cleanPass === 'Rahul@798#')) {
+    cleanPass = 'yyozpzropaysxtah';
+  }
+
+  const isGmail = rawUser.toLowerCase().includes('@gmail.com');
+  const port = isGmail ? 587 : (Number(smtpData.port || process.env.SMTP_PORT) || DEFAULT_EMAIL_NOTIFICATION_CONFIG.smtp.port);
+  const secure = port === 465;
+
   const smtp: SmtpConfig = {
-    host: String(smtpData.host || process.env.SMTP_HOST || DEFAULT_EMAIL_NOTIFICATION_CONFIG.smtp.host),
-    port: Number(smtpData.port || process.env.SMTP_PORT) || DEFAULT_EMAIL_NOTIFICATION_CONFIG.smtp.port,
-    secure: smtpData.secure !== undefined ? Boolean(smtpData.secure) : DEFAULT_EMAIL_NOTIFICATION_CONFIG.smtp.secure,
-    user: String(smtpData.user || process.env.SMTP_USER || DEFAULT_EMAIL_NOTIFICATION_CONFIG.smtp.user),
-    pass: String(smtpData.pass || process.env.SMTP_PASS || DEFAULT_EMAIL_NOTIFICATION_CONFIG.smtp.pass),
-    fromName: String(smtpData.fromName || DEFAULT_EMAIL_NOTIFICATION_CONFIG.smtp.fromName),
-    fromEmail: String(smtpData.fromEmail || DEFAULT_EMAIL_NOTIFICATION_CONFIG.smtp.fromEmail),
+    host,
+    port,
+    secure,
+    user: rawUser,
+    pass: cleanPass,
+    fromName: String(smtpData.fromName || DEFAULT_EMAIL_NOTIFICATION_CONFIG.smtp.fromName).trim(),
+    fromEmail: isGmail ? rawUser : String(smtpData.fromEmail || rawUser || DEFAULT_EMAIL_NOTIFICATION_CONFIG.smtp.fromEmail).trim(),
   };
 
   return {

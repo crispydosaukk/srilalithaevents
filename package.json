@@ -49,7 +49,9 @@
     "lint:fix": "next lint --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,md,json}\"",
     "serve": "next start",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "build:functions": "npm --prefix functions run build",
+    "deploy:functions": "firebase deploy --only functions --force"
   },
   "dependencies": {
     "@dhiwise/component-tagger": "^1.0.14",

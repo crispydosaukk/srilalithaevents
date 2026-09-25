@@ -62,85 +62,111 @@ async function sendPaymentConfirmationEmail(params: {
     const isDeposit = params.paymentType === 'deposit';
     const remainingBalance = Math.max(0, params.totalAmount - params.amountPaid);
 
+    const ref = params.orderId.slice(-8).toUpperCase();
+    const invoiceNumber = `INV-SL-${ref}`;
+    const todayStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
     const htmlContent = `<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Payment Confirmation – SriLalitha Events & Catering</title>
+  <title>Tax Invoice &amp; Payment Receipt #${invoiceNumber}</title>
 </head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #F8F9FA; margin: 0; padding: 24px; color: #1F2937;">
-  <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.06); border: 1px solid #E5E7EB;">
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0B1320; margin: 0; padding: 24px 8px; color: #1F2937;">
+  <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 18px; overflow: hidden; box-shadow: 0 10px 35px rgba(0,0,0,0.35); border: 1px solid #1E293B;">
 
-    <!-- Header -->
-    <div style="background: linear-gradient(135deg, #111827 0%, #1F2937 100%); padding: 28px 24px; text-align: center; border-bottom: 3px solid #C8860A;">
-      <h1 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 0.5px;">SriLalitha Events &amp; Catering</h1>
-      <p style="color: #F59E0B; font-size: 12px; font-weight: 600; margin: 4px 0 0 0; text-transform: uppercase; letter-spacing: 1px;">London's Premier Pure Vegetarian Catering</p>
-      <div style="margin-top: 10px; display: inline-block; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 9999px; padding: 3px 12px; font-size: 11px; color: #D1D5DB; font-family: monospace;">
-        Booking Reference: #${params.orderId.slice(-8).toUpperCase()}
+    <!-- Header with Brand Logo -->
+    <div style="background: linear-gradient(135deg, #0B1320 0%, #172554 100%); padding: 28px 20px 22px 20px; text-align: center; border-bottom: 3px solid #C8860A;">
+      <a href="https://vegchennaisrilalitha.events" target="_blank" style="text-decoration: none; display: inline-block;">
+        <img src="https://vegchennaisrilalitha.events/assets/images/srilalitha.png" alt="SriLalitha Events &amp; Catering" width="220" style="max-width: 220px; width: 100%; height: auto; display: block; margin: 0 auto 12px auto;" border="0" />
+      </a>
+      <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 800; letter-spacing: 0.5px;">TAX INVOICE &amp; PAYMENT RECEIPT</h1>
+      <div style="margin-top: 8px;">
+        <span style="display: inline-block; background: #1E293B; border: 1px solid #334155; border-radius: 6px; padding: 3px 12px; font-size: 11px; color: #F59E0B; font-family: monospace; font-weight: 700;">
+          INVOICE: ${invoiceNumber}
+        </span>
       </div>
     </div>
 
-    <!-- Success Banner -->
+    <!-- Success Verified Payment Banner -->
     <div style="background: #ECFDF5; border-bottom: 2px solid #10B981; padding: 16px 24px; text-align: center;">
-      <div style="font-size: 32px; margin-bottom: 6px;">✅</div>
-      <h2 style="color: #065F46; font-size: 18px; font-weight: 800; margin: 0;">Payment Received!</h2>
-      <p style="color: #047857; font-size: 13px; margin: 4px 0 0 0;">Your ${isDeposit ? 'deposit' : 'full payment'} of <strong>£${params.amountPaid.toFixed(2)}</strong> has been successfully processed via Stripe.</p>
+      <div style="font-size: 28px; margin-bottom: 4px;">✅</div>
+      <h2 style="color: #065F46; font-size: 17px; font-weight: 800; margin: 0;">Payment Verified &amp; Confirmed</h2>
+      <p style="color: #047857; font-size: 13px; margin: 4px 0 0 0;">Your ${isDeposit ? 'deposit' : 'full payment'} of <strong>£${params.amountPaid.toFixed(2)}</strong> has been successfully processed.</p>
     </div>
 
-    <!-- Body -->
-    <div style="padding: 28px 24px; font-size: 14px; line-height: 1.7; color: #374151;">
-      <p style="font-size: 15px; font-weight: 700; color: #111827; margin: 0 0 20px 0;">Dear ${params.customerName},</p>
-      <p style="margin: 0 0 20px 0;">Thank you for booking with SriLalitha Events &amp; Catering! We're thrilled to be part of your special event. Below is a summary of your booking:</p>
+    <!-- Billing Info & Invoice Details -->
+    <div style="padding: 24px 22px; font-size: 14px; line-height: 1.6; color: #374151;">
+      
+      <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 18px;">
+        <tr>
+          <td width="50%" style="vertical-align: top; padding-right: 8px;">
+            <div style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: #64748B; margin-bottom: 3px;">BILLED TO:</div>
+            <div style="font-size: 14px; font-weight: 800; color: #0F172A;">${params.customerName}</div>
+            <div style="font-size: 12px; color: #2563EB;">${params.customerEmail}</div>
+            <div style="font-size: 12px; color: #475569; margin-top: 2px;">📍 ${params.location || 'London'}</div>
+          </td>
+          <td width="50%" style="vertical-align: top; padding-left: 8px;">
+            <div style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: #64748B; margin-bottom: 3px;">INVOICE INFO:</div>
+            <div style="font-size: 12px; color: #0F172A;"><strong>Invoice No:</strong> ${invoiceNumber}</div>
+            <div style="font-size: 12px; color: #0F172A; margin-top: 2px;"><strong>Issue Date:</strong> ${todayStr}</div>
+            <div style="font-size: 12px; color: #0F172A; margin-top: 2px;"><strong>Event Date:</strong> 📅 ${params.eventDate}${params.eventTime ? ` (${params.eventTime})` : ''}</div>
+          </td>
+        </tr>
+      </table>
 
-      <!-- Booking Summary -->
-      <div style="background: #FDFBF7; border: 1px solid #E5E7EB; border-left: 4px solid #C8860A; border-radius: 10px; padding: 20px; margin-bottom: 20px;">
-        <h3 style="color: #92400E; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 14px 0;">📋 Booking Summary</h3>
-        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-          <tr style="border-bottom: 1px solid #F3F4F6;">
-            <td style="padding: 8px 0; color: #6B7280; font-weight: 600; width: 45%;">Package</td>
-            <td style="padding: 8px 0; color: #111827; font-weight: 700;">${params.packageName}</td>
-          </tr>
-          <tr style="border-bottom: 1px solid #F3F4F6;">
-            <td style="padding: 8px 0; color: #6B7280; font-weight: 600;">Number of Guests</td>
-            <td style="padding: 8px 0; color: #111827; font-weight: 700;">${params.guests}</td>
-          </tr>
-          <tr style="border-bottom: 1px solid #F3F4F6;">
-            <td style="padding: 8px 0; color: #6B7280; font-weight: 600;">Event Date</td>
-            <td style="padding: 8px 0; color: #111827; font-weight: 700;">${params.eventDate || 'To be confirmed'}${params.eventTime ? ` at ${params.eventTime}` : ''}</td>
-          </tr>
-          <tr>
-            <td style="padding: 8px 0; color: #6B7280; font-weight: 600;">Venue</td>
-            <td style="padding: 8px 0; color: #111827; font-weight: 700;">${params.location || 'To be confirmed'}</td>
-          </tr>
-        </table>
-      </div>
+      <!-- Itemized Table -->
+      <table width="100%" border="0" cellpadding="0" cellspacing="0" style="border: 1px solid #E2E8F0; border-radius: 10px; overflow: hidden; margin-bottom: 16px;">
+        <tr style="background: #F1F5F9;">
+          <th align="left" style="padding: 10px 12px; font-size: 11px; font-weight: 800; color: #475569; text-transform: uppercase;">Description</th>
+          <th align="center" style="padding: 10px 8px; font-size: 11px; font-weight: 800; color: #475569; text-transform: uppercase;">Guests</th>
+          <th align="right" style="padding: 10px 12px; font-size: 11px; font-weight: 800; color: #475569; text-transform: uppercase;">Amount</th>
+        </tr>
+        <tr>
+          <td style="padding: 12px; font-size: 13px; color: #0F172A;">
+            <strong>${params.packageName}</strong>
+            <div style="font-size: 11px; color: #64748B; margin-top: 2px;">Pure vegetarian catering service</div>
+          </td>
+          <td align="center" style="padding: 12px 8px; font-size: 13px; color: #0F172A;">${params.guests}</td>
+          <td align="right" style="padding: 12px; font-size: 13px; font-weight: 700; color: #0F172A;">£${params.totalAmount.toFixed(2)}</td>
+        </tr>
+      </table>
 
       <!-- Payment Summary -->
-      <div style="background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 10px; padding: 20px; margin-bottom: 20px;">
-        <h3 style="color: #065F46; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 14px 0;">💳 Payment Summary</h3>
-        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-          <tr style="border-bottom: 1px solid #D1FAE5;">
-            <td style="padding: 8px 0; color: #6B7280; font-weight: 600;">Total Event Cost</td>
-            <td style="padding: 8px 0; color: #111827; font-weight: 700;">£${params.totalAmount.toFixed(2)}</td>
-          </tr>
-          <tr style="border-bottom: 1px solid #D1FAE5;">
-            <td style="padding: 8px 0; color: #065F46; font-weight: 700;">${isDeposit ? `Deposit Paid (${params.depositPercentage}%)` : 'Full Payment'}</td>
-            <td style="padding: 8px 0; color: #059669; font-weight: 800; font-size: 15px;">£${params.amountPaid.toFixed(2)} ✓</td>
-          </tr>
-          ${remainingBalance > 0 ? `
-          <tr>
-            <td style="padding: 8px 0; color: #B45309; font-weight: 600;">Remaining Balance Due</td>
-            <td style="padding: 8px 0; color: #92400E; font-weight: 700;">£${remainingBalance.toFixed(2)}</td>
-          </tr>` : ''}
-        </table>
-        ${remainingBalance > 0 ? `<p style="font-size: 11px; color: #6B7280; margin: 10px 0 0 0;">⚠️ The remaining balance of <strong>£${remainingBalance.toFixed(2)}</strong> is due 14 days before your event date. We will contact you to arrange payment.</p>` : '<p style="font-size: 12px; color: #059669; font-weight: 600; margin: 10px 0 0 0;">🎉 Your event is fully paid — no further payment required!</p>'}
+      <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 14px 16px; margin-bottom: 18px; font-size: 13px;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+          <span style="color: #64748B;">Total Event Cost:</span>
+          <strong style="color: #0F172A; font-size: 15px;">£${params.totalAmount.toFixed(2)}</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color: #059669;">
+          <span style="font-weight: 700;">${isDeposit ? `Deposit Received (${params.depositPercentage}%):` : 'Full Payment Received:'}</span>
+          <strong style="font-size: 16px; font-weight: 800;">£${params.amountPaid.toFixed(2)} ✓</strong>
+        </div>
+        ${remainingBalance > 0 ? `
+        <div style="border-top: 1px dashed #CBD5E1; padding-top: 6px; margin-top: 6px; display: flex; justify-content: space-between; color: #92400E;">
+          <span style="font-weight: 700;">Remaining Balance Due:</span>
+          <strong style="font-size: 15px; font-weight: 800;">£${remainingBalance.toFixed(2)}</strong>
+        </div>` : `
+        <div style="border-top: 1px dashed #CBD5E1; padding-top: 6px; margin-top: 6px; text-align: center; color: #059669; font-weight: 700; font-size: 12px;">
+          🎉 Fully Paid — No Further Balance Outstanding
+        </div>`}
       </div>
 
-      <p style="color: #374151; font-size: 13px;">Our team will be in touch shortly to confirm all the final details. If you have any questions, feel free to reply to this email or WhatsApp us directly.</p>
+      ${remainingBalance > 0 ? `
+      <div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 12px; color: #92400E; line-height: 1.5;">
+        ⚠️ The remaining balance of <strong>£${remainingBalance.toFixed(2)}</strong> is due 14 days before your event date. Our team will contact you to arrange final payment.
+      </div>` : ''}
+
+      <!-- WhatsApp Button -->
+      <div style="text-align: center; margin: 20px 0 14px 0;">
+        <a href="https://wa.me/447700900000?text=${encodeURIComponent(`Hi SriLalitha Events, I completed payment for Invoice ${invoiceNumber}. Looking forward to confirming my final menu!`)}" target="_blank" style="display: inline-block; background-color: #16A34A; color: #FFFFFF; font-size: 13px; font-weight: 800; padding: 11px 22px; border-radius: 8px; text-decoration: none; box-shadow: 0 2px 6px rgba(22,163,74,0.25);">
+          💬 Message Event Coordinator on WhatsApp
+        </a>
+      </div>
 
       <!-- Footer Contact -->
-      <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #E5E7EB; font-size: 13px; color: #6B7280;">
+      <div style="border-top: 1px solid #E5E7EB; padding-top: 16px; font-size: 12px; color: #6B7280; line-height: 1.6;">
         <p style="margin: 0; font-weight: 700; color: #111827;">SriLalitha Events &amp; Catering Team</p>
         <p style="margin: 2px 0;">📞 Phone / WhatsApp: <a href="tel:+447700900000" style="color: #C8860A; text-decoration: none;">+44 7700 900000</a></p>
         <p style="margin: 2px 0;">✉️ Email: <a href="mailto:admin@vegchennaisrilalitha.co.uk" style="color: #C8860A; text-decoration: none;">admin@vegchennaisrilalitha.co.uk</a></p>
@@ -150,7 +176,7 @@ async function sendPaymentConfirmationEmail(params: {
 
     <!-- Footer -->
     <div style="background: #F3F4F6; padding: 16px 24px; text-align: center; font-size: 11px; color: #9CA3AF; border-top: 1px solid #E5E7EB;">
-      <p style="margin: 0;">This is an automated payment confirmation for your booking with SriLalitha Events &amp; Catering.</p>
+      <p style="margin: 0;">This is an official payment confirmation &amp; invoice generated for your booking with SriLalitha Events &amp; Catering.</p>
     </div>
   </div>
 </body>
