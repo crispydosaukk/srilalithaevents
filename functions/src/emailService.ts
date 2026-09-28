@@ -298,7 +298,7 @@ export async function sendPaymentReceiptEmail(orderData: any, bookingId: string)
     totalAmount,
     deliveryCharge: Number(orderData.deliveryCharge || 0),
     paymentType: orderData.paymentChoice || (amountPaid < totalAmount ? 'deposit' : 'full'),
-    depositPercentage: orderData.depositPercentage || '30',
+    depositPercentage: orderData.depositPercentage || '50',
     paymentIntentId: orderData.stripePaymentIntentId || '',
   };
 

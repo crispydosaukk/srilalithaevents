@@ -211,6 +211,39 @@ export default function HomePage() {
     });
   }, []);
 
+  const DEFAULT_DIETARY_LABELS = [
+    { code: 'V',  emoji: '🌿', label: 'Vegan',           color: '#10B981' },
+    { code: 'M',  emoji: '🥛', label: 'Milk / Dairy',    color: '#3B82F6' },
+    { code: 'N',  emoji: '🥜', label: 'Nuts',            color: '#F59E0B' },
+    { code: 'OJ', emoji: '🪷', label: 'Jain / No Onion', color: '#8B5CF6' },
+    { code: 'J',  emoji: '💜', label: 'Jain',            color: '#6366F1' },
+    { code: 'O',  emoji: '🧅', label: 'Onion-Free',      color: '#A855F7' },
+    { code: 'S',  emoji: '⭐', label: 'Signature',       color: '#F43F5E' },
+  ];
+  const [dietaryLabels, setDietaryLabels] = React.useState(DEFAULT_DIETARY_LABELS);
+
+  React.useEffect(() => {
+    return onSnapshot(doc(db, 'site_data', 'dietary_labels'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (Array.isArray(data.labels) && data.labels.length > 0) {
+          setDietaryLabels(data.labels);
+        }
+      }
+    });
+  }, []);
+
+  // Blocked slots
+  const [blockedSlots, setBlockedSlots] = React.useState<string[]>([]);
+  React.useEffect(() => {
+    return onSnapshot(doc(db, 'site_data', 'blocked_slots'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setBlockedSlots(Array.isArray(data.slots) ? data.slots : []);
+      }
+    });
+  }, []);
+
   React.useEffect(() => {
     return onSnapshot(collection(db, 'blocked_dates'), (snapshot) => {
       const dates = snapshot.docs.map(doc => doc.id);
@@ -972,51 +1005,75 @@ export default function HomePage() {
 
         {/* Clean Dropdown for Time of Day matching Image 2 request */}
         {field.type === 'time_select' && (
-          <select
-            required={field.required}
-            value={bookingForm[field.id] || ''}
-            onChange={(e) => setBookingForm({ ...bookingForm, [field.id]: e.target.value })}
-            className={inputBaseClass}
-          >
-            <option value="">{field.placeholder || 'Select time'}</option>
-            {lunchSlots.length > 0 && (
-              <optgroup label="☀️ Lunch Slots">
-                {lunchSlots.map((slot) => {
-                  const { full } = getSlotOccupancy(slot);
+          <>
+            <select
+              required={field.required}
+              value={bookingForm[field.id] || ''}
+              onChange={(e) => {
+                // Prevent selecting a blocked slot
+                if (blockedSlots.includes(e.target.value)) return;
+                setBookingForm({ ...bookingForm, [field.id]: e.target.value });
+              }}
+              className={inputBaseClass}
+            >
+              <option value="">{field.placeholder || 'Select time'}</option>
+              {lunchSlots.length > 0 && (
+                <optgroup label="☀️ Lunch Slots">
+                  {lunchSlots.map((slot) => {
+                    const { full } = getSlotOccupancy(slot);
+                    const isAdminBlocked = blockedSlots.includes(slot);
+                    return (
+                      <option key={slot} value={slot} disabled={isAdminBlocked}>
+                        {isAdminBlocked
+                          ? `🚫 ${slot} — Slot Full`
+                          : `${slot}${bookingForm.date && full ? ' (High Demand)' : ''}`
+                        }
+                      </option>
+                    );
+                  })}
+                </optgroup>
+              )}
+              {dinnerSlots.length > 0 && (
+                <optgroup label="🌙 Dinner Slots">
+                  {dinnerSlots.map((slot) => {
+                    const { full } = getSlotOccupancy(slot);
+                    const isAdminBlocked = blockedSlots.includes(slot);
+                    return (
+                      <option key={slot} value={slot} disabled={isAdminBlocked}>
+                        {isAdminBlocked
+                          ? `🚫 ${slot} — Slot Full`
+                          : `${slot}${bookingForm.date && full ? ' (High Demand)' : ''}`
+                        }
+                      </option>
+                    );
+                  })}
+                </optgroup>
+              )}
+              {allowCustomTime && (
+                <optgroup label="⏱️ Customised & Full Day">
+                  <option value="Full Day Hire (10:00 AM to 11:00 PM)">Full Day Hire (10:00 AM to 11:00 PM)</option>
+                  <option value="Custom Time (Discuss with Team)">Custom Time (Discuss with Team)</option>
+                </optgroup>
+              )}
+              {lunchSlots.length === 0 && dinnerSlots.length === 0 && (
+                dynamicTimeSlots.map((slot) => {
+                  const isAdminBlocked = blockedSlots.includes(slot);
                   return (
-                    <option key={slot} value={slot}>
-                      {slot} {bookingForm.date && full ? '(High Demand)' : ''}
+                    <option key={slot} value={slot} disabled={isAdminBlocked}>
+                      {isAdminBlocked ? `🚫 ${slot} — Slot Full` : slot}
                     </option>
                   );
-                })}
-              </optgroup>
+                })
+              )}
+            </select>
+            {/* Show a notice banner if selected slot was just blocked */}
+            {bookingForm[field.id] && blockedSlots.includes(bookingForm[field.id]) && (
+              <div className="mt-2 flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-xs text-red-700 font-medium">
+                <span className="text-base">🚫</span>
+                <span>This slot is now <strong>fully booked</strong>. Please select a different time.</span>
+              </div>
             )}
-            {dinnerSlots.length > 0 && (
-              <optgroup label="🌙 Dinner Slots">
-                {dinnerSlots.map((slot) => {
-                  const { full } = getSlotOccupancy(slot);
-                  return (
-                    <option key={slot} value={slot}>
-                      {slot} {bookingForm.date && full ? '(High Demand)' : ''}
-                    </option>
-                  );
-                })}
-              </optgroup>
-            )}
-            {allowCustomTime && (
-              <optgroup label="⏱️ Customised &amp; Full Day">
-                <option value="Full Day Hire (10:00 AM to 11:00 PM)">Full Day Hire (10:00 AM to 11:00 PM)</option>
-                <option value="Custom Time (Discuss with Team)">Custom Time (Discuss with Team)</option>
-              </optgroup>
-            )}
-            {lunchSlots.length === 0 && dinnerSlots.length === 0 && (
-              dynamicTimeSlots.map((slot) => (
-                <option key={slot} value={slot}>
-                  {slot}
-                </option>
-              ))
-            )}
-          </select>
+          </>
         )}
 
         {field.type === 'package_select' && (
@@ -1399,11 +1456,8 @@ export default function HomePage() {
                 <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto justify-start md:justify-end">
                   <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mr-1 hidden sm:inline">Filter:</span>
                   {[
-                    { id: 'all', label: 'All Items' },
-                    { id: 'V', label: '🌿 Vegan' },
-                    { id: 'OJ', label: '🪷 Jain / No Onion' },
-                    { id: 'M', label: '🥛 Dairy' },
-                    { id: 'N', label: '🥜 Contains Nuts' },
+                    { id: 'all', label: 'All Items', emoji: '' },
+                    ...dietaryLabels.map(dl => ({ id: dl.code, label: dl.label, emoji: dl.emoji })),
                   ].map((f) => (
                     <button
                       key={f.id}
@@ -1414,7 +1468,7 @@ export default function HomePage() {
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                       }`}
                     >
-                      {f.label}
+                      {f.id === 'all' ? f.label : `${f.emoji} ${f.label}`}
                     </button>
                   ))}
                 </div>
@@ -1606,12 +1660,12 @@ export default function HomePage() {
                         <div className="bg-white px-4 py-2.5 rounded-xl border border-gray-200 text-[11px] text-gray-500 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
                           <span className="font-bold text-gray-700">Dietary Guide:</span>
                           <div className="flex flex-wrap items-center gap-3">
-                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> <strong>V</strong> = Vegan</span>
-                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> <strong>M</strong> = Milk / Dairy</span>
-                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500"></span> <strong>N</strong> = Nuts</span>
-                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-500"></span> <strong>O</strong> = Onion-Free</span>
-                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500"></span> <strong>J</strong> = Jain</span>
-                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500"></span> <strong>S</strong> = Signature</span>
+                            {dietaryLabels.map((dl, idx) => (
+                              <span key={idx} className="flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: dl.color }} />
+                                <strong>{dl.code}</strong> = {dl.label}
+                              </span>
+                            ))}
                           </div>
                         </div>
 

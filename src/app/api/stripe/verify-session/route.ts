@@ -350,7 +350,7 @@ export async function GET(req: NextRequest) {
             amountPaid,
             totalAmount,
             paymentType: metadata.paymentType || 'deposit',
-            depositPercentage: metadata.depositPercentage || '30',
+            depositPercentage: metadata.depositPercentage || '50',
           });
         } catch (emailDispatchErr) {
           console.error('Error in sendPaymentConfirmationEmail:', emailDispatchErr);

@@ -629,7 +629,7 @@ export function generatePaymentInvoiceHtml(params: InvoiceEmailData, isAdminCopy
                 </tr>
                 <tr>
                   <td style="padding:4px 0; color:#059669; font-weight:700;">
-                    ${isDeposit ? `Deposit Received (${params.depositPercentage || '30'}%):` : 'Full Payment Received:'}
+                    ${isDeposit ? `Deposit Received (${params.depositPercentage || '50'}%):` : 'Full Payment Received:'}
                   </td>
                   <td align="right" style="padding:4px 0; font-weight:800; color:#059669; font-size:16px;">
                     £${amountPaid.toFixed(2)} ✓

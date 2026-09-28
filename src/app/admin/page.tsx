@@ -469,7 +469,7 @@ export default function AdminPage() {
   const [formConfig, setFormConfig] = useState<BookingFormConfig>(DEFAULT_FORM_CONFIG);
   const [editableFormConfig, setEditableFormConfig] = useState<BookingFormConfig>(DEFAULT_FORM_CONFIG);
   const [isSavingFormConfig, setIsSavingFormConfig] = useState(false);
-  const [settingsSection, setSettingsSection] = useState<'form_builder' | 'venue' | 'location_delivery' | 'pricing' | 'stripe_gateway' | 'bank' | 'block_dates' | 'website_content' | 'email_notifications' | 'message_templates'>('form_builder');
+  const [settingsSection, setSettingsSection] = useState<'form_builder' | 'venue' | 'location_delivery' | 'pricing' | 'stripe_gateway' | 'bank' | 'block_dates' | 'website_content' | 'email_notifications' | 'message_templates' | 'dietary_labels'>('form_builder');
 
   // Dynamic Email Notification State (Recipients, SMTP Settings, Test Dispatch)
   const [emailConfig, setEmailConfig] = useState<EmailNotificationConfig>(DEFAULT_EMAIL_NOTIFICATION_CONFIG);
@@ -515,6 +515,35 @@ export default function AdminPage() {
   const [newOutdoorSlotInput, setNewOutdoorSlotInput] = useState('');
   const [newLunchSlotInput, setNewLunchSlotInput] = useState('');
   const [newDinnerSlotInput, setNewDinnerSlotInput] = useState('');
+  const [blockedSlots, setBlockedSlots] = useState<string[]>([]);
+  const [isSavingBlockedSlots, setIsSavingBlockedSlots] = useState(false);
+
+  // Load blocked slots from Firestore
+  useEffect(() => {
+    return onSnapshot(doc(db, 'site_data', 'blocked_slots'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setBlockedSlots(Array.isArray(data.slots) ? data.slots : []);
+      }
+    });
+  }, []);
+
+  const toggleBlockSlot = async (slotName: string) => {
+    const isBlocked = blockedSlots.includes(slotName);
+    const updated = isBlocked
+      ? blockedSlots.filter(s => s !== slotName)
+      : [...blockedSlots, slotName];
+    setBlockedSlots(updated);
+    setIsSavingBlockedSlots(true);
+    try {
+      await setDoc(doc(db, 'site_data', 'blocked_slots'), { slots: updated }, { merge: true });
+    } catch (e) {
+      console.error('Error saving blocked slots:', e);
+      setCustomAlert({ message: 'Error saving slot status.', type: 'error' });
+    } finally {
+      setIsSavingBlockedSlots(false);
+    }
+  };
   const [fieldToManageOptions, setFieldToManageOptions] = useState<FormField | null>(null);
   const [newFieldForm, setNewFieldForm] = useState<Partial<FormField>>({
     id: '',
@@ -3423,6 +3452,44 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
       setCustomAlert({ message: 'Error saving pricing details.', type: 'error' });
     } finally {
       setIsSavingPricingDetails(false);
+    }
+  };
+
+  // ── DIETARY LABELS ──────────────────────────────────────────────────────────
+  const DEFAULT_DIETARY_LABELS = [
+    { code: 'V',  emoji: '🌿', label: 'Vegan',        color: '#10B981' },
+    { code: 'M',  emoji: '🥛', label: 'Milk / Dairy', color: '#3B82F6' },
+    { code: 'N',  emoji: '🥜', label: 'Nuts',         color: '#F59E0B' },
+    { code: 'OJ', emoji: '🪷', label: 'Jain / No Onion', color: '#8B5CF6' },
+    { code: 'J',  emoji: '💜', label: 'Jain',         color: '#6366F1' },
+    { code: 'O',  emoji: '🧅', label: 'Onion-Free',   color: '#A855F7' },
+    { code: 'S',  emoji: '⭐', label: 'Signature',    color: '#F43F5E' },
+  ];
+
+  const [dietaryLabels, setDietaryLabels] = useState(DEFAULT_DIETARY_LABELS);
+  const [isSavingDietaryLabels, setIsSavingDietaryLabels] = useState(false);
+
+  useEffect(() => {
+    return onSnapshot(doc(db, 'site_data', 'dietary_labels'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (Array.isArray(data.labels) && data.labels.length > 0) {
+          setDietaryLabels(data.labels);
+        }
+      }
+    });
+  }, []);
+
+  const saveDietaryLabels = async () => {
+    setIsSavingDietaryLabels(true);
+    try {
+      await setDoc(doc(db, 'site_data', 'dietary_labels'), { labels: dietaryLabels }, { merge: true });
+      setCustomAlert({ message: 'Dietary labels saved! They are now live on the menu page.', type: 'success' });
+    } catch (error) {
+      console.error('Error saving dietary labels:', error);
+      setCustomAlert({ message: 'Error saving dietary labels.', type: 'error' });
+    } finally {
+      setIsSavingDietaryLabels(false);
     }
   };
 
@@ -11029,6 +11096,16 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     {Object.keys(editableCommConfig.templates || {}).length}
                   </span>
                 </button>
+                <button
+                  onClick={() => setSettingsSection('dietary_labels')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                    settingsSection === 'dietary_labels'
+                      ? 'bg-[#C8860A] text-white shadow-sm'
+                      : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  🥗 Dietary Labels
+                </button>
               </div>
 
               {/* ── SECTION 1: DYNAMIC FORM BUILDER ── */}
@@ -11325,33 +11402,53 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                 </span>
                               </div>
                               <div className="flex flex-wrap gap-1.5 min-h-[38px] p-1.5 bg-amber-50/40 rounded-lg border border-amber-100">
-                                {(editableFormConfig.timeSlotsConfig?.lunchSlots || DEFAULT_LUNCH_SLOTS).map((slot, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-amber-950 shadow-2xs"
-                                  >
-                                    <span>{slot}</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const current = editableFormConfig.timeSlotsConfig?.lunchSlots || DEFAULT_LUNCH_SLOTS;
-                                        const updated = current.filter((_, i) => i !== idx);
-                                        setEditableFormConfig(prev => ({
-                                          ...prev,
-                                          timeSlotsConfig: {
-                                            lunchSlots: updated,
-                                            dinnerSlots: prev.timeSlotsConfig?.dinnerSlots || DEFAULT_DINNER_SLOTS,
-                                            allowCustomTime: prev.timeSlotsConfig?.allowCustomTime ?? true,
-                                          }
-                                        }));
-                                      }}
-                                      className="text-gray-400 hover:text-rose-600 transition-colors cursor-pointer"
-                                      title="Remove lunch slot"
+                                {(editableFormConfig.timeSlotsConfig?.lunchSlots || DEFAULT_LUNCH_SLOTS).map((slot, idx) => {
+                                  const isBlocked = blockedSlots.includes(slot);
+                                  return (
+                                    <span
+                                      key={idx}
+                                      className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border shadow-2xs transition-all ${
+                                        isBlocked
+                                          ? 'bg-red-50 border-red-300 text-red-700'
+                                          : 'bg-white border-amber-300 text-amber-950'
+                                      }`}
                                     >
-                                      <Icon name="XMarkIcon" size={12} />
-                                    </button>
-                                  </span>
-                                ))}
+                                      {isBlocked && <span className="text-red-500">🚫</span>}
+                                      <span className={isBlocked ? 'line-through opacity-60' : ''}>{slot}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleBlockSlot(slot)}
+                                        className={`text-xs font-bold px-1.5 py-0.5 rounded-md transition-all ${
+                                          isBlocked
+                                            ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                                            : 'bg-red-100 text-red-600 hover:bg-red-200'
+                                        }`}
+                                        title={isBlocked ? 'Unblock this slot' : 'Block this slot (show as Full)'}
+                                      >
+                                        {isBlocked ? 'Unblock' : 'Block'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const current = editableFormConfig.timeSlotsConfig?.lunchSlots || DEFAULT_LUNCH_SLOTS;
+                                          const updated = current.filter((_, i) => i !== idx);
+                                          setEditableFormConfig(prev => ({
+                                            ...prev,
+                                            timeSlotsConfig: {
+                                              lunchSlots: updated,
+                                              dinnerSlots: prev.timeSlotsConfig?.dinnerSlots || DEFAULT_DINNER_SLOTS,
+                                              allowCustomTime: prev.timeSlotsConfig?.allowCustomTime ?? true,
+                                            }
+                                          }));
+                                        }}
+                                        className="text-gray-400 hover:text-rose-600 transition-colors cursor-pointer"
+                                        title="Remove lunch slot"
+                                      >
+                                        <Icon name="XMarkIcon" size={12} />
+                                      </button>
+                                    </span>
+                                  );
+                                })}
                               </div>
 
                               <div className="flex items-center gap-1.5 pt-1">
@@ -11414,33 +11511,53 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                 </span>
                               </div>
                               <div className="flex flex-wrap gap-1.5 min-h-[38px] p-1.5 bg-amber-50/40 rounded-lg border border-amber-100">
-                                {(editableFormConfig.timeSlotsConfig?.dinnerSlots || DEFAULT_DINNER_SLOTS).map((slot, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-amber-950 shadow-2xs"
-                                  >
-                                    <span>{slot}</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const current = editableFormConfig.timeSlotsConfig?.dinnerSlots || DEFAULT_DINNER_SLOTS;
-                                        const updated = current.filter((_, i) => i !== idx);
-                                        setEditableFormConfig(prev => ({
-                                          ...prev,
-                                          timeSlotsConfig: {
-                                            lunchSlots: prev.timeSlotsConfig?.lunchSlots || DEFAULT_LUNCH_SLOTS,
-                                            dinnerSlots: updated,
-                                            allowCustomTime: prev.timeSlotsConfig?.allowCustomTime ?? true,
-                                          }
-                                        }));
-                                      }}
-                                      className="text-gray-400 hover:text-rose-600 transition-colors cursor-pointer"
-                                      title="Remove dinner slot"
+                                {(editableFormConfig.timeSlotsConfig?.dinnerSlots || DEFAULT_DINNER_SLOTS).map((slot, idx) => {
+                                  const isBlocked = blockedSlots.includes(slot);
+                                  return (
+                                    <span
+                                      key={idx}
+                                      className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border shadow-2xs transition-all ${
+                                        isBlocked
+                                          ? 'bg-red-50 border-red-300 text-red-700'
+                                          : 'bg-white border-amber-300 text-amber-950'
+                                      }`}
                                     >
-                                      <Icon name="XMarkIcon" size={12} />
-                                    </button>
-                                  </span>
-                                ))}
+                                      {isBlocked && <span className="text-red-500">🚫</span>}
+                                      <span className={isBlocked ? 'line-through opacity-60' : ''}>{slot}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleBlockSlot(slot)}
+                                        className={`text-xs font-bold px-1.5 py-0.5 rounded-md transition-all ${
+                                          isBlocked
+                                            ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                                            : 'bg-red-100 text-red-600 hover:bg-red-200'
+                                        }`}
+                                        title={isBlocked ? 'Unblock this slot' : 'Block this slot (show as Full)'}
+                                      >
+                                        {isBlocked ? 'Unblock' : 'Block'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const current = editableFormConfig.timeSlotsConfig?.dinnerSlots || DEFAULT_DINNER_SLOTS;
+                                          const updated = current.filter((_, i) => i !== idx);
+                                          setEditableFormConfig(prev => ({
+                                            ...prev,
+                                            timeSlotsConfig: {
+                                              lunchSlots: prev.timeSlotsConfig?.lunchSlots || DEFAULT_LUNCH_SLOTS,
+                                              dinnerSlots: updated,
+                                              allowCustomTime: prev.timeSlotsConfig?.allowCustomTime ?? true,
+                                            }
+                                          }));
+                                        }}
+                                        className="text-gray-400 hover:text-rose-600 transition-colors cursor-pointer"
+                                        title="Remove dinner slot"
+                                      >
+                                        <Icon name="XMarkIcon" size={12} />
+                                      </button>
+                                    </span>
+                                  );
+                                })}
                               </div>
 
                               <div className="flex items-center gap-1.5 pt-1">
@@ -12153,6 +12270,119 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
                     >
                       {isSavingPricingDetails ? 'Saving...' : 'Save Pricing & Deposits'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ── SECTION: DIETARY LABELS ── */}
+              {settingsSection === 'dietary_labels' && (
+                <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-3xl space-y-5 shadow-sm">
+                  <div>
+                    <h3 className="font-bold text-gray-900 flex items-center gap-2 text-base">
+                      🥗 Dietary Badge Labels
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-1">Customise the code, emoji, full label name, and dot colour shown in the menu Dietary Guide legend and on item badges. Changes are reflected live on the customer menu page.</p>
+                  </div>
+                  <div className="space-y-3">
+                    {/* Header row */}
+                    <div className="grid grid-cols-[60px_60px_1fr_90px] gap-2 text-[11px] font-bold text-gray-400 uppercase tracking-wider px-1">
+                      <span>Code</span>
+                      <span>Emoji</span>
+                      <span>Label Text</span>
+                      <span>Dot Colour</span>
+                    </div>
+                    {dietaryLabels.map((dl, idx) => (
+                      <div key={idx} className="grid grid-cols-[60px_60px_1fr_90px_36px] gap-2 items-center bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
+                        {/* Code badge preview */}
+                        <div className="flex items-center gap-1">
+                          <span
+                            className="inline-flex items-center justify-center w-7 h-7 rounded-full text-white text-[10px] font-black"
+                            style={{ backgroundColor: dl.color }}
+                          >
+                            {dl.code}
+                          </span>
+                        </div>
+                        {/* Emoji */}
+                        <input
+                          type="text"
+                          value={dl.emoji}
+                          onChange={e => setDietaryLabels(prev => prev.map((x, i) => i === idx ? { ...x, emoji: e.target.value } : x))}
+                          className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none bg-white focus:ring-2 focus:ring-amber-400"
+                          placeholder="🌿"
+                          maxLength={4}
+                        />
+                        {/* Label */}
+                        <input
+                          type="text"
+                          value={dl.label}
+                          onChange={e => setDietaryLabels(prev => prev.map((x, i) => i === idx ? { ...x, label: e.target.value } : x))}
+                          className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none bg-white focus:ring-2 focus:ring-amber-400"
+                          placeholder="Label name"
+                        />
+                        {/* Color picker */}
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="color"
+                            value={dl.color}
+                            onChange={e => setDietaryLabels(prev => prev.map((x, i) => i === idx ? { ...x, color: e.target.value } : x))}
+                            className="w-8 h-8 rounded cursor-pointer border border-gray-200"
+                          />
+                          <span className="text-[10px] text-gray-400 font-mono">{dl.color}</span>
+                        </div>
+                        {/* Remove */}
+                        <button
+                          onClick={() => setDietaryLabels(prev => prev.filter((_, i) => i !== idx))}
+                          className="w-8 h-8 flex items-center justify-center rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 transition-all"
+                          title="Remove label"
+                        >
+                          <Icon name="TrashIcon" size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Preview */}
+                  <div className="bg-gray-50 rounded-xl border border-gray-200 px-4 py-3">
+                    <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2">Live Preview — Dietary Guide</p>
+                    <div className="flex flex-wrap items-center gap-3 text-[11px] text-gray-600">
+                      <span className="font-bold text-gray-700">Dietary Guide:</span>
+                      {dietaryLabels.map((dl, idx) => (
+                        <span key={idx} className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: dl.color }} />
+                          <strong>{dl.code}</strong> = {dl.label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Filter pill preview */}
+                  <div className="bg-gray-50 rounded-xl border border-gray-200 px-4 py-3">
+                    <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2">Live Preview — Filter Pills</p>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-900 text-white">All Items</span>
+                      {dietaryLabels.map((dl, idx) => (
+                        <span key={idx} className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 text-gray-700">
+                          {dl.emoji} {dl.label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 pt-2">
+                    <button
+                      onClick={saveDietaryLabels}
+                      disabled={isSavingDietaryLabels}
+                      className="flex-1 text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition-all shadow-md active:scale-95 disabled:opacity-50"
+                      style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                    >
+                      {isSavingDietaryLabels ? 'Saving...' : '💾 Save Dietary Labels'}
+                    </button>
+                    <button
+                      onClick={() => setDietaryLabels(DEFAULT_DIETARY_LABELS)}
+                      className="px-4 py-2.5 rounded-xl text-sm font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50 transition-all"
+                    >
+                      Reset Defaults
                     </button>
                   </div>
                 </div>
