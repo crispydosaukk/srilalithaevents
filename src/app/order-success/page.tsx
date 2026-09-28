@@ -34,12 +34,21 @@ function OrderSuccessContent() {
         if (res.ok && data.paid) {
           setSessionData(data);
 
-          // Fetch full order record from Firestore
-          const targetId = orderId || data.metadata?.orderId;
-          if (targetId) {
-            const snap = await getDoc(doc(db, 'booking_requests', targetId));
-            if (snap.exists()) {
-              setOrderDoc({ id: snap.id, ...snap.data() });
+          // Use the authenticated order returned directly by verify-session API
+          if (data.order) {
+            setOrderDoc(data.order);
+          } else {
+            // Safe fallback attempt - NEVER let a client read permission error break a confirmed payment
+            const targetId = orderId || data.metadata?.orderId;
+            if (targetId) {
+              try {
+                const snap = await getDoc(doc(db, 'booking_requests', targetId));
+                if (snap.exists()) {
+                  setOrderDoc({ id: snap.id, ...snap.data() });
+                }
+              } catch (clientDbErr) {
+                console.warn('Could not read booking_requests directly from browser client (requires server auth):', clientDbErr);
+              }
             }
           }
         } else {

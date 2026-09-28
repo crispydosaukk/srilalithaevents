@@ -252,6 +252,7 @@ export async function GET(req: NextRequest) {
     const isPaid = session.payment_status === 'paid';
     const metadata = session.metadata || {};
     const orderId = metadata.orderId;
+    let fullOrderData: any = null;
 
     if (isPaid && orderId) {
       // 1. Authenticate server session to satisfy Firestore update security rules
@@ -287,9 +288,10 @@ export async function GET(req: NextRequest) {
           existingOrderData = orderSnap.data();
           wasAlreadyPaid = existingOrderData?.depositPaid === true;
           await updateDoc(orderRef, updateData);
+          fullOrderData = { id: orderId, ...existingOrderData, ...updateData };
         } else {
           const customerEmail = metadata.customerEmail || session.customer_details?.email || '';
-          await setDoc(orderRef, {
+          const newOrderDoc = {
             id: orderId,
             name: metadata.customerName || 'Customer',
             email: customerEmail,
@@ -303,10 +305,33 @@ export async function GET(req: NextRequest) {
             baseAmount: totalAmount,
             ...updateData,
             createdAt: new Date().toISOString(),
-          }, { merge: true });
+          };
+          await setDoc(orderRef, newOrderDoc, { merge: true });
+          fullOrderData = newOrderDoc;
         }
       } catch (dbErr) {
         console.error('Error updating order status in Firestore:', dbErr);
+      }
+
+      // Fallback in case fullOrderData wasn't set from Firestore
+      if (!fullOrderData) {
+        fullOrderData = {
+          id: orderId,
+          name: metadata.customerName || 'Customer',
+          email: metadata.customerEmail || session.customer_details?.email || '',
+          phone: metadata.customerPhone || '',
+          packageName: metadata.packageName || 'Catering Package',
+          guests: Number(metadata.guests || 0),
+          date: metadata.eventDate || '',
+          timeOfDay: metadata.eventTime || '',
+          location: metadata.location || '',
+          totalEstimatedAmount: totalAmount,
+          baseAmount: totalAmount,
+          deposit: isDeposit ? amountPaid : totalAmount,
+          amountPaidSoFar: amountPaid,
+          depositPaid: true,
+          status: 'deposit_confirmed',
+        };
       }
 
       // 2. ALWAYS dispatch payment confirmation email (runs independently of DB update status)
@@ -341,6 +366,7 @@ export async function GET(req: NextRequest) {
       metadata,
       paymentIntent: session.payment_intent,
       paymentStatus: session.payment_status,
+      order: fullOrderData,
     });
   } catch (error: any) {
     console.error('Error verifying Stripe session:', error);

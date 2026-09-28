@@ -196,6 +196,10 @@ interface Customer {
   phone: string;
   totalBookings: number;
   totalSpent: number;
+  totalDepositPaid: number;
+  totalDiscount: number;
+  totalAmount: number;
+  totalPaid: number;
   lastEvent: string;
   status: 'active' | 'inactive';
 }
@@ -3973,9 +3977,26 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
       const key = `${nameKey}_${contactKey}`;
       if (!key) return;
 
-      const eventCost = getTotalAmount(b);
-      const isDepositPaid = b.depositPaid || b.status === 'deposit_confirmed' || b.status === 'event_scheduled' || b.status === 'event_completed' || b.status === 'final_invoice_sent' || b.status === 'final_payment_received' || b.status === 'completed';
-      const spent = isDepositPaid ? eventCost : 0;
+      const eventTotal = getTotalAmount(b) || b.totalEstimatedAmount || b.baseAmount || 0;
+      const discountVal = getDiscountAmount(b) || (b.discount?.value ? (b.discount.type === 'percentage' ? (b.baseAmount * b.discount.value) / 100 : b.discount.value) : 0);
+
+      // Check if customer paid in full directly upfront at a single time
+      const isPaidInFullDirectly = b.paymentChoice === 'full';
+      const isDepositConfirmed = b.depositPaid || ['deposit_confirmed', 'final_invoice_sent', 'final_payment_received', 'event_scheduled', 'event_completed', 'completed'].includes(b.status);
+
+      // If customer is directly paying the total amount at a time, show 0 in deposit
+      const depositPaidAmt = isPaidInFullDirectly ? 0 : (isDepositConfirmed ? (b.deposit || 0) : 0);
+
+      // Total actual paid amount collected so far
+      let paidAmt = 0;
+      if (isPaidInFullDirectly && (isDepositConfirmed || b.finalPaymentPaid)) {
+        paidAmt = b.amountPaidSoFar || eventTotal;
+      } else if (b.finalPaymentPaid) {
+        paidAmt = eventTotal;
+      } else if (isDepositConfirmed) {
+        paidAmt = b.amountPaidSoFar || b.deposit || 0;
+      }
+
       const isActive = b.status !== 'completed';
 
       if (!customerMap[key]) {
@@ -3985,14 +4006,22 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
           email: b.email || 'N/A',
           phone: b.phone || 'N/A',
           totalBookings: 1,
-          totalSpent: spent,
+          totalSpent: paidAmt,
+          totalDepositPaid: depositPaidAmt,
+          totalDiscount: discountVal,
+          totalAmount: eventTotal,
+          totalPaid: paidAmt,
           lastEvent: b.date || 'N/A',
           status: isActive ? 'active' : 'inactive'
         };
       } else {
         const existing = customerMap[key];
         existing.totalBookings += 1;
-        existing.totalSpent += spent;
+        existing.totalSpent += paidAmt;
+        existing.totalDepositPaid += depositPaidAmt;
+        existing.totalDiscount += discountVal;
+        existing.totalAmount += eventTotal;
+        existing.totalPaid += paidAmt;
 
         if (b.date && b.date > existing.lastEvent) {
           existing.lastEvent = b.date;
@@ -5681,7 +5710,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             {booking.discount ? (
                               <div className="text-sm font-semibold text-red-600">-£{getDiscountAmount(booking).toLocaleString()}</div>
                             ) : (
-                              <div className="text-sm text-gray-400">—</div>
+                              <div className="text-sm text-gray-400 font-medium">£0</div>
                             )}
                           </td>
                           <td className="px-4 py-3.5">
@@ -5860,13 +5889,16 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               </div>
               <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm min-w-[600px]">
+                  <table className="w-full text-sm min-w-[950px]">
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Customer</th>
                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Contact</th>
                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Bookings</th>
-                        <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Total Spent</th>
+                        <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Deposit Paid</th>
+                        <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Discount</th>
+                        <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Total Amount</th>
+                        <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Total Paid</th>
                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Last Event</th>
                         <th className="px-4 py-3"></th>
                       </tr>
@@ -5887,8 +5919,46 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             <div className="text-xs text-gray-400">{customer.phone}</div>
                           </td>
                           <td className="px-4 py-3.5 text-sm text-gray-700 font-medium">{customer.totalBookings}</td>
-                          <td className="px-4 py-3.5 text-sm font-semibold text-gray-900">{customer.totalSpent > 0 ? `£${customer.totalSpent.toLocaleString()}` : '—'}</td>
-                          <td className="px-4 py-3.5 text-xs text-gray-500">{customer.lastEvent}</td>
+                          <td className="px-4 py-3.5">
+                            {customer.totalDepositPaid > 0 ? (
+                              <div>
+                                <span className="text-sm font-semibold text-emerald-700">£{customer.totalDepositPaid.toLocaleString()}</span>
+                                <div className="text-[10px] text-emerald-600 font-medium">✓ Deposit paid</div>
+                              </div>
+                            ) : (
+                              <div>
+                                <span className="text-sm text-gray-400 font-medium">£0</span>
+                                {customer.totalPaid >= customer.totalAmount && customer.totalAmount > 0 && (
+                                  <div className="text-[10px] text-emerald-600 font-medium">Paid in full directly</div>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3.5">
+                            {customer.totalDiscount > 0 ? (
+                              <span className="text-sm font-semibold text-rose-600">-£{customer.totalDiscount.toLocaleString()}</span>
+                            ) : (
+                              <span className="text-sm text-gray-400 font-medium">£0</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <span className="text-sm font-bold text-gray-900">£{customer.totalAmount.toLocaleString()}</span>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            {customer.totalPaid > 0 ? (
+                              <div>
+                                <span className="text-sm font-bold text-emerald-700">£{customer.totalPaid.toLocaleString()}</span>
+                                {customer.totalPaid >= customer.totalAmount && customer.totalAmount > 0 ? (
+                                  <div className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Settled ✓</div>
+                                ) : (
+                                  <div className="text-[10px] text-amber-700 font-medium">Bal: £{Math.max(0, customer.totalAmount - customer.totalPaid).toLocaleString()}</div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-sm text-gray-400 font-medium">£0</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3.5 text-xs text-gray-500 whitespace-nowrap">{customer.lastEvent}</td>
                           <td className="px-4 py-3.5">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <a href={buildWhatsAppLink(customer.phone, `Hi ${customer.name.split(' ')[0]}, this is SriLalitha. How can we help you today?`)}
@@ -5963,8 +6033,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                       {bookings.filter(b => b.status !== 'new_enquiry').map((b) => {
-                        const total = getTotalAmount(b);
-                        const balance = total - b.deposit;
+                        const total = getTotalAmount(b) || b.totalEstimatedAmount || b.baseAmount || 0;
+                        const isPaidInFull = b.finalPaymentPaid || (b.paymentChoice === 'full' && b.depositPaid);
+                        const balance = isPaidInFull ? 0 : Math.max(0, total - (b.depositPaid ? b.deposit : 0));
                         return (
                           <tr key={b.id} className="hover:bg-gray-50/80 transition-colors">
                             <td className="px-4 py-3.5">
@@ -5980,16 +6051,25 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               {b.discount ? (
                                 <div className="text-sm font-semibold text-red-600">-£{getDiscountAmount(b).toLocaleString()}</div>
                               ) : (
-                                <div className="text-sm text-gray-400">—</div>
+                                <div className="text-sm text-gray-400 font-medium">£0</div>
                               )}
                             </td>
                             <td className="px-4 py-3.5">
-                              <div className={`text-sm font-medium ${b.depositPaid ? 'text-emerald-700' : 'text-amber-600'}`}>£{b.deposit.toLocaleString()}</div>
-                              <div className="text-xs text-gray-400">{b.depositPaid ? '✓ Paid' : 'Pending'}</div>
+                              {b.paymentChoice === 'full' ? (
+                                <div>
+                                  <div className="text-sm font-medium text-gray-600">£0</div>
+                                  <div className="text-[10px] text-emerald-600 font-semibold">Paid in full directly</div>
+                                </div>
+                              ) : (
+                                <div>
+                                  <div className={`text-sm font-medium ${b.depositPaid ? 'text-emerald-700' : 'text-amber-600'}`}>£{b.deposit.toLocaleString()}</div>
+                                  <div className="text-xs text-gray-400">{b.depositPaid ? '✓ Paid' : 'Pending'}</div>
+                                </div>
+                              )}
                             </td>
                             <td className="px-4 py-3.5">
-                              {b.finalPaymentPaid ? (
-                                <span className="text-sm text-emerald-600 font-semibold">Paid in full</span>
+                              {isPaidInFull ? (
+                                <span className="text-sm text-emerald-600 font-semibold">Paid in full ✓</span>
                               ) : (
                                 <span className="text-sm font-semibold text-amber-700">£{balance.toLocaleString()}</span>
                               )}
@@ -15490,15 +15570,27 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   Email
                 </button>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-50 rounded-xl p-3 text-center">
-                  <div className="text-2xl font-bold text-gray-900">{selectedCustomer.totalBookings}</div>
-                  <div className="text-xs text-gray-500 mt-0.5">Total Bookings</div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="bg-gray-50 rounded-xl p-3 text-center border border-gray-100">
+                  <div className="text-xl font-bold text-gray-900">{selectedCustomer.totalBookings}</div>
+                  <div className="text-[11px] text-gray-500 mt-0.5">Bookings</div>
                 </div>
-                <div className="rounded-xl p-3 text-center" style={{ background: 'rgba(200,134,10,0.08)' }}>
-                  <div className="text-2xl font-bold" style={{ color: '#C8860A' }}>{selectedCustomer.totalSpent > 0 ? `£${selectedCustomer.totalSpent.toLocaleString()}` : '—'}</div>
-                  <div className="text-xs text-gray-500 mt-0.5">Total Spent</div>
+                <div className="bg-emerald-50/50 rounded-xl p-3 text-center border border-emerald-100">
+                  <div className="text-xl font-bold text-emerald-700">£{selectedCustomer.totalDepositPaid.toLocaleString()}</div>
+                  <div className="text-[11px] text-emerald-800 mt-0.5">Deposit Paid</div>
                 </div>
+                <div className="bg-rose-50/50 rounded-xl p-3 text-center border border-rose-100">
+                  <div className="text-xl font-bold text-rose-600">{selectedCustomer.totalDiscount > 0 ? `-£${selectedCustomer.totalDiscount.toLocaleString()}` : '£0'}</div>
+                  <div className="text-[11px] text-rose-800 mt-0.5">Discount</div>
+                </div>
+                <div className="rounded-xl p-3 text-center border border-amber-200" style={{ background: 'rgba(200,134,10,0.08)' }}>
+                  <div className="text-xl font-bold" style={{ color: '#C8860A' }}>£{selectedCustomer.totalAmount.toLocaleString()}</div>
+                  <div className="text-[11px] text-gray-600 mt-0.5">Total Amount</div>
+                </div>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-3 flex items-center justify-between border border-gray-100">
+                <span className="text-xs font-semibold text-gray-600">Total Money Collected:</span>
+                <span className="text-base font-bold text-emerald-700">£{selectedCustomer.totalPaid.toLocaleString()}</span>
               </div>
               <div>
                 <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Booking History</div>
@@ -15507,17 +15599,27 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     const nameKey = (b.name || 'Unknown').trim().toLowerCase();
                     const contactKey = (b.email || b.phone || '').trim().toLowerCase();
                     return `${nameKey}_${contactKey}` === selectedCustomer.id;
-                  }).map((b) => (
-                    <div key={b.id} className="flex items-center justify-between bg-gray-50 rounded-xl p-3">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{b.eventType}</div>
-                        <div className="text-xs text-gray-400">{b.date}</div>
+                  }).map((b) => {
+                    const bTotal = getTotalAmount(b) || b.totalEstimatedAmount || b.baseAmount || 0;
+                    const bDiscount = getDiscountAmount(b) || (b.discount?.value ? (b.discount.type === 'percentage' ? (b.baseAmount * b.discount.value) / 100 : b.discount.value) : 0);
+                    const bDeposit = b.paymentChoice === 'full' ? 0 : (b.depositPaid ? (b.deposit || 0) : 0);
+                    return (
+                      <div key={b.id} className="flex flex-col sm:flex-row sm:items-center justify-between bg-gray-50 rounded-xl p-3 gap-2 border border-gray-100">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">{b.eventType}</div>
+                          <div className="text-xs text-gray-400">{b.date} • Ref: #{b.id.slice(-8).toUpperCase()}</div>
+                          <div className="flex flex-wrap items-center gap-3 text-xs mt-1">
+                            <span className="text-gray-600">Total: <strong className="text-gray-900">£{bTotal.toLocaleString()}</strong></span>
+                            <span className="text-gray-600">Deposit: <strong className={bDeposit > 0 ? "text-emerald-700" : "text-gray-500"}>£{bDeposit.toLocaleString()}</strong></span>
+                            <span className="text-gray-600">Discount: <strong className={bDiscount > 0 ? "text-rose-600" : "text-gray-500"}>{bDiscount > 0 ? `-£${bDiscount.toLocaleString()}` : '£0'}</strong></span>
+                          </div>
+                        </div>
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold self-start sm:self-center ${STATUS_COLORS[b.status]}`}>
+                          {STATUS_LABELS[b.status]}
+                        </span>
                       </div>
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_COLORS[b.status]}`}>
-                        {STATUS_LABELS[b.status]}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>
