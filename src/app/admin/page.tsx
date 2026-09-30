@@ -516,14 +516,21 @@ export default function AdminPage() {
   const [newLunchSlotInput, setNewLunchSlotInput] = useState('');
   const [newDinnerSlotInput, setNewDinnerSlotInput] = useState('');
   const [blockedSlots, setBlockedSlots] = useState<string[]>([]);
+  const [dateBlockedSlots, setDateBlockedSlots] = useState<Record<string, string[]>>({});
   const [isSavingBlockedSlots, setIsSavingBlockedSlots] = useState(false);
+  const [selectedSlotBlockDate, setSelectedSlotBlockDate] = useState<string>(() => {
+    return new Date().toISOString().split('T')[0];
+  });
+  const [blockDatesSubTab, setBlockDatesSubTab] = useState<'date_slots' | 'full_dates'>('date_slots');
+  const [customDateSlotInput, setCustomDateSlotInput] = useState<string>('');
 
-  // Load blocked slots from Firestore
+  // Load blocked slots and date-specific blocked slots from Firestore
   useEffect(() => {
     return onSnapshot(doc(db, 'site_data', 'blocked_slots'), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
         setBlockedSlots(Array.isArray(data.slots) ? data.slots : []);
+        setDateBlockedSlots(data.dateSlots && typeof data.dateSlots === 'object' ? data.dateSlots : {});
       }
     });
   }, []);
@@ -536,10 +543,71 @@ export default function AdminPage() {
     setBlockedSlots(updated);
     setIsSavingBlockedSlots(true);
     try {
-      await setDoc(doc(db, 'site_data', 'blocked_slots'), { slots: updated }, { merge: true });
+      await setDoc(doc(db, 'site_data', 'blocked_slots'), {
+        slots: updated,
+        dateSlots: dateBlockedSlots,
+      }, { merge: true });
     } catch (e) {
       console.error('Error saving blocked slots:', e);
       setCustomAlert({ message: 'Error saving slot status.', type: 'error' });
+    } finally {
+      setIsSavingBlockedSlots(false);
+    }
+  };
+
+  const toggleBlockDateSlot = async (dateStr: string, slotName: string) => {
+    if (!dateStr) {
+      setCustomAlert({ message: 'Please select a date first.', type: 'error' });
+      return;
+    }
+    const currentSlotsForDate = dateBlockedSlots[dateStr] || [];
+    const isBlocked = currentSlotsForDate.includes(slotName);
+    const updatedSlotsForDate = isBlocked
+      ? currentSlotsForDate.filter(s => s !== slotName)
+      : [...currentSlotsForDate, slotName];
+
+    const updatedDateSlots = { ...dateBlockedSlots };
+    if (updatedSlotsForDate.length > 0) {
+      updatedDateSlots[dateStr] = updatedSlotsForDate;
+    } else {
+      delete updatedDateSlots[dateStr];
+    }
+
+    setDateBlockedSlots(updatedDateSlots);
+    setIsSavingBlockedSlots(true);
+    try {
+      await setDoc(doc(db, 'site_data', 'blocked_slots'), {
+        slots: blockedSlots,
+        dateSlots: updatedDateSlots,
+      }, { merge: true });
+      setCustomAlert({
+        message: isBlocked
+          ? `Slot "${slotName}" is now UNBLOCKED for ${dateStr}.`
+          : `Slot "${slotName}" is now BLOCKED for ${dateStr}.`,
+        type: 'success',
+      });
+    } catch (e: any) {
+      console.error('Error saving date-specific blocked slot:', e);
+      setCustomAlert({ message: 'Error saving date slot status: ' + (e?.message || e), type: 'error' });
+    } finally {
+      setIsSavingBlockedSlots(false);
+    }
+  };
+
+  const clearAllBlockedSlotsForDate = async (dateStr: string) => {
+    const updatedDateSlots = { ...dateBlockedSlots };
+    delete updatedDateSlots[dateStr];
+    setDateBlockedSlots(updatedDateSlots);
+    setIsSavingBlockedSlots(true);
+    try {
+      await setDoc(doc(db, 'site_data', 'blocked_slots'), {
+        slots: blockedSlots,
+        dateSlots: updatedDateSlots,
+      }, { merge: true });
+      setCustomAlert({ message: `All blocked slots cleared for ${dateStr}.`, type: 'success' });
+    } catch (e: any) {
+      console.error(e);
+      setCustomAlert({ message: 'Error clearing date slots.', type: 'error' });
     } finally {
       setIsSavingBlockedSlots(false);
     }
@@ -6328,9 +6396,21 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               </h3>
                               <p className="text-xs text-gray-500">{activeCat.description}</p>
                             </div>
-                            <span className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-900">
-                              {activeCat.items.length} Dishes
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={saveAllMenusToDatabase}
+                                disabled={isSavingMenus}
+                                className="flex items-center gap-1.5 text-xs font-semibold px-3.5 py-1.5 rounded-xl text-white shadow-sm transition-all hover:shadow-md disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
+                                style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                              >
+                                <Icon name="CloudArrowUpIcon" size={14} />
+                                <span>{isSavingMenus ? 'Saving...' : 'Save Changes'}</span>
+                              </button>
+                              <span className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-900">
+                                {activeCat.items.length} Dishes
+                              </span>
+                            </div>
                           </div>
 
                           <div className="space-y-3">
@@ -6470,6 +6550,24 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             >
                               <Icon name="PlusIcon" size={14} />
                               Add Dish to {activeCat.title}
+                            </button>
+                          </div>
+
+                          {/* Bottom Save Action Bar for Convenience */}
+                          <div className="pt-4 border-t border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-amber-50/50 p-4 rounded-xl border border-amber-200">
+                            <div>
+                              <p className="text-xs font-bold text-amber-950">Done updating dishes?</p>
+                              <p className="text-[11px] text-amber-800/80">Click save to push all edits and newly added items live to the website immediately.</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={saveAllMenusToDatabase}
+                              disabled={isSavingMenus}
+                              className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-md hover:shadow-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-70 disabled:cursor-not-allowed flex-shrink-0"
+                              style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                            >
+                              <Icon name="CloudArrowUpIcon" size={16} />
+                              <span>{isSavingMenus ? 'Saving Menus...' : 'Save Changes to Website'}</span>
                             </button>
                           </div>
                         </div>
@@ -11051,7 +11149,12 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   }`}
                 >
                   <Icon name="NoSymbolIcon" size={16} />
-                  Block Dates
+                  <span>Block Dates &amp; Slots</span>
+                  {(blockedDates.length > 0 || Object.keys(dateBlockedSlots).length > 0) && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900 font-bold ml-1">
+                      {blockedDates.length + Object.keys(dateBlockedSlots).length}
+                    </span>
+                  )}
                 </button>
                 <button
                   onClick={() => setSettingsSection('website_content')}
@@ -11390,6 +11493,29 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               />
                               <span className="text-xs font-bold text-amber-950">Allow Custom Time Dropdowns</span>
                             </label>
+                          </div>
+
+                          {/* Quick Shortcut to Date-Specific Slot Blocking */}
+                          <div className="bg-gradient-to-r from-amber-50 to-orange-50/70 p-3.5 rounded-xl border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="flex items-center gap-2.5">
+                              <span className="text-xl">⏰</span>
+                              <div>
+                                <h4 className="text-xs font-bold text-amber-950">Block Timeslots for a Specific Date</h4>
+                                <p className="text-[11px] text-amber-800">Need to block lunch or dinner on a particular date only (without blocking it permanently for all dates)?</p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSettingsSection('block_dates');
+                                setBlockDatesSubTab('date_slots');
+                              }}
+                              className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white shadow-sm hover:shadow transition-all flex items-center justify-center gap-1.5 flex-shrink-0 cursor-pointer"
+                              style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                            >
+                              <span>Manage Date-Specific Slots</span>
+                              <span>→</span>
+                            </button>
                           </div>
 
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -12567,82 +12693,475 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 </div>
               )}
 
-              {/* ── SECTION 5: BLOCK DATES ── */}
+              {/* ── SECTION 5: BLOCK DATES & TIMESLOTS ── */}
               {settingsSection === 'block_dates' && (
-                <div className="bg-white rounded-2xl border border-gray-200 p-6 max-w-3xl space-y-5 shadow-sm">
+                <div className="bg-white rounded-2xl border border-gray-200 p-6 max-w-4xl space-y-6 shadow-sm">
+                  {/* Top Header */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
                     <div>
                       <h3 className="font-bold text-gray-900 flex items-center gap-2 text-base">
                         <Icon name="NoSymbolIcon" size={20} style={{ color: '#C8860A' }} />
-                        Block Dates &amp; Calendar Availability
+                        <span>Block Availability: Dates &amp; Timeslots</span>
                       </h3>
                       <p className="text-xs text-gray-500 mt-1">
-                        Prevent bookings on holidays, fully-booked dates, or venue maintenance days. Blocked dates cannot be chosen on the homepage or menu order forms.
+                        Control calendar openings. Block specific lunch/dinner slots on chosen dates, or close full calendar days for holidays/private hire.
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-900">
-                        {blockedDates.length} {blockedDates.length === 1 ? 'Date' : 'Dates'} Blocked
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
+                        {Object.keys(dateBlockedSlots).length} {Object.keys(dateBlockedSlots).length === 1 ? 'Date' : 'Dates'} with Slot Blocks
+                      </span>
+                      <span className="text-xs font-bold px-3 py-1 rounded-full bg-rose-100 text-rose-900 border border-rose-200">
+                        {blockedDates.length} Full Days Blocked
                       </span>
                     </div>
                   </div>
 
-                  <div className="bg-amber-50/50 border border-amber-200/70 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                    <div className="flex-1">
-                      <label className="block text-xs font-bold text-amber-950 uppercase tracking-wide mb-1">
-                        Select Date to Block
-                      </label>
-                      <input
-                        type="date"
-                        value={blockDateInput}
-                        min={new Date().toISOString().split('T')[0]}
-                        onChange={(e) => setBlockDateInput(e.target.value)}
-                        className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-white font-medium text-gray-900"
-                      />
-                    </div>
-                    <div className="sm:self-end">
-                      <button
-                        type="button"
-                        onClick={handleBlockDate}
-                        disabled={!blockDateInput}
-                        className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold text-white transition-all shadow-md active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
-                        style={{ background: 'linear-gradient(135deg, #1F2937, #111827)' }}
-                      >
-                        <Icon name="NoSymbolIcon" size={16} />
-                        <span>Block This Date</span>
-                      </button>
-                    </div>
+                  {/* Sub-tab Navigation */}
+                  <div className="flex p-1 bg-gray-100 rounded-xl max-w-md">
+                    <button
+                      type="button"
+                      onClick={() => setBlockDatesSubTab('date_slots')}
+                      className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                        blockDatesSubTab === 'date_slots'
+                          ? 'bg-white text-gray-900 shadow-xs'
+                          : 'text-gray-500 hover:text-gray-900'
+                      }`}
+                    >
+                      <span>⏰</span>
+                      <span>Date-Specific Timeslots</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBlockDatesSubTab('full_dates')}
+                      className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                        blockDatesSubTab === 'full_dates'
+                          ? 'bg-white text-gray-900 shadow-xs'
+                          : 'text-gray-500 hover:text-gray-900'
+                      }`}
+                    >
+                      <span>🚫</span>
+                      <span>Full Calendar Days</span>
+                    </button>
                   </div>
 
-                  <div>
-                    <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                      <Icon name="CalendarDaysIcon" size={14} className="text-gray-500" />
-                      Currently Blocked Dates
-                    </h4>
-                    <div className="flex flex-wrap gap-2.5">
-                      {blockedDates.map((d) => (
-                        <div
-                          key={d}
-                          className="flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold px-3 py-1.5 rounded-xl shadow-2xs hover:bg-rose-100/70 transition-colors"
-                        >
-                          <span className="font-mono">{d}</span>
+                  {/* ── SUB-TAB 1: DATE-SPECIFIC TIMESLOT BLOCKING ── */}
+                  {blockDatesSubTab === 'date_slots' && (
+                    <div className="space-y-6">
+                      {/* Step 1: Date Selector Bar */}
+                      <div className="bg-gradient-to-r from-amber-50/70 via-orange-50/40 to-amber-50/60 border border-amber-200 rounded-2xl p-4.5 space-y-3 shadow-2xs">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div>
+                            <label className="block text-xs font-extrabold text-amber-950 uppercase tracking-wide">
+                              Step 1: Choose Calendar Date to Manage Slots
+                            </label>
+                            <p className="text-[11px] text-amber-800">
+                              Timeslots blocked here will only apply to this selected date.
+                            </p>
+                          </div>
+                          {selectedSlotBlockDate && (
+                            <span className="text-xs font-bold px-3 py-1 rounded-xl bg-white border border-amber-300 text-amber-950 shadow-2xs">
+                              Managing: <strong className="text-amber-800 font-extrabold">{new Date(selectedSlotBlockDate + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</strong>
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                          <input
+                            type="date"
+                            value={selectedSlotBlockDate}
+                            min={new Date().toISOString().split('T')[0]}
+                            onChange={(e) => setSelectedSlotBlockDate(e.target.value)}
+                            className="flex-1 border border-amber-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#C8860A] shadow-2xs"
+                          />
+                          {/* Quick Date Presets */}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedSlotBlockDate(new Date().toISOString().split('T')[0])}
+                              className="px-2.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-amber-100 text-amber-950 border border-amber-200 shadow-2xs transition-colors cursor-pointer"
+                            >
+                              Today
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const d = new Date();
+                                d.setDate(d.getDate() + 1);
+                                setSelectedSlotBlockDate(d.toISOString().split('T')[0]);
+                              }}
+                              className="px-2.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-amber-100 text-amber-950 border border-amber-200 shadow-2xs transition-colors cursor-pointer"
+                            >
+                              Tomorrow
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const d = new Date();
+                                const day = d.getDay();
+                                const diff = (6 - day + 7) % 7 || 7;
+                                d.setDate(d.getDate() + diff);
+                                setSelectedSlotBlockDate(d.toISOString().split('T')[0]);
+                              }}
+                              className="px-2.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-amber-100 text-amber-950 border border-amber-200 shadow-2xs transition-colors cursor-pointer"
+                            >
+                              Upcoming Saturday
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const d = new Date();
+                                const day = d.getDay();
+                                const diff = (7 - day) % 7 || 7;
+                                d.setDate(d.getDate() + diff);
+                                setSelectedSlotBlockDate(d.toISOString().split('T')[0]);
+                              }}
+                              className="px-2.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-amber-100 text-amber-950 border border-amber-200 shadow-2xs transition-colors cursor-pointer"
+                            >
+                              Upcoming Sunday
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Status alert for selected date */}
+                        {selectedSlotBlockDate && (
+                          <div className="flex items-center justify-between flex-wrap gap-2 pt-1 border-t border-amber-200/60">
+                            <div className="text-xs text-amber-900 flex items-center gap-1.5">
+                              {blockedDates.includes(selectedSlotBlockDate) ? (
+                                <span className="text-rose-600 font-bold flex items-center gap-1">
+                                  <span>🚫</span>
+                                  <span>Notice: This entire day is marked as fully blocked in the Full Days tab.</span>
+                                </span>
+                              ) : (
+                                <span>
+                                  Blocked on this date: <strong>{(dateBlockedSlots[selectedSlotBlockDate] || []).length} slot(s)</strong>
+                                </span>
+                              )}
+                            </div>
+                            {(dateBlockedSlots[selectedSlotBlockDate] || []).length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => clearAllBlockedSlotsForDate(selectedSlotBlockDate)}
+                                disabled={isSavingBlockedSlots}
+                                className="text-xs font-bold text-rose-600 hover:text-rose-800 hover:underline cursor-pointer flex items-center gap-1"
+                              >
+                                <Icon name="TrashIcon" size={13} />
+                                <span>Clear all blocked slots on this date</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Step 2: Slot Grid for Selected Date */}
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
+                            <span>⚡</span>
+                            <span>Step 2: Click to Block / Unblock Slots for {selectedSlotBlockDate}</span>
+                          </h4>
+                          <span className="text-[11px] text-gray-500">
+                            Red = Blocked on this date · Green = Available
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* Lunch Slots */}
+                          <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-3 shadow-2xs">
+                            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                              <span className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+                                <span>☀️</span>
+                                <span>Lunch Timeslots</span>
+                              </span>
+                              <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                                {(editableFormConfig.timeSlotsConfig?.lunchSlots || DEFAULT_LUNCH_SLOTS).length} Available
+                              </span>
+                            </div>
+
+                            <div className="space-y-2">
+                              {(editableFormConfig.timeSlotsConfig?.lunchSlots || DEFAULT_LUNCH_SLOTS).map((slot) => {
+                                const isDateBlocked = (dateBlockedSlots[selectedSlotBlockDate] || []).includes(slot);
+                                const isGloballyBlocked = blockedSlots.includes(slot);
+
+                                return (
+                                  <div
+                                    key={slot}
+                                    className={`p-3 rounded-xl border flex items-center justify-between gap-3 transition-all ${
+                                      isDateBlocked
+                                        ? 'bg-rose-50/80 border-rose-200 text-rose-900'
+                                        : isGloballyBlocked
+                                        ? 'bg-amber-50/70 border-amber-200 text-amber-900'
+                                        : 'bg-emerald-50/40 border-emerald-200/70 text-gray-900'
+                                    }`}
+                                  >
+                                    <div>
+                                      <div className="font-bold text-xs flex items-center gap-1.5">
+                                        <span>{isDateBlocked ? '🚫' : isGloballyBlocked ? '⚠️' : '☀️'}</span>
+                                        <span className={isDateBlocked ? 'line-through text-rose-900' : ''}>{slot}</span>
+                                      </div>
+                                      <div className="text-[10px] mt-0.5">
+                                        {isDateBlocked ? (
+                                          <span className="font-bold text-rose-700">Blocked on {selectedSlotBlockDate}</span>
+                                        ) : isGloballyBlocked ? (
+                                          <span className="font-bold text-amber-700">Globally blocked for all dates</span>
+                                        ) : (
+                                          <span className="text-emerald-700 font-semibold">Available for booking</span>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      disabled={isSavingBlockedSlots}
+                                      onClick={() => toggleBlockDateSlot(selectedSlotBlockDate, slot)}
+                                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer flex-shrink-0 active:scale-95 ${
+                                        isDateBlocked
+                                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                          : 'bg-rose-600 hover:bg-rose-700 text-white'
+                                      }`}
+                                    >
+                                      {isDateBlocked ? 'Unblock Slot' : 'Block Slot'}
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Dinner Slots */}
+                          <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-3 shadow-2xs">
+                            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                              <span className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+                                <span>🌙</span>
+                                <span>Dinner Timeslots</span>
+                              </span>
+                              <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                                {(editableFormConfig.timeSlotsConfig?.dinnerSlots || DEFAULT_DINNER_SLOTS).length} Available
+                              </span>
+                            </div>
+
+                            <div className="space-y-2">
+                              {(editableFormConfig.timeSlotsConfig?.dinnerSlots || DEFAULT_DINNER_SLOTS).map((slot) => {
+                                const isDateBlocked = (dateBlockedSlots[selectedSlotBlockDate] || []).includes(slot);
+                                const isGloballyBlocked = blockedSlots.includes(slot);
+
+                                return (
+                                  <div
+                                    key={slot}
+                                    className={`p-3 rounded-xl border flex items-center justify-between gap-3 transition-all ${
+                                      isDateBlocked
+                                        ? 'bg-rose-50/80 border-rose-200 text-rose-900'
+                                        : isGloballyBlocked
+                                        ? 'bg-amber-50/70 border-amber-200 text-amber-900'
+                                        : 'bg-emerald-50/40 border-emerald-200/70 text-gray-900'
+                                    }`}
+                                  >
+                                    <div>
+                                      <div className="font-bold text-xs flex items-center gap-1.5">
+                                        <span>{isDateBlocked ? '🚫' : isGloballyBlocked ? '⚠️' : '🌙'}</span>
+                                        <span className={isDateBlocked ? 'line-through text-rose-900' : ''}>{slot}</span>
+                                      </div>
+                                      <div className="text-[10px] mt-0.5">
+                                        {isDateBlocked ? (
+                                          <span className="font-bold text-rose-700">Blocked on {selectedSlotBlockDate}</span>
+                                        ) : isGloballyBlocked ? (
+                                          <span className="font-bold text-amber-700">Globally blocked for all dates</span>
+                                        ) : (
+                                          <span className="text-emerald-700 font-semibold">Available for booking</span>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      disabled={isSavingBlockedSlots}
+                                      onClick={() => toggleBlockDateSlot(selectedSlotBlockDate, slot)}
+                                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer flex-shrink-0 active:scale-95 ${
+                                        isDateBlocked
+                                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                          : 'bg-rose-600 hover:bg-rose-700 text-white'
+                                      }`}
+                                    >
+                                      {isDateBlocked ? 'Unblock Slot' : 'Block Slot'}
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Custom Slot Name Blocker */}
+                        <div className="bg-gray-50/80 border border-gray-200 rounded-2xl p-3.5 flex flex-col sm:flex-row items-center gap-2.5">
+                          <div className="flex-1 w-full">
+                            <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                              Block Custom / Customised Slot on {selectedSlotBlockDate}:
+                            </label>
+                            <input
+                              type="text"
+                              value={customDateSlotInput}
+                              onChange={(e) => setCustomDateSlotInput(e.target.value)}
+                              placeholder="e.g. Full Day Hire (10:00 AM to 11:00 PM) or 3:00 PM to 5:00 PM"
+                              className="w-full border border-gray-300 rounded-xl px-3 py-1.5 text-xs bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#C8860A]"
+                            />
+                          </div>
                           <button
                             type="button"
-                            onClick={() => handleUnblockDate(d)}
-                            className="text-rose-400 hover:text-rose-700 hover:bg-rose-200/60 transition-colors p-1 rounded-full cursor-pointer"
-                            title={`Unblock ${d}`}
+                            disabled={!customDateSlotInput.trim() || isSavingBlockedSlots}
+                            onClick={() => {
+                              if (customDateSlotInput.trim()) {
+                                toggleBlockDateSlot(selectedSlotBlockDate, customDateSlotInput.trim());
+                                setCustomDateSlotInput('');
+                              }
+                            }}
+                            className="w-full sm:w-auto px-4 py-2 mt-auto rounded-xl text-xs font-bold text-white bg-gray-900 hover:bg-black transition-all shadow-xs disabled:opacity-50 cursor-pointer"
                           >
-                            <Icon name="XMarkIcon" size={14} />
+                            Block Custom Slot
                           </button>
                         </div>
-                      ))}
-                      {blockedDates.length === 0 && (
-                        <div className="w-full py-6 text-center border-2 border-dashed border-gray-200 rounded-xl bg-gray-50/50">
-                          <p className="text-xs text-gray-400 font-medium">No dates currently blocked. All calendar dates are open for booking.</p>
+                      </div>
+
+                      {/* Step 3: All Dates with Blocked Timeslots Overview */}
+                      <div className="border-t border-gray-100 pt-5 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
+                            <Icon name="CalendarDaysIcon" size={14} className="text-gray-500" />
+                            <span>All Dates with Blocked Timeslots ({Object.keys(dateBlockedSlots).filter(k => (dateBlockedSlots[k] || []).length > 0).length})</span>
+                          </h4>
                         </div>
-                      )}
+
+                        {Object.keys(dateBlockedSlots).filter(k => (dateBlockedSlots[k] || []).length > 0).length === 0 ? (
+                          <div className="p-6 text-center border-2 border-dashed border-gray-200 rounded-2xl bg-gray-50/50">
+                            <span className="text-2xl mb-1 block">📅</span>
+                            <p className="text-xs font-semibold text-gray-600">No date-specific blocked timeslots.</p>
+                            <p className="text-[11px] text-gray-400 mt-0.5">Pick any date above and click &quot;Block Slot&quot; to reserve specific times.</p>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                            {Object.entries(dateBlockedSlots)
+                              .filter(([_, slots]) => slots && slots.length > 0)
+                              .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+                              .map(([dateStr, slots]) => {
+                                const isCurrentlySelected = selectedSlotBlockDate === dateStr;
+                                return (
+                                  <div
+                                    key={dateStr}
+                                    className={`p-3.5 rounded-2xl border transition-all ${
+                                      isCurrentlySelected
+                                        ? 'border-amber-400 bg-amber-50/40 shadow-xs'
+                                        : 'border-gray-200 bg-white hover:border-gray-300'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between mb-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => setSelectedSlotBlockDate(dateStr)}
+                                        className="text-xs font-bold text-gray-900 hover:text-[#C8860A] flex items-center gap-1.5 text-left cursor-pointer"
+                                      >
+                                        <Icon name="CalendarDaysIcon" size={14} className="text-[#C8860A]" />
+                                        <span>{dateStr}</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => clearAllBlockedSlotsForDate(dateStr)}
+                                        title={`Clear all blocked slots for ${dateStr}`}
+                                        className="text-gray-400 hover:text-rose-600 p-1 rounded-full hover:bg-rose-50 transition-colors cursor-pointer"
+                                      >
+                                        <Icon name="TrashIcon" size={13} />
+                                      </button>
+                                    </div>
+
+                                    <div className="flex flex-wrap gap-1">
+                                      {slots.map((s) => (
+                                        <span
+                                          key={s}
+                                          className="inline-flex items-center gap-1 bg-rose-50 border border-rose-200 text-rose-800 text-[10px] font-semibold px-2 py-0.5 rounded-lg"
+                                        >
+                                          <span>{s}</span>
+                                          <button
+                                            type="button"
+                                            onClick={() => toggleBlockDateSlot(dateStr, s)}
+                                            className="hover:text-rose-900 cursor-pointer ml-0.5 font-bold"
+                                            title="Unblock slot"
+                                          >
+                                            ×
+                                          </button>
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  )}
+
+                  {/* ── SUB-TAB 2: FULL CALENDAR DAYS BLOCKING ── */}
+                  {blockDatesSubTab === 'full_dates' && (
+                    <div className="space-y-5">
+                      <div className="bg-rose-50/60 border border-rose-200/80 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                        <div className="flex-1">
+                          <label className="block text-xs font-bold text-rose-950 uppercase tracking-wide mb-1">
+                            Select Date to Block Completely (All Day)
+                          </label>
+                          <p className="text-[11px] text-rose-800 mb-2">
+                            Customers will not be able to choose this calendar date on the booking form or interactive ordering modal.
+                          </p>
+                          <input
+                            type="date"
+                            value={blockDateInput}
+                            min={new Date().toISOString().split('T')[0]}
+                            onChange={(e) => setBlockDateInput(e.target.value)}
+                            className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 bg-white font-medium text-gray-900"
+                          />
+                        </div>
+                        <div className="sm:self-end">
+                          <button
+                            type="button"
+                            onClick={handleBlockDate}
+                            disabled={!blockDateInput}
+                            className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold text-white transition-all shadow-md active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+                            style={{ background: 'linear-gradient(135deg, #E11D48, #BE123C)' }}
+                          >
+                            <Icon name="NoSymbolIcon" size={16} />
+                            <span>Block Full Day</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                          <Icon name="CalendarDaysIcon" size={14} className="text-gray-500" />
+                          <span>Currently Blocked Full Days ({blockedDates.length})</span>
+                        </h4>
+                        <div className="flex flex-wrap gap-2.5">
+                          {blockedDates.map((d) => (
+                            <div
+                              key={d}
+                              className="flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold px-3 py-1.5 rounded-xl shadow-2xs hover:bg-rose-100/70 transition-colors"
+                            >
+                              <span className="font-mono">{d}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleUnblockDate(d)}
+                                className="text-rose-400 hover:text-rose-700 hover:bg-rose-200/60 transition-colors p-1 rounded-full cursor-pointer"
+                                title={`Unblock ${d}`}
+                              >
+                                <Icon name="XMarkIcon" size={14} />
+                              </button>
+                            </div>
+                          ))}
+                          {blockedDates.length === 0 && (
+                            <div className="w-full py-6 text-center border-2 border-dashed border-gray-200 rounded-xl bg-gray-50/50">
+                              <p className="text-xs text-gray-400 font-medium">No full dates currently blocked. All calendar dates are open for booking.</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

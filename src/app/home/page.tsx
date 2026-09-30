@@ -74,6 +74,7 @@ export default function HomePage() {
   const [selectedPackageForModal, setSelectedPackageForModal] = useState<string>('Live Dosa Option 1');
 
   const [menus, setMenus] = useState({
+    MENU_CATEGORIES: MENU_CATEGORIES,
     LIVE_DOSA_OPTION_1: LIVE_DOSA_OPTION_1,
     LIVE_DOSA_OPTION_2: LIVE_DOSA_OPTION_2,
     LIVE_DOSA_MENU: LIVE_DOSA_MENU,
@@ -169,6 +170,9 @@ export default function HomePage() {
       if (docSnap.exists()) {
         const data = docSnap.data();
         setMenus({
+          MENU_CATEGORIES: (data.MENU_CATEGORIES && Array.isArray(data.MENU_CATEGORIES) && data.MENU_CATEGORIES.length > 0)
+            ? data.MENU_CATEGORIES
+            : MENU_CATEGORIES,
           LIVE_DOSA_OPTION_1: data.LIVE_DOSA_OPTION_1 || data.LIVE_DOSA_MENU || LIVE_DOSA_OPTION_1,
           LIVE_DOSA_OPTION_2: data.LIVE_DOSA_OPTION_2 || LIVE_DOSA_OPTION_2,
           LIVE_DOSA_MENU: data.LIVE_DOSA_OPTION_1 || data.LIVE_DOSA_MENU || LIVE_DOSA_MENU,
@@ -233,16 +237,25 @@ export default function HomePage() {
     });
   }, []);
 
-  // Blocked slots
+  // Blocked slots (global and date-specific)
   const [blockedSlots, setBlockedSlots] = React.useState<string[]>([]);
+  const [dateBlockedSlots, setDateBlockedSlots] = React.useState<Record<string, string[]>>({});
   React.useEffect(() => {
     return onSnapshot(doc(db, 'site_data', 'blocked_slots'), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
         setBlockedSlots(Array.isArray(data.slots) ? data.slots : []);
+        setDateBlockedSlots(data.dateSlots && typeof data.dateSlots === 'object' ? data.dateSlots : {});
       }
     });
   }, []);
+
+  const isSlotBlocked = (slotName: string, dateStr?: string) => {
+    if (blockedSlots.includes(slotName)) return true;
+    if (dateStr && dateBlockedSlots[dateStr]?.includes(slotName)) return true;
+    return false;
+  };
+
 
   React.useEffect(() => {
     return onSnapshot(collection(db, 'blocked_dates'), (snapshot) => {
@@ -252,6 +265,12 @@ export default function HomePage() {
   }, []);
 
   const { INDIAN_MENU, SRI_LANKAN_MENU, LIVE_COUNTER_PACKAGE, BANQUET_PACKAGES, VENUE_HALL_CHARGES, TABLE_SERVICE, KIDS_PRICING, STANDARD_SETUP, TERMS_AND_CONDITIONS, DRY_HIRE_PRICES } = menus;
+
+  const activeMenuCategories = useMemo(() => {
+    return (menus.MENU_CATEGORIES && Array.isArray(menus.MENU_CATEGORIES) && menus.MENU_CATEGORIES.length > 0)
+      ? menus.MENU_CATEGORIES
+      : MENU_CATEGORIES;
+  }, [menus.MENU_CATEGORIES]);
 
   const activeLiveDosa1 = useMemo(() => {
     return (menus.LIVE_DOSA_OPTION_1 || LIVE_DOSA_OPTION_1) as any;
@@ -525,7 +544,7 @@ export default function HomePage() {
 
   const availableMenuTabs = useMemo(() => {
     const tabs: { id: MenuTab; label: string; count: string }[] = [
-      { id: 'full-menu', label: '📋 Full Menu', count: `${MENU_CATEGORIES.reduce((acc, c) => acc + c.items.length, 0)}+` }
+      { id: 'full-menu', label: '📋 Full Menu', count: `${activeMenuCategories.reduce((acc, c) => acc + (c.items?.length || 0), 0)}+` }
     ];
 
     if (activeLiveDosa1.isActive !== false && !activeLiveDosa1.isDeleted) {
@@ -580,6 +599,7 @@ export default function HomePage() {
     activeGujarati,
     activePunjabi,
     activeCustomPackages,
+    activeMenuCategories,
   ]);
 
   // If currently active tab becomes inactive or deleted, fall back to the first available tab
@@ -637,6 +657,15 @@ export default function HomePage() {
     if (bookingForm.date && blockedDates.includes(bookingForm.date)) {
       setCustomHomeAlert({
         message: "This date is unfortunately fully booked or unavailable. Please choose another date.",
+        type: 'error'
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (bookingForm.timeOfDay && isSlotBlocked(bookingForm.timeOfDay, bookingForm.date)) {
+      setCustomHomeAlert({
+        message: `The selected time slot "${bookingForm.timeOfDay}" is unavailable${bookingForm.date ? ` on ${bookingForm.date}` : ''}. Please select a different time slot.`,
         type: 'error'
       });
       setIsSubmitting(false);
@@ -1010,8 +1039,8 @@ export default function HomePage() {
               required={field.required}
               value={bookingForm[field.id] || ''}
               onChange={(e) => {
-                // Prevent selecting a blocked slot
-                if (blockedSlots.includes(e.target.value)) return;
+                // Prevent selecting a blocked slot for the chosen date
+                if (isSlotBlocked(e.target.value, bookingForm.date)) return;
                 setBookingForm({ ...bookingForm, [field.id]: e.target.value });
               }}
               className={inputBaseClass}
@@ -1021,11 +1050,11 @@ export default function HomePage() {
                 <optgroup label="☀️ Lunch Slots">
                   {lunchSlots.map((slot) => {
                     const { full } = getSlotOccupancy(slot);
-                    const isAdminBlocked = blockedSlots.includes(slot);
+                    const isAdminBlocked = isSlotBlocked(slot, bookingForm.date);
                     return (
                       <option key={slot} value={slot} disabled={isAdminBlocked}>
                         {isAdminBlocked
-                          ? `🚫 ${slot} — Slot Full`
+                          ? `🚫 ${slot} — Slot Unavailable`
                           : `${slot}${bookingForm.date && full ? ' (High Demand)' : ''}`
                         }
                       </option>
@@ -1037,11 +1066,11 @@ export default function HomePage() {
                 <optgroup label="🌙 Dinner Slots">
                   {dinnerSlots.map((slot) => {
                     const { full } = getSlotOccupancy(slot);
-                    const isAdminBlocked = blockedSlots.includes(slot);
+                    const isAdminBlocked = isSlotBlocked(slot, bookingForm.date);
                     return (
                       <option key={slot} value={slot} disabled={isAdminBlocked}>
                         {isAdminBlocked
-                          ? `🚫 ${slot} — Slot Full`
+                          ? `🚫 ${slot} — Slot Unavailable`
                           : `${slot}${bookingForm.date && full ? ' (High Demand)' : ''}`
                         }
                       </option>
@@ -1051,26 +1080,42 @@ export default function HomePage() {
               )}
               {allowCustomTime && (
                 <optgroup label="⏱️ Customised & Full Day">
-                  <option value="Full Day Hire (10:00 AM to 11:00 PM)">Full Day Hire (10:00 AM to 11:00 PM)</option>
-                  <option value="Custom Time (Discuss with Team)">Custom Time (Discuss with Team)</option>
+                  <option
+                    value="Full Day Hire (10:00 AM to 11:00 PM)"
+                    disabled={isSlotBlocked("Full Day Hire (10:00 AM to 11:00 PM)", bookingForm.date)}
+                  >
+                    {isSlotBlocked("Full Day Hire (10:00 AM to 11:00 PM)", bookingForm.date)
+                      ? "🚫 Full Day Hire (10:00 AM to 11:00 PM) — Unavailable"
+                      : "Full Day Hire (10:00 AM to 11:00 PM)"
+                    }
+                  </option>
+                  <option
+                    value="Custom Time (Discuss with Team)"
+                    disabled={isSlotBlocked("Custom Time (Discuss with Team)", bookingForm.date)}
+                  >
+                    {isSlotBlocked("Custom Time (Discuss with Team)", bookingForm.date)
+                      ? "🚫 Custom Time (Discuss with Team) — Unavailable"
+                      : "Custom Time (Discuss with Team)"
+                    }
+                  </option>
                 </optgroup>
               )}
               {lunchSlots.length === 0 && dinnerSlots.length === 0 && (
                 dynamicTimeSlots.map((slot) => {
-                  const isAdminBlocked = blockedSlots.includes(slot);
+                  const isAdminBlocked = isSlotBlocked(slot, bookingForm.date);
                   return (
                     <option key={slot} value={slot} disabled={isAdminBlocked}>
-                      {isAdminBlocked ? `🚫 ${slot} — Slot Full` : slot}
+                      {isAdminBlocked ? `🚫 ${slot} — Slot Unavailable` : slot}
                     </option>
                   );
                 })
               )}
             </select>
             {/* Show a notice banner if selected slot was just blocked */}
-            {bookingForm[field.id] && blockedSlots.includes(bookingForm[field.id]) && (
+            {bookingForm[field.id] && isSlotBlocked(bookingForm[field.id], bookingForm.date) && (
               <div className="mt-2 flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-xs text-red-700 font-medium">
                 <span className="text-base">🚫</span>
-                <span>This slot is now <strong>fully booked</strong>. Please select a different time.</span>
+                <span>The selected slot is <strong>unavailable</strong> for this date. Please choose another time.</span>
               </div>
             )}
           </>
@@ -1481,17 +1526,17 @@ export default function HomePage() {
                 <div className="lg:col-span-4 xl:col-span-3 space-y-2.5 bg-white p-3.5 sm:p-4 rounded-3xl border border-gray-200 shadow-sm sticky top-20 z-10">
                   <div className="text-xs font-bold text-gray-400 uppercase tracking-widest px-2 pb-1 border-b border-gray-100 flex items-center justify-between">
                     <span>Categories</span>
-                    <span className="text-[10px] text-[#C8860A] font-bold">{MENU_CATEGORIES.length} Menus</span>
+                    <span className="text-[10px] text-[#C8860A] font-bold">{activeMenuCategories.length} Menus</span>
                   </div>
 
                   <div className="flex lg:flex-col gap-2 overflow-x-auto lg:overflow-x-visible pb-2 lg:pb-0 scrollbar-none">
-                    {MENU_CATEGORIES.map((cat, idx) => {
+                    {activeMenuCategories.map((cat, idx) => {
                       const isSelected = selectedCategoryIndex === idx && !menuSearchQuery;
                       
                       // Count matching items for active dietary filter
                       const catMatchingCount = dietaryFilter === 'all'
-                        ? cat.items.length
-                        : cat.items.filter(item => {
+                        ? (cat.items || []).length
+                        : (cat.items || []).filter(item => {
                             if (!item.tags || item.tags.length === 0) return false;
                             if (dietaryFilter === 'V') return item.tags.includes('V');
                             if (dietaryFilter === 'M') return item.tags.includes('M');
@@ -1507,7 +1552,7 @@ export default function HomePage() {
 
                       return (
                         <button
-                          key={cat.id}
+                          key={cat.id || idx}
                           onClick={() => {
                             setSelectedCategoryIndex(idx);
                             setMenuSearchQuery('');
@@ -1554,7 +1599,14 @@ export default function HomePage() {
                 {/* ── Right Content: Selected Category or Search Results ── */}
                 <div className="lg:col-span-8 xl:col-span-9 space-y-4">
                   {(() => {
-                    const currentCategory = MENU_CATEGORIES[selectedCategoryIndex];
+                    const currentCategory = activeMenuCategories[selectedCategoryIndex] || activeMenuCategories[0] || {
+                      id: 'super-starters',
+                      title: 'Super Staters',
+                      icon: '⚡',
+                      color: '#3D2614',
+                      description: 'Crispy, crunchy, and flavor-packed starters prepared with chef secret spices',
+                      items: [],
+                    };
 
                     const matchesDiet = (tags?: string[]) => {
                       if (!tags || tags.length === 0) return false;
@@ -1571,11 +1623,11 @@ export default function HomePage() {
 
                     if (menuSearchQuery.trim()) {
                       const q = menuSearchQuery.toLowerCase().trim();
-                      MENU_CATEGORIES.forEach((cat) => {
-                        cat.items.forEach((item) => {
+                      activeMenuCategories.forEach((cat) => {
+                        (cat.items || []).forEach((item) => {
                           if (
                             item.name.toLowerCase().includes(q) ||
-                            item.description.toLowerCase().includes(q)
+                            (item.description && item.description.toLowerCase().includes(q))
                           ) {
                             itemsToDisplay.push({ item, categoryTitle: cat.title });
                           }
@@ -1585,7 +1637,7 @@ export default function HomePage() {
                         itemsToDisplay = itemsToDisplay.filter(({ item }) => matchesDiet(item.tags));
                       }
                     } else {
-                      const inCategory = currentCategory.items.map((item) => ({
+                      const inCategory = (currentCategory.items || []).map((item) => ({
                         item,
                         categoryTitle: currentCategory.title,
                       }));
@@ -1597,8 +1649,8 @@ export default function HomePage() {
                         } else {
                           // Fallback across all categories so the user NEVER sees 0 dishes!
                           isGlobalFilterFallback = true;
-                          MENU_CATEGORIES.forEach((cat) => {
-                            cat.items.forEach((item) => {
+                          activeMenuCategories.forEach((cat) => {
+                            (cat.items || []).forEach((item) => {
                               if (matchesDiet(item.tags)) {
                                 itemsToDisplay.push({ item, categoryTitle: cat.title });
                               }
