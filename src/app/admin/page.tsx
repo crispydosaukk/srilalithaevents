@@ -6416,7 +6416,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           <div className="space-y-3">
                             {activeCat.items.map((item, itemIdx) => (
                               <div
-                                key={`${item.name}-${itemIdx}`}
+                                key={itemIdx}
                                 className="p-3.5 rounded-xl border border-gray-200/80 bg-gray-50/50 hover:bg-white hover:border-amber-300 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
                               >
                                 <div className="flex-1 space-y-1.5 w-full sm:w-auto">
