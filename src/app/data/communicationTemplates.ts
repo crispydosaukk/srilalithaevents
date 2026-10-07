@@ -172,6 +172,25 @@ SriLalitha Events & Catering
 Phone / WhatsApp: {contactWhatsApp}
 Email: {contactEmail}`,
     },
+    no_show: {
+      id: 'no_show',
+      name: 'No Show Follow-up',
+      description: 'Sent to re-engage customers who missed or did not show up for their scheduled booking',
+      subject: 'SriLalitha Events: We Missed You! Regarding Your {eventType} Booking',
+      body: `Hi {customerName},
+
+We noticed that we missed connecting with you regarding your scheduled {eventType} booking on {eventDate}.
+
+We understand that unexpected plans or schedule changes can happen! If you would still like to discuss catering or reschedule your event date, our team is always ready to assist.
+
+Please feel free to reply to this email or contact us directly:
+Phone / WhatsApp: {contactWhatsApp}
+Email: {contactEmail}
+
+Warm regards,
+SriLalitha Events & Catering
+Website: https://vegchennaisrilalitha.events`,
+    },
     general_message: {
       id: 'general_message',
       name: 'General Customer Message',
@@ -182,6 +201,24 @@ Email: {contactEmail}`,
 This is SriLalitha Events & Catering regarding your booking.
 
 How can we help you today? Please feel free to let us know your questions or requirements.
+
+Warm regards,
+SriLalitha Events & Catering
+Phone / WhatsApp: {contactWhatsApp}
+Email: {contactEmail}`,
+    },
+    order_confirmation: {
+      id: 'order_confirmation',
+      name: 'Order Confirmation',
+      description: 'Sent when confirming an online takeaway or catering order',
+      subject: '✨ SriLalitha Catering: Confirmation for Order #{orderId}',
+      body: `Hi {customerName},
+
+Thank you for your order with SriLalitha Catering (Order #{orderId})!
+
+We have received your menu selection for {eventDate} ({guests} guests).
+
+Everything is scheduled in our kitchen. Please feel free to reply if you need any adjustments.
 
 Warm regards,
 SriLalitha Events & Catering
@@ -215,17 +252,26 @@ export function sanitizeCommunicationConfig(data: any): CommunicationConfig {
   const templates: Record<string, CommunicationTemplate> = {};
   const baseTemplates = DEFAULT_COMMUNICATION_CONFIG.templates;
 
-  Object.keys(baseTemplates).forEach((k) => {
-    const raw = data.templates?.[k] || {};
-    const base = baseTemplates[k];
-    templates[k] = {
-      id: base.id,
-      name: String(raw.name || base.name),
-      description: String(raw.description || base.description),
-      subject: String(raw.subject || base.subject),
-      body: String(raw.body || base.body),
-    };
-  });
+  if (data.templates && typeof data.templates === 'object' && Object.keys(data.templates).length > 0) {
+    Object.keys(data.templates).forEach((k) => {
+      const raw = data.templates[k];
+      if (raw && typeof raw === 'object') {
+        const base = baseTemplates[k];
+        templates[k] = {
+          id: String(raw.id || k),
+          name: String(raw.name || (base ? base.name : k)),
+          description: String(raw.description !== undefined ? raw.description : (base ? base.description : 'Email template')),
+          subject: String(raw.subject !== undefined ? raw.subject : (base ? base.subject : '')),
+          body: String(raw.body !== undefined ? raw.body : (base ? base.body : '')),
+        };
+      }
+    });
+  } else {
+    Object.keys(baseTemplates).forEach((k) => {
+      const base = baseTemplates[k];
+      templates[k] = { ...base };
+    });
+  }
 
   return {
     contactEmail: String(data.contactEmail || DEFAULT_COMMUNICATION_CONFIG.contactEmail).trim(),
