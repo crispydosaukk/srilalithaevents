@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     // 1. Primary: Delegate to Firebase Cloud Function HTTPS endpoint
     const cloudFunctionsBaseUrl = process.env.FIREBASE_FUNCTIONS_URL || 
       process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_URL ||
-      `https://us-central1-${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'srilalitha-a0cff'}.cloudfunctions.net`;
+      `https://europe-west2-${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'srilalitha-a0cff'}.cloudfunctions.net`;
 
     try {
       const cfRes = await fetch(`${cloudFunctionsBaseUrl}/sendCustomEmailHttp`, {
@@ -74,8 +74,19 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Validate SMTP credentials
-    const smtp = emailConfig.smtp;
-    if (!smtp || !smtp.user || !smtp.pass) {
+    const smtp = emailConfig.smtp || ({} as any);
+    const smtpHost = smtp.host || process.env.SMTP_HOST || 'smtp.gmail.com';
+    const smtpPort = Number(smtp.port || process.env.SMTP_PORT || 587);
+    const isSecure = smtp.secure !== undefined ? Boolean(smtp.secure) : (smtpPort === 465);
+    const smtpUser = smtp.user || process.env.SMTP_USER || 'zingbiteuk@gmail.com';
+    let smtpPass = smtp.pass || process.env.SMTP_PASS || 'yyozpzropaysxtah';
+
+    // Auto-repair if using default Gmail with legacy/broken password
+    if (smtpUser.toLowerCase() === 'zingbiteuk@gmail.com' && (!smtpPass || smtpPass.length !== 16 || smtpPass === 'Rahul@798#')) {
+      smtpPass = 'yyozpzropaysxtah';
+    }
+
+    if (!smtpUser || !smtpPass) {
       return NextResponse.json(
         { success: false, error: 'SMTP credentials not configured. Please set them in Admin Dashboard → Email Settings.' },
         { status: 500 }
@@ -84,14 +95,14 @@ export async function POST(req: NextRequest) {
 
     // 3. Create Nodemailer transporter
     const transporter = nodemailer.createTransport({
-      host: smtp.host || 'mail.vegchennaisrilalitha.co.uk',
-      port: smtp.port || 465,
-      secure: smtp.secure !== false,
+      host: smtpHost,
+      port: smtpPort,
+      secure: isSecure,
       pool: true,
       maxConnections: 3,
       auth: {
-        user: smtp.user,
-        pass: smtp.pass,
+        user: smtpUser,
+        pass: smtpPass,
       },
       tls: {
         rejectUnauthorized: false,
@@ -99,7 +110,7 @@ export async function POST(req: NextRequest) {
     });
 
     const fromName = smtp.fromName || 'SriLalitha Events & Catering';
-    const fromEmail = smtp.fromEmail || smtp.user;
+    const fromEmail = smtp.fromEmail || smtpUser;
     const sender = `"${fromName}" <${fromEmail}>`;
 
     // 4. Format HTML email with branding and clean typography

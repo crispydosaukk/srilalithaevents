@@ -458,7 +458,7 @@ export default function AdminPage() {
     adults: '50',
     kids4to10: '0',
     kidsUnder4: '0',
-    package: 'Gold Package',
+    package: 'Live Dosa Option 1',
     status: 'new_enquiry' as BookingStatus,
     notes: '',
   });
@@ -2269,26 +2269,479 @@ export default function AdminPage() {
     setEditingPackageData(null);
   };
 
+  // ─── UNIFIED WEBSITE PACKAGES & PRICING HELPERS ────────────────────────────
+  const getPackageRate = (packageName?: string, date?: string): number => {
+    if (!packageName) return 0;
+    const isWeekend = isWeekendOrBankHoliday(date);
+    const nameLower = packageName.toLowerCase();
+
+    // Option 2: Live Dosa Option 2
+    if (nameLower.includes('live dosa option 2') || (nameLower.includes('live dosa') && nameLower.includes('option 2')) || nameLower.includes('live-dosa-2')) {
+      return isWeekend
+        ? Number(editableLiveDosa2.pricing?.weekend?.pricePerPerson ?? 17.50)
+        : Number(editableLiveDosa2.pricing?.weekday?.pricePerPerson ?? 16.50);
+    }
+    // Option 1: Live Dosa Option 1
+    if (nameLower.includes('live dosa') || nameLower.includes('live counter') || nameLower.includes('option 1') || nameLower.includes('live-dosa-1')) {
+      return isWeekend
+        ? Number(editableLiveDosa1.pricing?.weekend?.pricePerPerson ?? 12.00)
+        : Number(editableLiveDosa1.pricing?.weekday?.pricePerPerson ?? 11.00);
+    }
+    // Option 3: Madras Thali
+    if (nameLower.includes('thali') || nameLower.includes('bhojanam') || nameLower.includes('option 3') || nameLower.includes('madras')) {
+      return Number(editableMadrasThali.pricePerPerson ?? 10.99);
+    }
+    // Option 4: Tailor Your Own Menu
+    if (nameLower.includes('tailor') || nameLower.includes('option 4')) {
+      const extracted = parseFloat(String(editableTailorMenu4.priceLabel || '').replace(/[^0-9.]/g, ''));
+      return !isNaN(extracted) && extracted > 0 ? extracted : 15.00;
+    }
+    // Option 5: Dosa Festival
+    if (nameLower.includes('festival') || nameLower.includes('option 5')) {
+      return Number(editableDosaFestival5.pricePerPerson ?? 14.99);
+    }
+    // Option 6: Canapé Service
+    if (nameLower.includes('canape') || nameLower.includes('canapé') || nameLower.includes('option 6')) {
+      return Number(editableCanape6.pricePerPerson ?? 8.99);
+    }
+    // Option 7: North Indian Standard Menu
+    if (nameLower.includes('north indian') || nameLower.includes('option 7')) {
+      return Number(editableNorthIndian7.pricePerPerson ?? 12.00);
+    }
+    // Option 8: Gujarati Menu
+    if (nameLower.includes('gujarati') || nameLower.includes('option 8')) {
+      return Number(editableGujarati8.pricePerPerson ?? 14.99);
+    }
+    // Option 9: Punjabi Menu
+    if (nameLower.includes('punjabi') || nameLower.includes('option 9')) {
+      return Number(editablePunjabi9.pricePerPerson ?? 13.99);
+    }
+
+    // Dynamic Custom Packages
+    const custom = (editableCustomPackages || []).find(
+      p => !p.isDeleted && (p.title.toLowerCase() === nameLower || p.id === packageName || p.title.toLowerCase().includes(nameLower) || nameLower.includes(p.title.toLowerCase()))
+    );
+    if (custom) {
+      if (custom.pricingType === 'flat') {
+        return Number(custom.pricePerPerson ?? 14.50);
+      }
+      return isWeekend
+        ? Number(custom.pricing?.weekend?.pricePerPerson ?? 15.00)
+        : Number(custom.pricing?.weekday?.pricePerPerson ?? 14.00);
+    }
+
+    // Fallback: Legacy banquet packages
+    const legacy = (editableBanquetPackages || []).find(
+      p => p.name.toLowerCase() === nameLower || p.id === packageName || nameLower.includes(p.name.toLowerCase())
+    );
+    if (legacy) {
+      return Number(legacy.pricePerPerson || 0);
+    }
+
+    return 0;
+  };
+
+  const getWebsitePackagesForBooking = (booking?: Booking | null) => {
+    const isWeekend = isWeekendOrBankHoliday(booking?.date);
+    const adults = booking ? (booking.adults ?? booking.guests ?? 1) : 35;
+    const kids4to10 = booking?.kids4to10 || 0;
+    const kidsUnder4 = booking?.kidsUnder4 || 0;
+    const totalGuests = adults + kids4to10 + kidsUnder4;
+    const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
+    const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
+
+    const pkgs: {
+      id: string;
+      name: string;
+      icon: string;
+      badge: string;
+      pricePerPerson: number;
+      priceDisplay: string;
+      estTotal: number;
+      inclusionsSummary: string;
+      detailsWhatsApp: string;
+      detailsEmail: string;
+    }[] = [];
+
+    // 1. Live Dosa Option 1
+    if (editableLiveDosa1.isActive !== false && !editableLiveDosa1.isDeleted) {
+      const rate = isWeekend
+        ? Number(editableLiveDosa1.pricing?.weekend?.pricePerPerson ?? 12)
+        : Number(editableLiveDosa1.pricing?.weekday?.pricePerPerson ?? 11);
+      const minG = isWeekend
+        ? Number(editableLiveDosa1.pricing?.weekend?.minGuests ?? 40)
+        : Number(editableLiveDosa1.pricing?.weekday?.minGuests ?? 35);
+      const minCallOut = isWeekend
+        ? Number(editableLiveDosa1.pricing?.weekend?.minCallOutCharge ?? 480)
+        : Number(editableLiveDosa1.pricing?.weekday?.minCallOutCharge ?? 385);
+      const est = Math.max(minCallOut, (rate * adults) + (kids4to10 * kidsPrice));
+
+      pkgs.push({
+        id: 'live-dosa-1',
+        name: editableLiveDosa1.title || 'Live Dosa Option 1',
+        icon: '🎪',
+        badge: '2 Hours Live Station',
+        pricePerPerson: rate,
+        priceDisplay: `£${rate.toFixed(0)}/person · Est. £${est.toLocaleString()} for ${totalGuests} guests`,
+        estTotal: est,
+        inclusionsSummary: '12 Live Dishes (Dosas, Uthappams, Meduvada, Idly), Chutneys & Sambar',
+        detailsWhatsApp: `🎪 *${editableLiveDosa1.title || 'Live Dosa Option 1'}* at *£${rate}/person* (Excl. VAT):\n\n` +
+          `• *Duration:* 2 Hours Live Station (Fresh on the spot with theatrical flair)\n` +
+          `• *Minimum Guests:* ${minG} guests (Minimum call-out: £${minCallOut})\n\n` +
+          `*12 Live Specialties Included:*\n` +
+          `• Steamed Fluffy Idly or Veg Biryani\n` +
+          `• Golden Medu Vada\n` +
+          `• 5 Dosa Varieties (Masala, Plain, Onion, Podi, Ghee/Butter)\n` +
+          `• 5 Uthappam Varieties (Onion, Tomato, Chilli, Podi, Mix Veg)\n` +
+          `• 3 Fresh Chutneys (Coconut, Tomato, Mint) & Hot Sambar\n\n` +
+          `For ${adults} Adults and ${kids4to10} Kids, estimated total: *£${est.toLocaleString()}* (Excl. VAT)`,
+        detailsEmail: `Live Dosa Option 1 (2 Hours Live Station)\n` +
+          `Rate: £${rate}/person (Min ${minG} guests · Min call-out £${minCallOut})\n\n` +
+          `Inclusions: 12 Live On-site Dishes (Idly/Biryani, Meduvada, 5 Dosas, 5 Uthappams, Chutneys & Sambar)\n` +
+          `Estimated Total for ${totalGuests} guests: £${est.toLocaleString()}`,
+      });
+    }
+
+    // 2. Live Dosa Option 2
+    if (editableLiveDosa2.isActive !== false && !editableLiveDosa2.isDeleted) {
+      const rate = isWeekend
+        ? Number(editableLiveDosa2.pricing?.weekend?.pricePerPerson ?? 17.50)
+        : Number(editableLiveDosa2.pricing?.weekday?.pricePerPerson ?? 16.50);
+      const minG = isWeekend
+        ? Number(editableLiveDosa2.pricing?.weekend?.minGuests ?? 40)
+        : Number(editableLiveDosa2.pricing?.weekday?.minGuests ?? 35);
+      const minCallOut = isWeekend
+        ? Number(editableLiveDosa2.pricing?.weekend?.minCallOutCharge ?? 700)
+        : Number(editableLiveDosa2.pricing?.weekday?.minCallOutCharge ?? 577.50);
+      const est = Math.max(minCallOut, (rate * adults) + (kids4to10 * kidsPrice));
+
+      pkgs.push({
+        id: 'live-dosa-2',
+        name: editableLiveDosa2.title || 'Live Dosa Option 2',
+        icon: '👑',
+        badge: '3 Hours Live + 1 Main + 1 Dessert',
+        pricePerPerson: rate,
+        priceDisplay: `£${rate.toFixed(2)}/person · Est. £${est.toLocaleString()} for ${totalGuests} guests`,
+        estTotal: est,
+        inclusionsSummary: '12 Live Dishes + 1 Restaurant Main Course + 1 Traditional Dessert + 3 Hours Service',
+        detailsWhatsApp: `👑 *${editableLiveDosa2.title || 'Live Dosa Option 2'}* at *£${rate.toFixed(2)}/person* (Excl. VAT):\n\n` +
+          `• *Duration:* 3 Hours Dedicated Chef Service\n` +
+          `• *Minimum Guests:* ${minG} guests (Minimum call-out: £${minCallOut})\n\n` +
+          `*Inclusions:*\n` +
+          `• 12 Live On-Site Dishes (Dosas, Uthappams, Meduvada, Idly, Chutneys & Sambar)\n` +
+          `• 1 Main Course (Selected from restaurant mains)\n` +
+          `• 1 Traditional Dessert (Selected from traditional desserts)\n` +
+          `• 3 Hours On-site Chef Service\n\n` +
+          `For ${adults} Adults and ${kids4to10} Kids, estimated total: *£${est.toLocaleString()}* (Excl. VAT)`,
+        detailsEmail: `Live Dosa Option 2 (3 Hours Live Station + 1 Main + 1 Dessert)\n` +
+          `Rate: £${rate.toFixed(2)}/person (Min ${minG} guests · Min call-out £${minCallOut})\n\n` +
+          `Inclusions: 12 Live Dishes + 1 Main Course + 1 Traditional Dessert + 3 Hours Chef Service\n` +
+          `Estimated Total for ${totalGuests} guests: £${est.toLocaleString()}`,
+      });
+    }
+
+    // 3. Madras Thali (Option 3)
+    if (editableMadrasThali.isActive !== false && !editableMadrasThali.isDeleted) {
+      const rate = Number(editableMadrasThali.pricePerPerson ?? 10.99);
+      const est = (rate * adults) + (kids4to10 * kidsPrice);
+
+      pkgs.push({
+        id: 'madras-thali',
+        name: editableMadrasThali.title || 'Madras Thali (Option 3)',
+        icon: '🍲',
+        badge: 'South Indian Meals / Bhojanam',
+        pricePerPerson: rate,
+        priceDisplay: `£${rate.toFixed(2)}/person · Est. £${est.toLocaleString()} for ${totalGuests} guests`,
+        estTotal: est,
+        inclusionsSummary: '12 Core Traditional Dishes: Rice, Sambar, Rasam, Koottu, Poriyal, Kaarakolambu, Sweet, Curd & more',
+        detailsWhatsApp: `🍲 *${editableMadrasThali.title || 'Madras Thali (Option 3)'}* at *£${rate.toFixed(2)}/person* (Excl. VAT):\n\n` +
+          `*12 Core Dishes Included:*\n` +
+          editableMadrasThali.coreDishes.map(d => `• *${d.name}:* ${d.description}`).join('\n') + `\n\n` +
+          `For ${adults} Adults and ${kids4to10} Kids, estimated total: *£${est.toLocaleString()}* (Excl. VAT)`,
+        detailsEmail: `Madras Thali (Option 3)\n` +
+          `Rate: £${rate.toFixed(2)}/person\n\n` +
+          `12 Core Dishes Included:\n` +
+          editableMadrasThali.coreDishes.map(d => `• ${d.name}: ${d.description}`).join('\n') + `\n\n` +
+          `Estimated Total for ${totalGuests} guests: £${est.toLocaleString()}`,
+      });
+    }
+
+    // 4. Tailor Your Own Menu (Option 4)
+    if (editableTailorMenu4.isActive !== false && !editableTailorMenu4.isDeleted) {
+      const extracted = parseFloat(String(editableTailorMenu4.priceLabel || '').replace(/[^0-9.]/g, ''));
+      const rate = !isNaN(extracted) && extracted > 0 ? extracted : 15.00;
+      const est = (rate * adults) + (kids4to10 * kidsPrice);
+
+      pkgs.push({
+        id: 'tailor-menu',
+        name: editableTailorMenu4.title || 'Tailor Your Own Menu (Option 4)',
+        icon: '🎨',
+        badge: '4 Live Stations',
+        pricePerPerson: rate,
+        priceDisplay: `From £${rate.toFixed(2)}/person · Est. £${est.toLocaleString()} for ${totalGuests} guests`,
+        estTotal: est,
+        inclusionsSummary: 'Bespoke live station experience (Dosa, Chaat, Indo-Chinese, Desserts)',
+        detailsWhatsApp: `🎨 *${editableTailorMenu4.title || 'Tailor Your Own Menu (Option 4)'}* (${editableTailorMenu4.priceLabel || `From £${rate}/person`}):\n\n` +
+          `*4 Signature Live Stations:*\n` +
+          editableTailorMenu4.liveStationsFeatured.map(s => `• *${s.name}:* ${s.description}`).join('\n') + `\n\n` +
+          `For ${adults} Adults and ${kids4to10} Kids, estimated total: *£${est.toLocaleString()}* (Excl. VAT)`,
+        detailsEmail: `Tailor Your Own Menu (Option 4)\n` +
+          `Price: ${editableTailorMenu4.priceLabel || `From £${rate}/person`}\n\n` +
+          `4 Signature Live Stations:\n` +
+          editableTailorMenu4.liveStationsFeatured.map(s => `• ${s.name}: ${s.description}`).join('\n') + `\n\n` +
+          `Estimated Total for ${totalGuests} guests: £${est.toLocaleString()}`,
+      });
+    }
+
+    // 5. Dosa Festival (Option 5)
+    if (editableDosaFestival5.isActive !== false && !editableDosaFestival5.isDeleted) {
+      const rate = Number(editableDosaFestival5.pricePerPerson ?? 14.99);
+      const est = (rate * adults) + (kids4to10 * kidsPrice);
+
+      pkgs.push({
+        id: 'dosa-festival',
+        name: editableDosaFestival5.title || 'Dosa Festival At Your Home (Option 5)',
+        icon: '🥞',
+        badge: '34+ Dosa Varieties',
+        pricePerPerson: rate,
+        priceDisplay: `£${rate.toFixed(2)}/person · Est. £${est.toLocaleString()} for ${totalGuests} guests`,
+        estTotal: est,
+        inclusionsSummary: '34+ Signature festival dosas live, meduvada, chutneys & sambar',
+        detailsWhatsApp: `🥞 *${editableDosaFestival5.title || 'Dosa Festival At Your Home (Option 5)'}* at *£${rate.toFixed(2)}/person* (Excl. VAT):\n\n` +
+          `• 16 Years of Quality and Trust in London\n\n` +
+          `*34+ Signature Festival Dosa Varieties:* Masala, Mysore, Chettinad, Jini, Pizza, Spring, Cheese, Chocolate Dosas & more live with Medu Vada, Sambar & 3 Chutneys.\n\n` +
+          `For ${adults} Adults and ${kids4to10} Kids, estimated total: *£${est.toLocaleString()}* (Excl. VAT)`,
+        detailsEmail: `Dosa Festival At Your Home (Option 5)\n` +
+          `Rate: £${rate.toFixed(2)}/person\n\n` +
+          `Includes 34+ Signature Festival Dosa Varieties live with Medu Vada, Sambar & Chutneys.\n` +
+          `Estimated Total for ${totalGuests} guests: £${est.toLocaleString()}`,
+      });
+    }
+
+    // 6. Canapé Service (Option 6)
+    if (editableCanape6.isActive !== false && !editableCanape6.isDeleted) {
+      const rate = Number(editableCanape6.pricePerPerson ?? 8.99);
+      const est = (rate * adults) + (kids4to10 * kidsPrice);
+
+      pkgs.push({
+        id: 'canape',
+        name: editableCanape6.title || 'Canapé Service (Option 6)',
+        icon: '🍢',
+        badge: 'Cocktail Receptions',
+        pricePerPerson: rate,
+        priceDisplay: `From £${rate.toFixed(2)}/person · Est. £${est.toLocaleString()} for ${totalGuests} guests`,
+        estTotal: est,
+        inclusionsSummary: 'Artisanal bite-sized Indian appetizers & fusion canapés',
+        detailsWhatsApp: `🍢 *${editableCanape6.title || 'Canapé Service (Option 6)'}* from *£${rate.toFixed(2)}/person* (Excl. VAT):\n\n` +
+          `*Canapé Selection:*\n` +
+          editableCanape6.suggestedItems.map(i => `• ${i}`).join('\n') + `\n\n` +
+          `For ${adults} Adults and ${kids4to10} Kids, estimated total: *£${est.toLocaleString()}* (Excl. VAT)`,
+        detailsEmail: `Canapé Service (Option 6)\n` +
+          `Rate: From £${rate.toFixed(2)}/person\n\n` +
+          `Canapé Selection:\n` +
+          editableCanape6.suggestedItems.map(i => `• ${i}`).join('\n') + `\n\n` +
+          `Estimated Total for ${totalGuests} guests: £${est.toLocaleString()}`,
+      });
+    }
+
+    // 7. North Indian Standard Menu (Option 7)
+    if (editableNorthIndian7.isActive !== false && !editableNorthIndian7.isDeleted) {
+      const rate = Number(editableNorthIndian7.pricePerPerson ?? 12.00);
+      const est = (rate * Math.max(25, adults)) + (kids4to10 * kidsPrice);
+
+      pkgs.push({
+        id: 'north-indian',
+        name: editableNorthIndian7.title || 'North Indian Standard Menu (Option 7)',
+        icon: '🍛',
+        badge: 'Min 25 Guests',
+        pricePerPerson: rate,
+        priceDisplay: `£${rate.toFixed(2)}/person (Min 25) · Est. £${est.toLocaleString()} for ${totalGuests} guests`,
+        estTotal: est,
+        inclusionsSummary: 'Starters, Paneer/Veg Curries, Dal, Naan/Roti, Rice, Dessert & Condiments',
+        detailsWhatsApp: `🍛 *${editableNorthIndian7.title || 'North Indian Standard Menu (Option 7)'}* at *£${rate.toFixed(2)}/person* (Excl. VAT):\n\n` +
+          `*Inclusions:*\n` +
+          editableNorthIndian7.inclusions.map(i => `✓ ${i}`).join('\n') + `\n\n` +
+          `For ${adults} Adults and ${kids4to10} Kids, estimated total: *£${est.toLocaleString()}* (Excl. VAT)`,
+        detailsEmail: `North Indian Standard Menu (Option 7)\n` +
+          `Rate: £${rate.toFixed(2)}/person (Min 25 guests)\n\n` +
+          `Inclusions:\n` +
+          editableNorthIndian7.inclusions.map(i => `✓ ${i}`).join('\n') + `\n\n` +
+          `Estimated Total for ${totalGuests} guests: £${est.toLocaleString()}`,
+      });
+    }
+
+    // 8. Gujarati Menu (Option 8)
+    if (editableGujarati8.isActive !== false && !editableGujarati8.isDeleted) {
+      const rate = Number(editableGujarati8.pricePerPerson ?? 14.99);
+      const est = (rate * adults) + (kids4to10 * kidsPrice);
+
+      pkgs.push({
+        id: 'gujarati',
+        name: editableGujarati8.title || 'Gujarati Menu (Option 8)',
+        icon: '🪔',
+        badge: 'Authentic Gujarati Thaal',
+        pricePerPerson: rate,
+        priceDisplay: `£${rate.toFixed(2)}/person · Est. £${est.toLocaleString()} for ${totalGuests} guests`,
+        estTotal: est,
+        inclusionsSummary: 'Mithai, Farsan, Classic Shaak (Undhiyu), Dal, Kadhi, Rotli & Rice',
+        detailsWhatsApp: `🪔 *${editableGujarati8.title || 'Gujarati Menu (Option 8)'}* at *£${rate.toFixed(2)}/person* (Excl. VAT):\n\n` +
+          `*Authentic Gujarati Thaal Included:*\n` +
+          `• 2 Mithai (Mohanthal, Shrikhand, Basundi / Kaju Barfi)\n` +
+          `• 2 Farsan (Dhokla, Khandvi, Samosa, Kachori / Bhajia)\n` +
+          `• 2 Shaak (Surti Undhiyu, Sev Tameta, Bateta Nu Shaak)\n` +
+          `• Gujarati Dal & Kadhi, Phulka Rotli / Puri, Rice & Condiments\n\n` +
+          `For ${adults} Adults and ${kids4to10} Kids, estimated total: *£${est.toLocaleString()}* (Excl. VAT)`,
+        detailsEmail: `Gujarati Menu (Option 8)\n` +
+          `Rate: £${rate.toFixed(2)}/person\n\n` +
+          `Authentic Gujarati Thaal with Mithai, Farsan, Shaak, Dal & Kadhi\n` +
+          `Estimated Total for ${totalGuests} guests: £${est.toLocaleString()}`,
+      });
+    }
+
+    // 9. Punjabi Menu (Option 9)
+    if (editablePunjabi9.isActive !== false && !editablePunjabi9.isDeleted) {
+      const rate = Number(editablePunjabi9.pricePerPerson ?? 13.99);
+      const est = (rate * adults) + (kids4to10 * kidsPrice);
+
+      pkgs.push({
+        id: 'punjabi',
+        name: editablePunjabi9.title || 'Punjabi Menu (Option 9)',
+        icon: '👑',
+        badge: 'Royal Punjabi Celebration',
+        pricePerPerson: rate,
+        priceDisplay: `£${rate.toFixed(2)}/person · Est. £${est.toLocaleString()} for ${totalGuests} guests`,
+        estTotal: est,
+        inclusionsSummary: 'Chaats, Paneer Tikkas, Royal Subjies, Dal Makhani, Naan, Rice & Desserts',
+        detailsWhatsApp: `👑 *${editablePunjabi9.title || 'Punjabi Menu (Option 9)'}* at *£${rate.toFixed(2)}/person* (Excl. VAT):\n\n` +
+          `*Signature Punjabi Courses Included:*\n` +
+          `• Starters: Amritsari Paneer Tikka, Crispy Bhajia, Spring Rolls\n` +
+          `• Royal Subjies: Paneer Butter Masala, Pindi Chole, Dal Makhani\n` +
+          `• Breads: Butter Naan, Laccha Paratha & Tandoori Roti\n` +
+          `• Rice, Raita, Salad & Traditional Desserts (Gajar Ka Halwa / Gulab Jamun)\n\n` +
+          `For ${adults} Adults and ${kids4to10} Kids, estimated total: *£${est.toLocaleString()}* (Excl. VAT)`,
+        detailsEmail: `Punjabi Menu (Option 9)\n` +
+          `Rate: £${rate.toFixed(2)}/person\n\n` +
+          `Royal Punjabi celebration feast with Tikkas, Subjies, Dal Makhani & Breads\n` +
+          `Estimated Total for ${totalGuests} guests: £${est.toLocaleString()}`,
+      });
+    }
+
+    // 10. Dynamic Custom Packages
+    (editableCustomPackages || []).filter(p => !p.isDeleted).forEach(pkg => {
+      const rate = pkg.pricingType === 'flat'
+        ? Number(pkg.pricePerPerson ?? 14.50)
+        : (isWeekend ? Number(pkg.pricing?.weekend?.pricePerPerson ?? 15) : Number(pkg.pricing?.weekday?.pricePerPerson ?? 14));
+      const est = (rate * adults) + (kids4to10 * kidsPrice);
+
+      pkgs.push({
+        id: pkg.id,
+        name: pkg.title,
+        icon: '✨',
+        badge: pkg.badge || 'Bespoke Package',
+        pricePerPerson: rate,
+        priceDisplay: `£${rate.toFixed(2)}/person · Est. £${est.toLocaleString()} for ${totalGuests} guests`,
+        estTotal: est,
+        inclusionsSummary: pkg.tagline || pkg.description || 'Custom crafted catering package',
+        detailsWhatsApp: `✨ *${pkg.title}* at *£${rate.toFixed(2)}/person* (Excl. VAT):\n\n` +
+          `${pkg.description ? `${pkg.description}\n\n` : ''}` +
+          `*Inclusions:*\n` +
+          (pkg.items || []).map(i => `• ${i.name}${i.description ? `: ${i.description}` : ''}`).join('\n') + `\n\n` +
+          `For ${adults} Adults and ${kids4to10} Kids, estimated total: *£${est.toLocaleString()}* (Excl. VAT)`,
+        detailsEmail: `${pkg.title}\n` +
+          `Rate: £${rate.toFixed(2)}/person\n\n` +
+          `${pkg.description || ''}\n\n` +
+          `Inclusions:\n` +
+          (pkg.items || []).map(i => `• ${i.name}: ${i.description || ''}`).join('\n') + `\n\n` +
+          `Estimated Total for ${totalGuests} guests: £${est.toLocaleString()}`,
+      });
+    });
+
+    return pkgs;
+  };
+
+  const buildPackageWhatsAppLink = (booking: Booking, pkg: ReturnType<typeof getWebsitePackagesForBooking>[0]) => {
+    const adults = booking.adults ?? booking.guests;
+    const kids4to10 = booking.kids4to10 || 0;
+    
+    const text = `Hi ${booking.name.split(' ')[0]}, here is our *${pkg.name}* from SriLalitha:\n\n` +
+      `${pkg.detailsWhatsApp}\n\n` +
+      `🧒 *Kids Pricing* (Over 50 Adults):\n${editableKidsPricing.map(kp => `${kp.ageRange}: ${kp.price}`).join('\n')}\n\n` +
+      `🏢 *Venue Hire Charges:*\n${editableVenueCharges.map(vc => `• ${vc.day}: ${vc.charge}${vc.note ? ` (${vc.note})` : ''}`).join('\n')}\n\n` +
+      `✨ *Upgrades Available:*\n${(editableUpgrades?.items || []).map((e: MenuUpgradeItem) => `• ${e.name}: ${e.priceLabel}`).join('\n')}\n\n` +
+      `Please reply with your selection! 🙏`;
+
+    return buildWhatsAppLink(booking.phone, text);
+  };
+
+  const openPackageEmail = (booking: Booking, pkg: ReturnType<typeof getWebsitePackagesForBooking>[0]) => {
+    const totalGuests = (booking.adults ?? booking.guests) + (booking.kids4to10 || 0) + (booking.kidsUnder4 || 0);
+    const tmpl = editableCommConfig.templates.menu_sharing || DEFAULT_COMMUNICATION_CONFIG.templates.menu_sharing;
+    
+    const menuDetails = `${pkg.detailsEmail}\n\n` +
+      `✨ Available Event Upgrades:\n` +
+      (editableUpgrades?.items || []).map((e: MenuUpgradeItem) => `• ${e.name}: ${e.priceLabel}`).join('\n') + `\n\n` +
+      `🧒 Kids Pricing:\n` +
+      editableKidsPricing.map(kp => `• ${kp.ageRange}: ${kp.price}`).join('\n');
+
+    const subject = renderCommunicationTemplate(tmpl.subject, {
+      customerName: booking.name.split(' ')[0],
+      menuType: pkg.name,
+      eventType: booking.eventType || 'Catering',
+      eventDate: booking.date || 'Upcoming Event',
+    });
+
+    const body = renderCommunicationTemplate(tmpl.body, {
+      customerName: booking.name.split(' ')[0],
+      menuType: pkg.name,
+      eventType: booking.eventType || 'Catering',
+      eventDate: booking.date || 'Upcoming Event',
+      menuDetails,
+      guests: totalGuests,
+      totalEstimatedAmount: pkg.estTotal.toLocaleString(),
+      contactWhatsApp: editableCommConfig.contactWhatsApp,
+      contactEmail: editableCommConfig.contactEmail,
+    });
+
+    openEmailComposer(booking.email, booking.name, subject, body, booking.id);
+  };
+
   const buildMenuWhatsAppText = (customerName: string, customerPhone: string, menuType: string, guestCount: number) => {
     let text = `Hi ${customerName}, here are our *${menuType}* options from SriLalitha:\n\n`;
-    
-    const matchedCategory = editableMenuCategories.find(c => c.title.toLowerCase() === menuType.toLowerCase() || c.id === menuType);
-    if (matchedCategory) {
+    const mtLower = menuType.toLowerCase();
+
+    // 1. Extras / Upgrades
+    if (mtLower === 'extras' || mtLower.includes('extra') || mtLower === 'upgrades' || mtLower.includes('upgrade')) {
+      text += `✨ *Event Upgrades & Extras from SriLalitha:*\n\n`;
+      text += (editableUpgrades?.items || []).map(u => `• *${u.name}* (${u.priceLabel})\n  ${u.description}`).join('\n\n') + '\n\n';
+    }
+    // 2. Full Menu
+    else if (mtLower === 'full restaurant menu' || mtLower === 'full menu' || mtLower.includes('full menu')) {
+      text += `📋 *Complete SriLalitha Catering & Restaurant Menu:*\n\n`;
+      editableMenuCategories.forEach(cat => {
+        text += `🍽️ *${cat.title}* (${cat.items.length} items):\n`;
+        text += cat.items.map(i => `• *${i.name}*${i.description ? ` - ${i.description}` : ''}`).join('\n') + '\n\n';
+      });
+      text += `✨ *Event Upgrades Available:*\n` + (editableUpgrades?.items || []).map(u => `• ${u.name}: ${u.priceLabel}`).join('\n') + '\n\n';
+    }
+    // 3. Matched single category
+    else if (editableMenuCategories.some(c => c.title.toLowerCase() === mtLower || c.id === menuType)) {
+      const matchedCategory = editableMenuCategories.find(c => c.title.toLowerCase() === mtLower || c.id === menuType)!;
       text += `🍽️ *${matchedCategory.title} (${matchedCategory.items.length} items):*\n\n`;
       text += matchedCategory.items.map(i => `• *${i.name}*\n  ${i.description}`).join('\n\n') + '\n\n';
-    } else if (menuType === 'Live Dosa Option 2' || menuType.toLowerCase().includes('option 2')) {
+    }
+    // 4. Packages
+    else if (mtLower.includes('live dosa option 2') || (mtLower.includes('live dosa') && mtLower.includes('option 2'))) {
       text += `👑 *Live Dosa Option 2 (3 Hours Service + 1 Main + 1 Dessert):*\n`;
       text += `• *Weekdays (Mon-Fri):* £${editableLiveDosa2.pricing?.weekday?.pricePerPerson || 16.50} / per person (35 people min · Min Call-Out: £${editableLiveDosa2.pricing?.weekday?.minCallOutCharge || 577.50})\n`;
-      text += `• *Weekends & Bank Holidays:* £${editableLiveDosa2.pricing?.weekend?.pricePerPerson || 17.50} / per person (40 people min · Min Call-Out: £${editableLiveDosa2.pricing?.weekend?.minCallOutCharge || 700})\n`;
-      text += `ℹ️ _Minimum call out charge can be reached by the number of people or by the menu & upgrades._\n\n`;
+      text += `• *Weekends & Bank Holidays:* £${editableLiveDosa2.pricing?.weekend?.pricePerPerson || 17.50} / per person (40 people min · Min Call-Out: £${editableLiveDosa2.pricing?.weekend?.minCallOutCharge || 700})\n\n`;
       text += `*Inclusions (Option 2):*\n`;
       text += `• 12 Live On-Site Dishes (Idly Or Veg Biryani, Meduvada, 5 Dosas, 5 Uthappams, Chutneys & Sambar)\n`;
       text += `• 1 Main Course Dish (Selected from restaurant mains)\n`;
       text += `• 1 Dessert (Selected from traditional desserts)\n`;
-      text += `• 3 Hours On-site Chef Service (instead of 2 hours)\n\n`;
+      text += `• 3 Hours On-site Chef Service\n\n`;
       text += `*✨ Optional Upgrades:*\n`;
-      text += editableUpgrades.items.map(u => `• *${u.name}:* ${u.priceLabel}\n  ${u.description}`).join('\n\n') + '\n\n';
-    } else if (menuType === 'Madras Thali (Option 3)' || menuType.toLowerCase().includes('thali') || menuType.toLowerCase().includes('bhojanam') || menuType.toLowerCase().includes('option 3')) {
+      text += (editableUpgrades?.items || []).map(u => `• *${u.name}:* ${u.priceLabel}\n  ${u.description}`).join('\n\n') + '\n\n';
+    } else if (mtLower.includes('thali') || mtLower.includes('bhojanam') || mtLower.includes('option 3')) {
       text += `🍲 *${editableMadrasThali.title}:*\n`;
       text += `• *Price:* £${editableMadrasThali.pricePerPerson} / per person\n\n`;
       text += `*12 Core Dishes Included:*\n`;
@@ -2303,76 +2756,81 @@ export default function AdminPage() {
       text += `*✨ Optional Additions (from £2.50):*\n`;
       text += editableMadrasThali.additions.map(a => `• ${a.name} (+£${a.price.toFixed(2)})`).join('\n') + '\n\n';
       text += `*✨ Upgrades:*\n`;
-      text += editableUpgrades.items.map(u => `• *${u.name}:* ${u.priceLabel} (${u.description})`).join('\n\n') + '\n\n';
-    } else if (menuType === 'Tailor Your Own Menu (Option 4)' || menuType.toLowerCase().includes('tailor')) {
+      text += (editableUpgrades?.items || []).map(u => `• *${u.name}:* ${u.priceLabel} (${u.description})`).join('\n\n') + '\n\n';
+    } else if (mtLower.includes('tailor') || mtLower.includes('option 4')) {
       text += `🎨 *${editableTailorMenu4.title} (Option 4):*\n`;
-      text += `• *Price:* ${editableTailorMenu4.priceLabel}\n`;
-      text += `• *Deposit:* 50% deposit at booking, balance by cash after event.\n\n`;
+      text += `• *Price:* ${editableTailorMenu4.priceLabel}\n\n`;
       text += `*4 Signature Live Stations:*\n`;
       text += editableTailorMenu4.liveStationsFeatured.map(s => `• ${s.name}: ${s.description}`).join('\n') + '\n\n';
-      text += `*🚚 What We Bring:*\n` + editableTailorMenu4.whatWeBring.map(b => `✓ ${b}`).join('\n') + '\n\n';
-      text += `*🔌 What We Need From You:*\n` + editableTailorMenu4.whatWeNeedFromYou.map(n => `• ${n}`).join('\n') + '\n\n';
       text += `*✨ Optional Upgrades:*\n`;
-      text += editableUpgrades.items.map(u => `• *${u.name}:* ${u.priceLabel} (${u.description})`).join('\n\n') + '\n\n';
-    } else if (menuType === 'Dosa Festival At Your Home (Option 5)' || menuType.toLowerCase().includes('festival')) {
+      text += (editableUpgrades?.items || []).map(u => `• *${u.name}:* ${u.priceLabel} (${u.description})`).join('\n\n') + '\n\n';
+    } else if (mtLower.includes('festival') || mtLower.includes('option 5')) {
       text += `🥞 *${editableDosaFestival5.title} (Option 5):*\n`;
       text += `• *Price:* £${editableDosaFestival5.pricePerPerson} / per person\n`;
       text += `• *Heritage:* 16 Years of Quality and Trust in London\n\n`;
       text += `*34+ Signature Festival Dosa Varieties:*\n`;
       text += editableDosaFestival5.dosaVarieties.map(d => `• ${d}`).join('\n') + '\n\n';
-      text += `*Inclusions:*\n${editableDosaFestival5.inclusions}\n\n`;
       text += `*✨ Optional Upgrades:*\n`;
-      text += editableUpgrades.items.map(u => `• *${u.name}:* ${u.priceLabel} (${u.description})`).join('\n\n') + '\n\n';
-    } else if (menuType === 'Canapé Service (Option 6)' || menuType.toLowerCase().includes('canape')) {
+      text += (editableUpgrades?.items || []).map(u => `• *${u.name}:* ${u.priceLabel} (${u.description})`).join('\n\n') + '\n\n';
+    } else if (mtLower.includes('canape') || mtLower.includes('canapé') || mtLower.includes('option 6')) {
       text += `🍢 *${editableCanape6.title} (Option 6):*\n`;
       text += `• *Price:* From £${editableCanape6.pricePerPerson} / per person\n\n`;
       text += `*Canapé Suggestions:*\n` + editableCanape6.suggestedItems.map(i => `• ${i}`).join('\n') + '\n\n';
       text += `*✨ Optional Upgrades:*\n`;
-      text += editableUpgrades.items.map(u => `• *${u.name}:* ${u.priceLabel} (${u.description})`).join('\n\n') + '\n\n';
-    } else if (menuType === 'North Indian Standard Menu (Option 7)' || menuType.toLowerCase().includes('north indian')) {
+      text += (editableUpgrades?.items || []).map(u => `• *${u.name}:* ${u.priceLabel} (${u.description})`).join('\n\n') + '\n\n';
+    } else if (mtLower.includes('north indian') || mtLower.includes('option 7')) {
       text += `🍛 *${editableNorthIndian7.title} (Option 7):*\n`;
       text += `• *Price:* £${editableNorthIndian7.pricePerPerson} / per person (Min 25 guests)\n\n`;
       text += `*Inclusions:*\n` + editableNorthIndian7.inclusions.map(i => `✓ ${i}`).join('\n') + '\n\n';
       text += `*✨ Optional Upgrades:*\n`;
-      text += editableUpgrades.items.map(u => `• *${u.name}:* ${u.priceLabel} (${u.description})`).join('\n\n') + '\n\n';
-    } else if (menuType === 'Gujarati Menu (Option 8)' || menuType.toLowerCase().includes('gujarati')) {
+      text += (editableUpgrades?.items || []).map(u => `• *${u.name}:* ${u.priceLabel} (${u.description})`).join('\n\n') + '\n\n';
+    } else if (mtLower.includes('gujarati') || mtLower.includes('option 8')) {
       text += `🪔 *${editableGujarati8.title} (Option 8):*\n`;
       text += `• *Price:* £${editableGujarati8.pricePerPerson} / per person\n\n`;
       text += `*Signature Gujarati Courses Included:* Mithai, Farsan, Classic Shaak (Undhiyu), Kadhi & Breads\n\n`;
       text += `*✨ Optional Upgrades:*\n`;
-      text += editableUpgrades.items.map(u => `• *${u.name}:* ${u.priceLabel} (${u.description})`).join('\n\n') + '\n\n';
-    } else if (menuType === 'Punjabi Menu (Option 9)' || menuType.toLowerCase().includes('punjabi')) {
+      text += (editableUpgrades?.items || []).map(u => `• *${u.name}:* ${u.priceLabel} (${u.description})`).join('\n\n') + '\n\n';
+    } else if (mtLower.includes('punjabi') || mtLower.includes('option 9')) {
       text += `👑 *${editablePunjabi9.title} (Option 9):*\n`;
       text += `• *Price:* £${editablePunjabi9.pricePerPerson} / per person\n\n`;
       text += `*Signature Punjabi Courses:* Chaats, Paneer Tikkas, Royal Subjies, Dal Makhani & Breads\n\n`;
       text += `*✨ Optional Upgrades:*\n`;
-      text += editableUpgrades.items.map(u => `• *${u.name}:* ${u.priceLabel} (${u.description})`).join('\n\n') + '\n\n';
-    } else if (menuType === 'Live Dosa Station' || menuType === 'Live Dosa Option 1' || menuType === 'Live Counter') {
+      text += (editableUpgrades?.items || []).map(u => `• *${u.name}:* ${u.priceLabel} (${u.description})`).join('\n\n') + '\n\n';
+    } else if (mtLower.includes('live dosa') || mtLower.includes('option 1') || mtLower.includes('live counter')) {
       text += `🎪 *Live Dosa Option 1 (12 Live Dishes · 2 Hours Service):*\n`;
       text += `• *Weekdays (Mon-Fri):* £${editableLiveDosa1.pricing?.weekday?.pricePerPerson || 11} / per person (35 people min · Min Call-Out: £${editableLiveDosa1.pricing?.weekday?.minCallOutCharge || 385})\n`;
-      text += `• *Weekends & Bank Holidays:* £${editableLiveDosa1.pricing?.weekend?.pricePerPerson || 12} / per person (40 people min · Min Call-Out: £${editableLiveDosa1.pricing?.weekend?.minCallOutCharge || 480})\n`;
-      text += `ℹ️ _Minimum call out charge can be reached by the number of people or by the menu & upgrades._\n\n`;
+      text += `• *Weekends & Bank Holidays:* £${editableLiveDosa1.pricing?.weekend?.pricePerPerson || 12} / per person (40 people min · Min Call-Out: £${editableLiveDosa1.pricing?.weekend?.minCallOutCharge || 480})\n\n`;
       text += `*Included 12 Live Specialties:*\n`;
       text += editableLiveDosa1.items.map(i => `• *${i.name}*\n  ${i.description}`).join('\n\n') + '\n\n';
       text += `*✨ Optional Upgrades:*\n`;
-      text += editableUpgrades.items.map(u => `• *${u.name}:* ${u.priceLabel}\n  ${u.description}`).join('\n\n') + '\n\n';
-    } else if (menuType === 'Upgrades') {
-      text += `✨ *Event Upgrades from SriLalitha:*\n\n`;
-      text += editableUpgrades.items.map(u => `• *${u.name}* (${u.priceLabel})\n  ${u.description}`).join('\n\n') + '\n\n';
-    } else if (menuType === 'South Indian Buffet') {
-      text += `🍲 *South Indian Special Buffet (${editableSouthIndianBuffet.items.length} Dishes):*\n`;
-      text += `• Weekday (Mon-Fri): ${editableSouthIndianBuffet.weekday.price}\n`;
-      text += `• Weekend & Holidays: ${editableSouthIndianBuffet.weekend.price}\n\n`;
-      text += `*Inclusions:*\n` + editableSouthIndianBuffet.items.map(i => `• ${i.name} (${i.description})`).join('\n') + '\n\n';
-    } else if (menuType === 'Venue Hall Charges') {
+      text += (editableUpgrades?.items || []).map(u => `• *${u.name}:* ${u.priceLabel}\n  ${u.description}`).join('\n\n') + '\n\n';
+    } else if (mtLower === 'venue hall charges') {
       text += editableVenueCharges.map(row => `• *${row.day}:* ${row.charge} ${row.note ? `(${row.note})` : ''}`).join('\n') + '\n\n';
       text += `🍷 *ALCOHOL:*\nCorkage fee - Charges for outside Alcohol in Venue which will be discussed as per guests.\n\n`;
-    } else if (menuType === 'Dry Hire') {
+    } else if (mtLower === 'dry hire') {
       text += editableDryHirePrices.map(row => `• *${row.day} (${row.session}):* £${row.price}`).join('\n') + '\n\n';
-    } else if (menuType === 'Kids Pricing') {
+    } else if (mtLower === 'kids pricing') {
       text += `(Only Applies for over 50 Adults)\n\n`;
       text += editableKidsPricing.map(kp => `• *${kp.ageRange}:* ${kp.price}`).join('\n') + '\n\n';
       text += `*NOTE:* Minimum Number of Guests will be charged as agreed. As per our policy and food safety, we don't allow any food takeaway from Banquet Venue.\n\n`;
+    } else {
+      // Check custom packages
+      const custom = editableCustomPackages.find(p => !p.isDeleted && (p.title.toLowerCase() === mtLower || p.id === menuType));
+      if (custom) {
+        text += `✨ *${custom.title}:*\n`;
+        text += `• Price: ${custom.pricingType === 'flat' ? `£${custom.pricePerPerson}/pp` : `From £${custom.pricing?.weekday?.pricePerPerson}/pp`}\n\n`;
+        text += `${custom.description}\n\n`;
+        text += `*Inclusions:*\n` + (custom.items || []).map(i => `• ${i.name}${i.description ? `: ${i.description}` : ''}`).join('\n') + '\n\n';
+      } else {
+        // Fallback: check legacy package
+        const leg = editableBanquetPackages.find(p => p.name.toLowerCase() === mtLower);
+        if (leg) {
+          text += `📦 *${leg.name}:* £${leg.pricePerPerson}/person\n\n`;
+          text += `• Starters: ${leg.starters.veg} Veg + ${leg.starters.nonVeg} Non-Veg\n• Mains: ${leg.mains.veg} Veg + ${leg.mains.nonVeg} Non-Veg\n• Desserts: ${leg.desserts.join(', ')}\n\n`;
+        } else {
+          text += `Detailed options for ${menuType}\n\n`;
+        }
+      }
     }
 
     text += `Please reply with your preferred selections. We look forward to serving you! 🙏`;
@@ -2404,7 +2862,8 @@ export default function AdminPage() {
     const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
     const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
 
-    const guestBreakdown = `• Adults: ${adults} × £${editableBanquetPackages.find(p => p.name === (booking.selectedMenu || booking.package))?.pricePerPerson || 0}/person\n• Kids (4-10 yrs): ${kids4to10} × £${kidsPrice}/person\n• Kids (0-4 yrs): ${kidsUnder4} × Free`;
+    const rate = getPackageRate(booking.selectedMenu || booking.package, booking.date);
+    const guestBreakdown = `• Adults: ${adults} × £${rate}/person\n• Kids (4-10 yrs): ${kids4to10} × £${kidsPrice}/person\n• Kids (0-4 yrs): ${kidsUnder4} × Free`;
 
     return `Hi ${booking.name.split(' ')[0]},
 
@@ -2453,7 +2912,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
     const kidsUnder4 = booking.kidsUnder4 || 0;
     const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
     const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
-    const pricePerPerson = editableBanquetPackages.find(p => p.name === (booking.selectedMenu || booking.package))?.pricePerPerson || 0;
+    const pricePerPerson = getPackageRate(booking.selectedMenu || booking.package, booking.date);
 
     const guestBreakdown = `*👥 Guest Breakdown:*\n• Adults: ${adults} × £${pricePerPerson}/person = £${(adults * pricePerPerson).toLocaleString()}\n• Kids (4-10 yrs): ${kids4to10} × £${kidsPrice}/person = £${(kids4to10 * kidsPrice).toLocaleString()}\n• Kids (0-4 yrs): ${kidsUnder4} × Free = £0\n• Total Guests: ${adults + kids4to10 + kidsUnder4}`;
 
@@ -2532,30 +2991,76 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
   const getMenuEmailContent = (customerName: string, customerPhone: string, customerEmail: string, menuType: string, guestCount: number, booking?: Booking) => {
     const tmpl = editableCommConfig.templates.menu_sharing || DEFAULT_COMMUNICATION_CONFIG.templates.menu_sharing;
+    const mtLower = menuType.toLowerCase();
     
-    let menuDetails = `Menu Category: ${menuType}\n`;
-    const matchedCategory = editableMenuCategories.find(c => c.title.toLowerCase() === menuType.toLowerCase() || c.id === menuType);
-    if (matchedCategory) {
+    let menuDetails = `Menu Category: ${menuType}\n\n`;
+
+    // 1. Extras / Upgrades
+    if (mtLower === 'extras' || mtLower.includes('extra') || mtLower === 'upgrades' || mtLower.includes('upgrade')) {
+      menuDetails += `✨ Event Upgrades & Extras from SriLalitha:\n\n` +
+        (editableUpgrades?.items || []).map(u => `• ${u.name}: ${u.priceLabel} (${u.description})`).join('\n');
+    }
+    // 2. Full Menu
+    else if (mtLower === 'full restaurant menu' || mtLower === 'full menu' || mtLower.includes('full menu')) {
+      menuDetails += `📋 Complete SriLalitha Restaurant Catering Menu:\n\n` +
+        editableMenuCategories.map(cat => `${cat.title} (${cat.items.length} items):\n` + cat.items.map(i => `• ${i.name}${i.description ? ` - ${i.description}` : ''}`).join('\n')).join('\n\n') +
+        `\n\n✨ Event Upgrades:\n` +
+        (editableUpgrades?.items || []).map(u => `• ${u.name}: ${u.priceLabel}`).join('\n');
+    }
+    // 3. Matched single category
+    else if (editableMenuCategories.some(c => c.title.toLowerCase() === mtLower || c.id === menuType)) {
+      const matchedCategory = editableMenuCategories.find(c => c.title.toLowerCase() === mtLower || c.id === menuType)!;
       menuDetails += `🍽️ ${matchedCategory.title} (${matchedCategory.items.length} items):\n\n` +
         matchedCategory.items.map(i => `• ${i.name}\n  ${i.description}`).join('\n\n');
-    } else if (menuType === 'Live Dosa Option 2' || menuType.toLowerCase().includes('option 2')) {
+    }
+    // 4. Packages
+    else if (mtLower.includes('live dosa option 2') || (mtLower.includes('live dosa') && mtLower.includes('option 2'))) {
       menuDetails += `👑 Live Dosa Option 2 (3 Hours Service + 1 Main + 1 Dessert):\n` +
         `• Weekdays (Mon-Fri): £${editableLiveDosa2.pricing?.weekday?.pricePerPerson || 16.50}/person\n` +
         `• Weekends & Bank Holidays: £${editableLiveDosa2.pricing?.weekend?.pricePerPerson || 17.50}/person\n\n` +
-        `Inclusions: 12 Live On-Site Dishes + 1 Restaurant Main + 1 Traditional Dessert + 3 Hours Chef Service.`;
-    } else if (menuType === 'Madras Thali (Option 3)' || menuType.toLowerCase().includes('thali') || menuType.toLowerCase().includes('option 3')) {
+        `Inclusions: 12 Live On-Site Dishes (Dosas, Uthappams, Meduvada, Idly), 1 Restaurant Main Course, 1 Traditional Dessert, 3 Hours Dedicated Chef Service.`;
+    } else if (mtLower.includes('thali') || mtLower.includes('bhojanam') || mtLower.includes('option 3')) {
       menuDetails += `🍲 ${editableMadrasThali.title}:\n• Price: £${editableMadrasThali.pricePerPerson}/person\n12 Core Dishes Included:\n` +
         editableMadrasThali.coreDishes.map(d => `• ${d.name}: ${d.description}`).join('\n');
-    } else if (menuType === 'Tailor Your Own Menu (Option 4)' || menuType.toLowerCase().includes('tailor')) {
-      menuDetails += `🎨 ${editableTailorMenu4.title}:\n• Price: ${editableTailorMenu4.priceLabel}\n4 Signature Live Stations: ${editableTailorMenu4.liveStationsFeatured.map(s => s.name).join(', ')}`;
-    } else if (menuType === 'Dosa Festival At Your Home (Option 5)' || menuType.toLowerCase().includes('festival')) {
-      menuDetails += `🥞 ${editableDosaFestival5.title}:\n• Price: £${editableDosaFestival5.pricePerPerson}/person (34+ Varieties)`;
-    } else if (menuType === 'Live Dosa Option 1' || menuType.toLowerCase().includes('option 1')) {
+    } else if (mtLower.includes('tailor') || mtLower.includes('option 4')) {
+      menuDetails += `🎨 ${editableTailorMenu4.title}:\n• Price: ${editableTailorMenu4.priceLabel}\n4 Signature Live Stations:\n` +
+        editableTailorMenu4.liveStationsFeatured.map(s => `• ${s.name}: ${s.description}`).join('\n');
+    } else if (mtLower.includes('festival') || mtLower.includes('option 5')) {
+      menuDetails += `🥞 ${editableDosaFestival5.title}:\n• Price: £${editableDosaFestival5.pricePerPerson}/person (34+ Varieties live counter)`;
+    } else if (mtLower.includes('canape') || mtLower.includes('canapé') || mtLower.includes('option 6')) {
+      menuDetails += `🍢 ${editableCanape6.title}:\n• Price: From £${editableCanape6.pricePerPerson}/person\nCanapé Selection:\n` +
+        editableCanape6.suggestedItems.map(i => `• ${i}`).join('\n');
+    } else if (mtLower.includes('north indian') || mtLower.includes('option 7')) {
+      menuDetails += `🍛 ${editableNorthIndian7.title}:\n• Price: £${editableNorthIndian7.pricePerPerson}/person (Min 25 guests)\nInclusions:\n` +
+        editableNorthIndian7.inclusions.map(i => `✓ ${i}`).join('\n');
+    } else if (mtLower.includes('gujarati') || mtLower.includes('option 8')) {
+      menuDetails += `🪔 ${editableGujarati8.title}:\n• Price: £${editableGujarati8.pricePerPerson}/person\n` +
+        `Authentic Gujarati Thaal with Mithai, Farsan, Classic Shaak (Undhiyu), Dal, Kadhi, Rotli & Rice.`;
+    } else if (mtLower.includes('punjabi') || mtLower.includes('option 9')) {
+      menuDetails += `👑 ${editablePunjabi9.title}:\n• Price: £${editablePunjabi9.pricePerPerson}/person\n` +
+        `Royal Punjabi Feast with Tikkas, Royal Subjies, Dal Makhani, Fresh Naans, Rice & Desserts.`;
+    } else if (mtLower.includes('live dosa') || mtLower.includes('option 1') || mtLower.includes('live counter')) {
       menuDetails += `🎪 Live Dosa Option 1 (12 Live Dishes · 2 Hours Service):\n` +
         `• Weekdays: £${editableLiveDosa1.pricing?.weekday?.pricePerPerson || 11}/person\n` +
-        `• Weekends: £${editableLiveDosa1.pricing?.weekend?.pricePerPerson || 12}/person`;
+        `• Weekends: £${editableLiveDosa1.pricing?.weekend?.pricePerPerson || 12}/person\n\n` +
+        `Inclusions: 12 Live On-site Specialties (Dosas, Uthappams, Meduvada, Idly), Chutneys & Sambar.`;
+    } else if (mtLower === 'venue hall charges') {
+      menuDetails += `🏢 Venue Hall Hire Charges:\n` +
+        editableVenueCharges.map(vc => `• ${vc.day}: ${vc.charge}${vc.note ? ` (${vc.note})` : ''}`).join('\n');
+    } else if (mtLower === 'kids pricing') {
+      menuDetails += `🧒 Kids Pricing (Over 50 Adults):\n` +
+        editableKidsPricing.map(kp => `• ${kp.ageRange}: ${kp.price}`).join('\n');
+    } else if (mtLower === 'dry hire') {
+      menuDetails += `🏢 Dry Hire Prices:\n` +
+        editableDryHirePrices.map(dh => `• ${dh.day} (${dh.session}): £${dh.price}`).join('\n');
     } else {
-      menuDetails += `Detailed options for ${menuType}`;
+      const custom = editableCustomPackages.find(p => !p.isDeleted && (p.title.toLowerCase() === mtLower || p.id === menuType));
+      if (custom) {
+        menuDetails += `✨ ${custom.title}:\n• Price: ${custom.pricingType === 'flat' ? `£${custom.pricePerPerson}/pp` : `From £${custom.pricing?.weekday?.pricePerPerson}/pp`}\n\n${custom.description}\n\n` +
+          `Inclusions:\n` + (custom.items || []).map(i => `• ${i.name}${i.description ? `: ${i.description}` : ''}`).join('\n');
+      } else {
+        menuDetails += `Detailed options for ${menuType}`;
+      }
     }
 
     const subject = renderCommunicationTemplate(tmpl.subject, {
@@ -2608,7 +3113,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     const adults = booking.adults ?? booking.guests;
     const kids4to10 = booking.kids4to10 || 0;
     const kidsUnder4 = booking.kidsUnder4 || 0;
-    const pricePerPerson = editableBanquetPackages.find(p => p.name === (booking.selectedMenu || booking.package))?.pricePerPerson || 0;
+    const pricePerPerson = getPackageRate(booking.selectedMenu || booking.package, booking.date);
     const grandTotal = getTotalAmount(booking);
     const extraChargesTotal = (booking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
     const finalPaymentPaidAmt = grandTotal - booking.deposit - extraChargesTotal;
@@ -2814,7 +3319,6 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
       const kidsUnder4 = Number(newBookingForm.kidsUnder4) || 0;
       const totalGuests = (adults + kids4to10 + kidsUnder4) || Number(newBookingForm.guests) || 1;
 
-      const selectedPkg = editableBanquetPackages.find(p => p.name === newBookingForm.package);
       let baseAmount = 0;
       const pkgLower = (newBookingForm.package || '').toLowerCase();
       if (pkgLower.includes('live dosa')) {
@@ -2827,10 +3331,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
           (isOption2 ? editableLiveDosa2.pricing : editableLiveDosa1.pricing) as any
         );
         baseAmount = liveCalc.finalSubtotal;
-      } else if (selectedPkg) {
-        baseAmount = adults * selectedPkg.pricePerPerson;
       } else {
-        baseAmount = adults * 25;
+        const rate = getPackageRate(newBookingForm.package, newBookingForm.date);
+        baseAmount = adults * (rate > 0 ? rate : 25);
       }
 
       const depositPercent = pricingDetails.depositPercentage || 50;
@@ -2874,7 +3377,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
         adults: '50',
         kids4to10: '0',
         kidsUnder4: '0',
-        package: 'Gold Package',
+        package: 'Live Dosa Option 1',
         status: 'new_enquiry',
         notes: '',
       });
@@ -3666,7 +4169,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     const kidsUnder4 = booking.kidsUnder4 || 0;
     const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
     const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
-    const pricePerPerson = editableBanquetPackages.find(p => p.name === (booking.selectedMenu || booking.package))?.pricePerPerson || 0;
+    const pricePerPerson = getPackageRate(booking.selectedMenu || booking.package, booking.date);
     const hallCharge = getVenueHallCharge(booking.date, booking.time);
     const grandTotal = getTotalAmount(booking);
     const discountAmount = getDiscountAmount(booking);
@@ -12035,7 +12538,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                         className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-gray-50/60 cursor-not-allowed text-gray-700"
                                       >
                                         <option value="">Choose package</option>
-                                        {editableBanquetPackages.map(p => (
+                                        {getWebsitePackagesForBooking(null).map(p => (
                                           <option key={p.id} value={p.name}>{p.name} — £{p.pricePerPerson}/pp</option>
                                         ))}
                                       </select>
@@ -14728,10 +15231,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
                           const currentPkg = selectedBooking.selectedMenu || selectedBooking.package;
                           if (currentPkg && currentPkg !== 'custom') {
-                            const found = editableBanquetPackages.find(p => p.name === currentPkg);
-                            if (found) {
-                              baseAmount = found.pricePerPerson * val;
-                              deposit = pricingDetails.depositPercentage;
+                            const rate = getPackageRate(currentPkg, selectedBooking.date);
+                            if (rate > 0) {
+                              baseAmount = rate * val;
+                              deposit = Math.round((baseAmount * (pricingDetails.depositPercentage || 50)) / 100);
                             }
                           }
 
@@ -14881,14 +15384,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             baseAmount = liveCalc.finalSubtotal;
                             pricePerPerson = liveCalc.pricePerPerson;
                           } else {
-                            const found = editableBanquetPackages.find(p => p.name === val);
-                            if (found) {
-                              pricePerPerson = found.pricePerPerson;
-                              selectedPkgName = found.name;
-                            } else {
-                              selectedPkgName = val;
-                              pricePerPerson = 0; // Manual pricing for Venue Hire, etc.
-                            }
+                            const rate = getPackageRate(val, selectedBooking.date);
+                            pricePerPerson = rate;
+                            selectedPkgName = val;
                           }
 
                           const adults = selectedBooking.adults ?? selectedBooking.guests;
@@ -14943,27 +15441,30 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none bg-white"
                       >
                         <option value="">-- Choose Package --</option>
-                        <optgroup label="Buffet Packages">
-                          {editableBanquetPackages.map(pkg => (
+                        <optgroup label="Website Catering Packages">
+                          {getWebsitePackagesForBooking(selectedBooking).map(pkg => (
                             <option key={pkg.id} value={pkg.name}>
-                              {pkg.name} (£{pkg.pricePerPerson}/person)
+                              {pkg.icon} {pkg.name} ({pkg.priceDisplay.split('·')[0].trim()})
                             </option>
                           ))}
                         </optgroup>
-                        <optgroup label="Live Dosa Stations">
-                          <option value="Live Dosa Option 1 (Weekday: Mon-Fri)">Live Dosa Option 1 (Weekday: Mon-Fri) — £11/pp (Min £385)</option>
-                          <option value="Live Dosa Option 1 (Weekend & Holidays)">Live Dosa Option 1 (Weekend &amp; Holidays) — £12/pp (Min £480)</option>
-                          <option value="Live Dosa Option 2 (Weekday: Mon-Fri)">Live Dosa Option 2 (Weekday: Mon-Fri) — £16.50/pp (Min £577.50)</option>
-                          <option value="Live Dosa Option 2 (Weekend & Holidays)">Live Dosa Option 2 (Weekend &amp; Holidays) — £17.50/pp (Min £700)</option>
+                        <optgroup label="Venue & Services">
                           <option value="Venue Hire">Venue Hire</option>
                           <option value="Dry Hire">Dry Hire</option>
                           <option value="Table Service">Table Service</option>
                           <option value="Kids Pricing">Kids Pricing</option>
                         </optgroup>
-                        <optgroup label="Upgrades">
+                        <optgroup label="Upgrades & Extras">
                           {(editableUpgrades?.items || []).map((extra: MenuUpgradeItem) => (
                             <option key={extra.name} value={extra.name}>
                               {extra.name} ({extra.priceLabel})
+                            </option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Legacy Banquet Packages">
+                          {editableBanquetPackages.map(pkg => (
+                            <option key={pkg.id} value={pkg.name}>
+                              {pkg.name} (£{pkg.pricePerPerson}/person)
                             </option>
                           ))}
                         </optgroup>
@@ -15043,9 +15544,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               const kidsUnder4 = selectedBooking.kidsUnder4 || 0;
                               const guests = adults + kids4to10 + kidsUnder4;
                               
-                              let pricePerPerson = 0;
-                              const found = editableBanquetPackages.find(p => p.name === (selectedBooking.selectedMenu || selectedBooking.package));
-                              if (found) pricePerPerson = found.pricePerPerson;
+                              const pricePerPerson = getPackageRate(selectedBooking.selectedMenu || selectedBooking.package, selectedBooking.date);
 
                               const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
                               const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
@@ -15076,9 +15575,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               const kidsUnder4 = selectedBooking.kidsUnder4 || 0;
                               const guests = adults + kids4to10 + kidsUnder4;
                               
-                              let pricePerPerson = 0;
-                              const found = editableBanquetPackages.find(p => p.name === (selectedBooking.selectedMenu || selectedBooking.package));
-                              if (found) pricePerPerson = found.pricePerPerson;
+                              const pricePerPerson = getPackageRate(selectedBooking.selectedMenu || selectedBooking.package, selectedBooking.date);
 
                               const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
                               const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
@@ -15109,9 +15606,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               const kids4to10 = selectedBooking.kids4to10 || 0;
                               const guests = adults + kids4to10 + kidsUnder4;
                               
-                              let pricePerPerson = 0;
-                              const found = editableBanquetPackages.find(p => p.name === (selectedBooking.selectedMenu || selectedBooking.package));
-                              if (found) pricePerPerson = found.pricePerPerson;
+                              const pricePerPerson = getPackageRate(selectedBooking.selectedMenu || selectedBooking.package, selectedBooking.date);
 
                               const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
                               const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
@@ -15204,77 +15699,78 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 <div className="border border-purple-200 rounded-xl p-4 bg-purple-50">
                   <div className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-3">Send Menu Packages via WhatsApp</div>
                   <div className="space-y-2">
-                    {editableBanquetPackages.map((pkg) => {
-                      const adults = selectedBooking.adults ?? selectedBooking.guests;
-                      const kids4to10 = selectedBooking.kids4to10 || 0;
-                      const kidsUnder4 = selectedBooking.kidsUnder4 || 0;
-                      const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
-                      const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
-                      const estTotal = (pkg.pricePerPerson * adults) + (kids4to10 * kidsPrice);
-                      const totalGuests = adults + kids4to10 + kidsUnder4;
-                      
-                      return (
-                        <div key={pkg.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2.5 border border-purple-100">
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">{pkg.name}</div>
-                            <div className="text-xs text-gray-500">£{pkg.pricePerPerson}/person · Est. £{estTotal.toLocaleString()} for {totalGuests} guests</div>
+                    {getWebsitePackagesForBooking(selectedBooking).map((pkg) => (
+                      <div key={pkg.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2.5 border border-purple-100 hover:border-purple-300 transition-colors shadow-2xs">
+                        <div className="min-w-0 pr-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-sm">{pkg.icon}</span>
+                            <span className="text-sm font-semibold text-gray-900">{pkg.name}</span>
+                            {pkg.badge && (
+                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 border border-purple-200">
+                                {pkg.badge}
+                              </span>
+                            )}
                           </div>
-                          <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
-                            <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n🥗 Starters: ${pkg.starters.veg} Veg + ${pkg.starters.nonVeg} Non-Veg\n🍛 Mains: ${pkg.mains.veg} Veg + ${pkg.mains.nonVeg} Non-Veg\n🍮 Desserts: ${pkg.desserts.join(', ')}\n${pkg.drinks.length > 0 ? `🥤 Drinks: ${pkg.drinks.join(', ')}\n` : ''}${pkg.guestLabel ? `\n👥 ${pkg.guestLabel}` : ''}\n\nFor ${adults} Adults and ${kids4to10} Kids, estimated total: *£${estTotal.toLocaleString()}* (Excl. VAT)\n\n🧒 *Kids Pricing* (Over 50 Adults):\n${editableKidsPricing.map(kp => `${kp.ageRange}: ${kp.price}`).join('\\n')}\n\n🏢 *Venue Hire Charges:*\n${editableVenueCharges.map(vc => `• ${vc.day}: ${vc.charge}${vc.note ? ` (${vc.note})` : ''}`).join('\\n')}\n\n✨ *Upgrades Available:*\n${(editableUpgrades?.items || []).map((e: MenuUpgradeItem) => `• ${e.name}: ${e.priceLabel}`).join('\\n')}\n\nPlease reply with your selection! 🙏`)}
-                              target="_blank" rel="noopener noreferrer"
-                              className="flex items-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-lg"
-                              style={{ background: '#25D366', color: 'white' }}
-                              title="Send via WhatsApp">
-                              <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                              WhatsApp
-                            </a>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const { subject, body } = getMenuEmailContent(selectedBooking.name, selectedBooking.phone, selectedBooking.email, pkg.name, totalGuests, selectedBooking);
-                                openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id);
-                              }}
-                              className="flex items-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 cursor-pointer"
-                              title="Send via Email"
-                            >
-                              <Icon name="EnvelopeIcon" size={12} />
-                              Email
-                            </button>
-                          </div>
+                          <div className="text-xs text-purple-700 font-medium mt-0.5">{pkg.priceDisplay}</div>
+                          {pkg.inclusionsSummary && (
+                            <div className="text-[11px] text-gray-500 truncate max-w-xs sm:max-w-md mt-0.5">{pkg.inclusionsSummary}</div>
+                          )}
                         </div>
-                      );
-                    })}
-                    {/* Also offer Indian & Sri Lankan menus */}
-                    <div className="mt-2 pt-2 border-t border-purple-100">
-                      <div className="text-xs text-purple-600 font-medium mb-2">Or send full menu list (WhatsApp / Email):</div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                          <a
+                            href={buildPackageWhatsAppLink(selectedBooking, pkg)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg shadow-2xs hover:opacity-90 transition-opacity"
+                            style={{ background: '#25D366', color: 'white' }}
+                            title="Send package via WhatsApp"
+                          >
+                            <Icon name="ChatBubbleLeftRightIcon" size={13} />
+                            WhatsApp
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => openPackageEmail(selectedBooking, pkg)}
+                            className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 cursor-pointer shadow-2xs"
+                            title="Send package via Email"
+                          >
+                            <Icon name="EnvelopeIcon" size={13} />
+                            Email
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    {/* Send menus, extras & pricing lists */}
+                    <div className="mt-3 pt-3 border-t border-purple-100">
+                      <div className="text-xs text-purple-700 font-semibold mb-2">Or send menus, extras & pricing lists (WhatsApp / Email):</div>
                       <div className="flex gap-2 flex-wrap">
                         {[
-                          'Indian Menu',
-                          'Sri Lankan Menu',
-                          'Extras',
-                          'Venue Hall Charges',
-                          'Dry Hire',
-                          'Kids Pricing',
-                        ].map((menuTitle) => (
-                          <div key={menuTitle} className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-2 py-1 shadow-2xs">
-                            <span className="text-xs font-semibold text-gray-700">{menuTitle}</span>
+                          { title: 'Full Restaurant Menu', label: 'Full Menu 📋' },
+                          { title: 'Extras & Upgrades', label: 'Extras & Upgrades ✨' },
+                          { title: 'Venue Hall Charges', label: 'Hall Charges 🏢' },
+                          { title: 'Kids Pricing', label: 'Kids Pricing 🧒' },
+                          { title: 'Dry Hire', label: 'Dry Hire 🍽️' },
+                          ...editableMenuCategories.map(c => ({ title: c.title, label: `${c.icon || '🍽️'} ${c.title}` }))
+                        ].map((m) => (
+                          <div key={m.title} className="flex items-center gap-1.5 bg-white border border-purple-200/70 hover:border-purple-300 rounded-lg px-2.5 py-1 shadow-2xs">
+                            <span className="text-xs font-medium text-gray-800">{m.label}</span>
                             <a
-                              href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, menuTitle, selectedBooking.guests)}
+                              href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, m.title, selectedBooking.guests)}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"
-                              title={`Send ${menuTitle} via WhatsApp`}
+                              className="p-1 text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+                              title={`Send ${m.title} via WhatsApp`}
                             >
                               <Icon name="ChatBubbleLeftRightIcon" size={13} />
                             </a>
                             <button
                               type="button"
                               onClick={() => {
-                                const { subject, body } = getMenuEmailContent(selectedBooking.name, selectedBooking.phone, selectedBooking.email, menuTitle, selectedBooking.guests, selectedBooking);
+                                const { subject, body } = getMenuEmailContent(selectedBooking.name, selectedBooking.phone, selectedBooking.email, m.title, selectedBooking.guests, selectedBooking);
                                 openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id);
                               }}
-                              className="p-1 text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
-                              title={`Send ${menuTitle} via Email`}
+                              className="p-1 text-blue-600 hover:bg-blue-50 rounded cursor-pointer transition-colors"
+                              title={`Send ${m.title} via Email`}
                             >
                               <Icon name="EnvelopeIcon" size={13} />
                             </button>
@@ -15807,7 +16303,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     const kidsUnder4 = selectedBooking.kidsUnder4 || 0;
                     const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
                     const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
-                    const pricePerPerson = editableBanquetPackages.find(p => p.name === (selectedBooking.selectedMenu || selectedBooking.package))?.pricePerPerson || 0;
+                    const pricePerPerson = getPackageRate(selectedBooking.selectedMenu || selectedBooking.package, selectedBooking.date);
                     const hasKids = kids4to10 > 0 || kidsUnder4 > 0;
                     return (
                       <div className="bg-white rounded-lg p-2.5 border border-gray-100 space-y-1 mb-1">
@@ -16628,15 +17124,32 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     onChange={(e) => setNewBookingForm({ ...newBookingForm, package: e.target.value })}
                     className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-white"
                   >
-                    {editableBanquetPackages.map(p => (
-                      <option key={p.id} value={p.name}>{p.name} (£{p.pricePerPerson}/pp)</option>
-                    ))}
-                    <option value="Live Dosa Option 1 (Weekday: Mon-Fri)">Live Dosa Option 1 (Weekday: Mon-Fri) — £11.00/pp (Min £385)</option>
-                    <option value="Live Dosa Option 1 (Weekend & Holidays)">Live Dosa Option 1 (Weekend &amp; Holidays) — £12.00/pp (Min £480)</option>
-                    <option value="Live Dosa Option 2 (Weekday: Mon-Fri)">Live Dosa Option 2 (Weekday: Mon-Fri) — £16.50/pp (Min £577.50)</option>
-                    <option value="Live Dosa Option 2 (Weekend & Holidays)">Live Dosa Option 2 (Weekend &amp; Holidays) — £17.50/pp (Min £700)</option>
-                    <option value="Venue Hall Only">Venue Hall Only</option>
-                    <option value="Dry Hire">Dry Hire</option>
+                    <optgroup label="Website Catering Packages">
+                      {getWebsitePackagesForBooking(null).map(p => (
+                        <option key={p.id} value={p.name}>
+                          {p.icon} {p.name} ({p.priceDisplay.split('·')[0].trim()})
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Venue & Services">
+                      <option value="Venue Hall Only">Venue Hall Only</option>
+                      <option value="Dry Hire">Dry Hire</option>
+                      <option value="Table Service">Table Service</option>
+                    </optgroup>
+                    <optgroup label="Upgrades & Extras">
+                      {(editableUpgrades?.items || []).map((extra: MenuUpgradeItem) => (
+                        <option key={extra.name} value={extra.name}>
+                          {extra.name} ({extra.priceLabel})
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Legacy Banquet Packages">
+                      {editableBanquetPackages.map(p => (
+                        <option key={p.id} value={p.name}>
+                          {p.name} (£{p.pricePerPerson}/pp)
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
                 </div>
                 <div>
