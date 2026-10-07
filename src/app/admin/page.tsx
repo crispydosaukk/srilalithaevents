@@ -76,6 +76,7 @@ import {
 } from '@/app/data/emailNotificationConfig';
 import {
   CommunicationConfig,
+  CommunicationTemplate,
   DEFAULT_COMMUNICATION_CONFIG,
   sanitizeCommunicationConfig,
   renderCommunicationTemplate,
@@ -96,7 +97,8 @@ type BookingStatus =
   | 'final_payment_received'
   | 'completed'
   | 'cancelled'
-  | 'rejected';
+  | 'rejected'
+  | 'no_show';
 
 interface ExtraCharge {
   id?: string;
@@ -232,6 +234,7 @@ const STATUS_LABELS: Record<BookingStatus, string> = {
   completed: 'Completed',
   cancelled: 'Cancelled',
   rejected: 'Rejected',
+  no_show: 'No Show',
 };
 
 const STATUS_COLORS: Record<BookingStatus, string> = {
@@ -247,6 +250,7 @@ const STATUS_COLORS: Record<BookingStatus, string> = {
   completed: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
   cancelled: 'bg-gray-100 text-gray-700 border border-gray-300',
   rejected: 'bg-red-50 text-red-700 border border-red-200',
+  no_show: 'bg-rose-50 text-rose-700 border border-rose-200',
 };
 
 const STATUS_DOT: Record<BookingStatus, string> = {
@@ -262,7 +266,39 @@ const STATUS_DOT: Record<BookingStatus, string> = {
   completed: 'bg-emerald-500',
   cancelled: 'bg-gray-400',
   rejected: 'bg-red-500',
+  no_show: 'bg-rose-500',
 };
+
+const BOOKING_FILTER_STATUS_OPTIONS = [
+  { value: 'all', label: 'All Active' },
+  { value: 'new_enquiry', label: 'New Enquiry' },
+  { value: 'menu_sent', label: 'Menu Sent' },
+  { value: 'menu_selected', label: 'Menu Selected' },
+  { value: 'deposit_pending', label: 'Deposit Pending' },
+  { value: 'deposit_confirmed', label: 'Deposit Confirmed' },
+  { value: 'final_invoice_sent', label: 'Final Invoice Sent' },
+  { value: 'final_payment_received', label: 'Final Payment Received' },
+  { value: 'event_scheduled', label: 'Event Scheduled' },
+  { value: 'event_completed', label: 'Event Completed' },
+  { value: 'no_show', label: 'No Show' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
+
+const ALL_ROW_STATUS_OPTIONS: { value: BookingStatus; label: string; dot: string }[] = [
+  { value: 'new_enquiry', label: 'New Enquiry', dot: 'bg-blue-500' },
+  { value: 'menu_sent', label: 'Menu Sent', dot: 'bg-purple-500' },
+  { value: 'menu_selected', label: 'Menu Selected', dot: 'bg-indigo-500' },
+  { value: 'deposit_pending', label: 'Deposit Pending', dot: 'bg-amber-400' },
+  { value: 'deposit_confirmed', label: 'Deposit Confirmed', dot: 'bg-orange-500' },
+  { value: 'final_invoice_sent', label: 'Final Invoice Sent', dot: 'bg-yellow-500' },
+  { value: 'final_payment_received', label: 'Final Payment Received', dot: 'bg-lime-500' },
+  { value: 'event_scheduled', label: 'Event Scheduled', dot: 'bg-cyan-500' },
+  { value: 'event_completed', label: 'Event Completed', dot: 'bg-teal-500' },
+  { value: 'no_show', label: 'No Show', dot: 'bg-rose-500' },
+  { value: 'completed', label: 'Completed', dot: 'bg-emerald-500' },
+  { value: 'cancelled', label: 'Cancelled', dot: 'bg-gray-400' },
+];
 
 const MENU_PACKAGES = [
   {
@@ -377,7 +413,24 @@ function buildWhatsAppLink(phone: string, message: string) {
   return `https://wa.me/${cleaned}?text=${encodeURIComponent(message)}`;
 }
 
-type AdminTab = 'overview' | 'online_orders' | 'enquiries' | 'bookings' | 'calendar' | 'customers' | 'payments' | 'menus' | 'history' | 'settings' | 'access' | 'discount_approvals' | 'tracker' | 'website_content';
+type AdminTab =
+  | 'overview'
+  | 'online_orders'
+  | 'enquiries'
+  | 'bookings'
+  | 'calendar'
+  | 'customers'
+  | 'payments'
+  | 'menus'
+  | 'history'
+  | 'settings'
+  | 'access'
+  | 'discount_approvals'
+  | 'tracker'
+  | 'website_content'
+  | 'no_show'
+  | 'completion_events'
+  | 'email_templates';
 
 // ─── COMPONENT ────────────────────────────────────────────────────────────────
 
@@ -427,6 +480,14 @@ export default function AdminPage() {
   const [bookingStartDate, setBookingStartDate] = useState('');
   const [bookingEndDate, setBookingEndDate] = useState('');
   const [selectedBookingIds, setSelectedBookingIds] = useState<string[]>([]);
+  const [bookingsPage, setBookingsPage] = useState(1);
+  const [bookingsPageSize, setBookingsPageSize] = useState(5);
+  const [dismissEnquiryBanner, setDismissEnquiryBanner] = useState(false);
+  const [noShowSearch, setNoShowSearch] = useState('');
+  const [completionSearch, setCompletionSearch] = useState('');
+  const [completionMonthFilter, setCompletionMonthFilter] = useState('all');
+  const [openFilterDropdown, setOpenFilterDropdown] = useState<string | null>(null);
+  const [openRowStatusId, setOpenRowStatusId] = useState<string | null>(null);
 
   // Unified Deletion Confirmation Modal State
   const [deleteConfirmModal, setDeleteConfirmModal] = useState<{
@@ -492,14 +553,32 @@ export default function AdminPage() {
     subject: string;
     body: string;
     bookingId?: string;
+    templateId?: string;
   }>({
     to: '',
     customerName: '',
     subject: '',
     body: '',
     bookingId: '',
+    templateId: 'custom',
   });
   const [isSendingCustomEmail, setIsSendingCustomEmail] = useState(false);
+
+  // Custom Template Creation State
+  const [showCreateTemplateModal, setShowCreateTemplateModal] = useState(false);
+  const [newTemplateForm, setNewTemplateForm] = useState({
+    name: '',
+    description: '',
+    subject: '',
+    body: '',
+  });
+  const [isSavingNewTemplate, setIsSavingNewTemplate] = useState(false);
+
+  // Template Edit & Delete Confirmation Modals State
+  const [editingTemplateModal, setEditingTemplateModal] = useState<CommunicationTemplate | null>(null);
+  const [isSavingEditedTemplate, setIsSavingEditedTemplate] = useState(false);
+  const [templateToDelete, setTemplateToDelete] = useState<CommunicationTemplate | null>(null);
+  const [isDeletingTemplate, setIsDeletingTemplate] = useState(false);
 
   // Dynamic Website Content State (Hero, Badges, Stats Ribbon, Menu Header, Terms & Conditions)
   const [websiteContent, setWebsiteContent] = useState<WebsiteContentConfig>(DEFAULT_WEBSITE_CONTENT);
@@ -647,6 +726,29 @@ export default function AdminPage() {
       localStorage.setItem('adminActiveTab', activeTab);
     }
   }, [activeTab]);
+
+  // Global outside click and escape handler for custom dropdowns
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-custom-dropdown]')) {
+        setOpenFilterDropdown(null);
+        setOpenRowStatusId(null);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpenFilterDropdown(null);
+        setOpenRowStatusId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   // Seed default site_data if database is newly initialized
   useEffect(() => {
@@ -911,12 +1013,206 @@ export default function AdminPage() {
     }
   };
 
+  const handleSaveNewCustomTemplate = async (applyToComposer: boolean = false) => {
+    const { name, description, subject, body } = newTemplateForm;
+    if (!name.trim()) {
+      setCustomAlert({ message: 'Please enter a name for the new email template.', type: 'error' });
+      return;
+    }
+    if (!subject.trim()) {
+      setCustomAlert({ message: 'Please enter an email subject for the template.', type: 'error' });
+      return;
+    }
+    if (!body.trim()) {
+      setCustomAlert({ message: 'Please enter message content for the template.', type: 'error' });
+      return;
+    }
+
+    setIsSavingNewTemplate(true);
+    try {
+      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30);
+      const templateId = `custom_${slug || Date.now()}`;
+
+      const newTemplate: CommunicationTemplate = {
+        id: templateId,
+        name: name.trim(),
+        description: description.trim() || 'Custom created email template',
+        subject: subject.trim(),
+        body: body.trim(),
+      };
+
+      const updatedConfig: CommunicationConfig = {
+        ...editableCommConfig,
+        templates: {
+          ...editableCommConfig.templates,
+          [templateId]: newTemplate,
+        },
+        updatedAt: new Date().toISOString(),
+      };
+
+      const sanitized = sanitizeCommunicationConfig(updatedConfig);
+      await setDoc(doc(db, 'site_data', 'communication_templates'), sanitized, { merge: true });
+      setCommConfig(sanitized);
+      setEditableCommConfig(sanitized);
+      setSelectedTemplateForEdit(templateId);
+
+      if (applyToComposer) {
+        setEmailModalData(prev => ({
+          ...prev,
+          templateId,
+          subject: newTemplate.subject,
+          body: newTemplate.body,
+        }));
+      }
+
+      setShowCreateTemplateModal(false);
+      setNewTemplateForm({ name: '', description: '', subject: '', body: '' });
+      setCustomAlert({
+        message: `Template "${newTemplate.name}" created and saved successfully!`,
+        type: 'success',
+      });
+    } catch (err: any) {
+      console.error('Error saving new custom template:', err);
+      setCustomAlert({
+        message: 'Failed to save new template: ' + (err?.message || err),
+        type: 'error',
+      });
+    } finally {
+      setIsSavingNewTemplate(false);
+    }
+  };
+
+  const handleSaveEditedTemplate = async (updated: CommunicationTemplate) => {
+    if (!updated.name.trim()) {
+      setCustomAlert({ message: 'Template name cannot be empty.', type: 'error' });
+      return;
+    }
+    if (!updated.subject.trim()) {
+      setCustomAlert({ message: 'Email subject cannot be empty.', type: 'error' });
+      return;
+    }
+    if (!updated.body.trim()) {
+      setCustomAlert({ message: 'Message content cannot be empty.', type: 'error' });
+      return;
+    }
+
+    setIsSavingEditedTemplate(true);
+    try {
+      const updatedConfig: CommunicationConfig = {
+        ...editableCommConfig,
+        templates: {
+          ...editableCommConfig.templates,
+          [updated.id]: {
+            ...updated,
+            name: updated.name.trim(),
+            description: updated.description.trim(),
+            subject: updated.subject.trim(),
+            body: updated.body.trim(),
+          },
+        },
+        updatedAt: new Date().toISOString(),
+      };
+
+      const sanitized = sanitizeCommunicationConfig(updatedConfig);
+      await setDoc(doc(db, 'site_data', 'communication_templates'), sanitized, { merge: true });
+      setCommConfig(sanitized);
+      setEditableCommConfig(sanitized);
+
+      // If email composer is open and using this template, re-apply it dynamically
+      if (emailModalOpen && emailModalData.templateId === updated.id) {
+        applyTemplateToEmailModal(updated.id);
+      }
+
+      setEditingTemplateModal(null);
+      setCustomAlert({
+        message: `Template "${updated.name}" saved successfully!`,
+        type: 'success',
+      });
+    } catch (err: any) {
+      console.error('Error saving template:', err);
+      setCustomAlert({
+        message: 'Failed to save template changes: ' + (err?.message || err),
+        type: 'error',
+      });
+    } finally {
+      setIsSavingEditedTemplate(false);
+    }
+  };
+
+  const executeDeleteTemplate = async (templateId: string) => {
+    setIsDeletingTemplate(true);
+    try {
+      const targetName = editableCommConfig.templates[templateId]?.name || templateId;
+      const nextTemplates = { ...editableCommConfig.templates };
+      delete nextTemplates[templateId];
+
+      const updatedConfig: CommunicationConfig = {
+        ...editableCommConfig,
+        templates: nextTemplates,
+        updatedAt: new Date().toISOString(),
+      };
+
+      const sanitized = sanitizeCommunicationConfig(updatedConfig);
+      await setDoc(doc(db, 'site_data', 'communication_templates'), sanitized, { merge: true });
+      setCommConfig(sanitized);
+      setEditableCommConfig(sanitized);
+
+      // If this template was selected in email composer, reset to custom
+      if (emailModalData.templateId === templateId) {
+        setEmailModalData(prev => ({ ...prev, templateId: 'custom' }));
+      }
+      // If this template was selected in template editor, select next remaining template
+      const remainingIds = Object.keys(nextTemplates);
+      if (selectedTemplateForEdit === templateId && remainingIds.length > 0) {
+        setSelectedTemplateForEdit(remainingIds[0]);
+      }
+
+      setTemplateToDelete(null);
+      setCustomAlert({
+        message: `Template "${targetName}" deleted successfully.`,
+        type: 'success',
+      });
+    } catch (err: any) {
+      console.error('Error deleting template:', err);
+      setCustomAlert({
+        message: 'Failed to delete template: ' + (err?.message || err),
+        type: 'error',
+      });
+    } finally {
+      setIsDeletingTemplate(false);
+    }
+  };
+
+  const handleRestoreDefaultTemplates = async () => {
+    try {
+      const updatedConfig: CommunicationConfig = {
+        ...editableCommConfig,
+        templates: {
+          ...DEFAULT_COMMUNICATION_CONFIG.templates,
+          ...editableCommConfig.templates,
+        },
+        updatedAt: new Date().toISOString(),
+      };
+      const sanitized = sanitizeCommunicationConfig(updatedConfig);
+      await setDoc(doc(db, 'site_data', 'communication_templates'), sanitized, { merge: true });
+      setCommConfig(sanitized);
+      setEditableCommConfig(sanitized);
+      setCustomAlert({
+        message: 'Default system templates restored successfully!',
+        type: 'success',
+      });
+    } catch (err: any) {
+      setCustomAlert({ message: 'Failed to restore default templates: ' + (err?.message || err), type: 'error' });
+    }
+  };
+
   const openEmailComposer = (
     to: string,
     customerName: string,
     subject: string,
     body: string,
-    bookingId?: string
+    bookingId?: string,
+    templateId?: string
   ) => {
     setEmailModalData({
       to: to || '',
@@ -924,6 +1220,7 @@ export default function AdminPage() {
       subject: subject || '',
       body: body || '',
       bookingId: bookingId || '',
+      templateId: templateId || 'custom',
     });
     setEmailModalOpen(true);
   };
@@ -953,6 +1250,8 @@ export default function AdminPage() {
           subject: emailModalData.subject,
           message: emailModalData.body,
           bookingId: emailModalData.bookingId,
+          contactEmail: editableCommConfig.contactEmail,
+          contactWhatsApp: editableCommConfig.contactWhatsApp,
         }),
       });
       const data = await res.json();
@@ -2508,16 +2807,16 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
   const getEnquiryEmailContent = (b: Booking) => {
     const tmpl = editableCommConfig.templates.enquiry_reply || DEFAULT_COMMUNICATION_CONFIG.templates.enquiry_reply;
     const subject = renderCommunicationTemplate(tmpl.subject, {
-      customerName: b.name.split(' ')[0],
-      eventType: b.eventType,
-      eventDate: b.date || 'your preferred date',
-      bookingId: b.id,
+      customerName: b.name ? b.name.split(' ')[0] : '',
+      eventType: b.eventType || '',
+      eventDate: b.date || '',
+      bookingId: b.id || '',
     });
     const body = renderCommunicationTemplate(tmpl.body, {
-      customerName: b.name.split(' ')[0],
-      eventType: b.eventType,
-      eventDate: b.date || 'TBD',
-      guests: b.guests,
+      customerName: b.name ? b.name.split(' ')[0] : '',
+      eventType: b.eventType || '',
+      eventDate: b.date || '',
+      guests: b.guests || '',
       contactWhatsApp: editableCommConfig.contactWhatsApp,
       contactEmail: editableCommConfig.contactEmail,
     });
@@ -2525,8 +2824,25 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
   };
 
   const getOrderEmailContent = (order: any) => {
-    const subject = `✨ SriLalitha Catering: Confirmation for Order #${order.id}`;
-    const body = `Hi ${order.name},\n\nThank you for your order with SriLalitha Catering (Order #${order.id})!\n\nWe have received your menu selection for ${order.date} (${order.guests} guests).\n\nEverything is scheduled in our kitchen. Please feel free to reply if you need any adjustments.\n\nWarm regards,\nSriLalitha Events & Catering\nPhone / WhatsApp: ${editableCommConfig.contactWhatsApp}\nEmail: ${editableCommConfig.contactEmail}`;
+    const tmpl = editableCommConfig.templates.order_confirmation || DEFAULT_COMMUNICATION_CONFIG.templates.order_confirmation;
+    const subject = renderCommunicationTemplate(tmpl.subject, {
+      customerName: order.name ? order.name.split(' ')[0] : '',
+      orderId: order.id || '',
+      bookingId: order.id || '',
+      eventDate: order.date || '',
+      guests: order.guests || '',
+      contactWhatsApp: editableCommConfig.contactWhatsApp,
+      contactEmail: editableCommConfig.contactEmail,
+    });
+    const body = renderCommunicationTemplate(tmpl.body, {
+      customerName: order.name ? order.name.split(' ')[0] : '',
+      orderId: order.id || '',
+      bookingId: order.id || '',
+      eventDate: order.date || '',
+      guests: order.guests || '',
+      contactWhatsApp: editableCommConfig.contactWhatsApp,
+      contactEmail: editableCommConfig.contactEmail,
+    });
     return { subject, body };
   };
 
@@ -2559,20 +2875,20 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     }
 
     const subject = renderCommunicationTemplate(tmpl.subject, {
-      customerName: customerName.split(' ')[0],
+      customerName: customerName ? customerName.split(' ')[0] : '',
       menuType,
-      eventType: booking?.eventType || 'Catering',
-      eventDate: booking?.date || 'Upcoming Event',
+      eventType: booking?.eventType || '',
+      eventDate: booking?.date || '',
     });
 
     const body = renderCommunicationTemplate(tmpl.body, {
-      customerName: customerName.split(' ')[0],
+      customerName: customerName ? customerName.split(' ')[0] : '',
       menuType,
-      eventType: booking?.eventType || 'Catering',
-      eventDate: booking?.date || 'Upcoming Event',
+      eventType: booking?.eventType || '',
+      eventDate: booking?.date || '',
       menuDetails,
       guests: guestCount || booking?.guests || 0,
-      totalEstimatedAmount: booking ? getTotalAmount(booking).toLocaleString() : 'As per selection',
+      totalEstimatedAmount: booking ? getTotalAmount(booking).toLocaleString() : '',
       contactWhatsApp: editableCommConfig.contactWhatsApp,
       contactEmail: editableCommConfig.contactEmail,
     });
@@ -2721,19 +3037,204 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     return { subject, body };
   };
 
+  const getNoShowEmailContent = (booking: Booking) => {
+    const tmpl = editableCommConfig.templates.no_show || DEFAULT_COMMUNICATION_CONFIG.templates.no_show;
+    const subject = renderCommunicationTemplate(tmpl.subject, {
+      customerName: booking.name.split(' ')[0],
+      bookingId: booking.id,
+      eventType: booking.eventType || '',
+      eventDate: booking.date || '',
+    });
+    const body = renderCommunicationTemplate(tmpl.body, {
+      customerName: booking.name.split(' ')[0],
+      bookingId: booking.id,
+      eventType: booking.eventType || '',
+      eventDate: booking.date || '',
+      contactWhatsApp: editableCommConfig.contactWhatsApp,
+      contactEmail: editableCommConfig.contactEmail,
+    });
+    return { subject, body };
+  };
+
   const getGeneralCustomerEmailContent = (customerName: string, customerEmail: string, bookingId?: string) => {
     const tmpl = editableCommConfig.templates.general_message || DEFAULT_COMMUNICATION_CONFIG.templates.general_message;
     const subject = renderCommunicationTemplate(tmpl.subject, {
-      customerName: customerName.split(' ')[0],
+      customerName: customerName ? customerName.split(' ')[0] : '',
       bookingId: bookingId || '',
     });
     const body = renderCommunicationTemplate(tmpl.body, {
-      customerName: customerName.split(' ')[0],
+      customerName: customerName ? customerName.split(' ')[0] : '',
       bookingId: bookingId || '',
       contactWhatsApp: editableCommConfig.contactWhatsApp,
       contactEmail: editableCommConfig.contactEmail,
     });
     return { subject, body };
+  };
+
+  const applyTemplateToEmailModal = (tmplId: string, currentData?: typeof emailModalData) => {
+    const data = currentData || emailModalData;
+    if (!tmplId || tmplId === 'custom') {
+      setEmailModalData(prev => ({ ...prev, templateId: 'custom' }));
+      return;
+    }
+
+    const tmpl = editableCommConfig.templates[tmplId];
+    if (!tmpl) {
+      setEmailModalData(prev => ({ ...prev, templateId: tmplId }));
+      return;
+    }
+
+    const booking = data.bookingId
+      ? (bookings.find(b => b.id === data.bookingId) || enquiries.find(e => e.id === data.bookingId))
+      : undefined;
+
+    if (tmplId === 'deposit_request' && booking) {
+      const { subject, body } = getDepositEmailContent(booking);
+      setEmailModalData(prev => ({ ...prev, templateId: tmplId, subject, body }));
+      return;
+    }
+    if (tmplId === 'final_invoice' && booking) {
+      const { subject, body } = getFinalInvoiceEmailContent(booking);
+      setEmailModalData(prev => ({ ...prev, templateId: tmplId, subject, body }));
+      return;
+    }
+    if (tmplId === 'extra_invoice' && booking) {
+      const { subject, body } = getExtraInvoiceEmailContent(booking);
+      setEmailModalData(prev => ({ ...prev, templateId: tmplId, subject, body }));
+      return;
+    }
+    if (tmplId === 'booking_completed' && booking) {
+      const { subject, body } = getCompletedEmailContent(booking);
+      setEmailModalData(prev => ({ ...prev, templateId: tmplId, subject, body }));
+      return;
+    }
+    if (tmplId === 'event_reminder' && booking) {
+      const { subject, body } = getEventReminderEmailContent(booking);
+      setEmailModalData(prev => ({ ...prev, templateId: tmplId, subject, body }));
+      return;
+    }
+    if (tmplId === 'enquiry_reply' && booking) {
+      const { subject, body } = getEnquiryEmailContent(booking);
+      setEmailModalData(prev => ({ ...prev, templateId: tmplId, subject, body }));
+      return;
+    }
+    if (tmplId === 'no_show' && booking) {
+      const { subject, body } = getNoShowEmailContent(booking);
+      setEmailModalData(prev => ({ ...prev, templateId: tmplId, subject, body }));
+      return;
+    }
+    if (tmplId === 'menu_sharing' && booking) {
+      const { subject, body } = getMenuEmailContent(
+        data.customerName || booking.name,
+        booking.phone || '',
+        data.to || booking.email,
+        booking.selectedMenu || booking.package || '',
+        booking.guests || 0,
+        booking
+      );
+      setEmailModalData(prev => ({ ...prev, templateId: tmplId, subject, body }));
+      return;
+    }
+    if (tmplId === 'order_confirmation') {
+      const order = (onlineOrdersList as any[]).find((o: any) => o.id === data.bookingId);
+      if (order) {
+        const { subject, body } = getOrderEmailContent(order);
+        setEmailModalData(prev => ({ ...prev, templateId: tmplId, subject, body }));
+        return;
+      } else if (booking) {
+        const { subject, body } = getOrderEmailContent({
+          id: booking.id,
+          name: booking.name,
+          date: booking.date,
+          guests: booking.guests,
+        });
+        setEmailModalData(prev => ({ ...prev, templateId: tmplId, subject, body }));
+        return;
+      }
+    }
+
+    const customerDisplayName = data.customerName || booking?.name || '';
+    const firstName = customerDisplayName ? customerDisplayName.split(' ')[0] : '';
+
+    let invoiceBreakdown = '';
+    let extrasList = '';
+    let extraTotal = '0';
+    let completedSummary = '';
+    let menuDetails = '';
+
+    if (booking) {
+      const adults = booking.adults ?? booking.guests ?? 0;
+      const kids4to10 = booking.kids4to10 || 0;
+      const kidsUnder4 = booking.kidsUnder4 || 0;
+      const pricePerPerson = editableBanquetPackages.find(p => p.name === (booking.selectedMenu || booking.package))?.pricePerPerson || 0;
+      const grandTotal = getTotalAmount(booking);
+      const extraChargesTotal = (booking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
+      const finalPaymentPaidAmt = grandTotal - (booking.deposit || 0) - extraChargesTotal;
+      const isDepositPaid = booking.depositPaid || !['new_enquiry', 'menu_sent', 'menu_selected', 'deposit_pending'].includes(booking.status);
+      const isFinalPaid = booking.finalPaymentPaid;
+      const isExtraPaid = booking.status === 'completed' || !!booking.paymentProofExtra || booking.finalPaymentPaid;
+      const totalPaid = (isDepositPaid ? (booking.deposit || 0) : 0) + (isFinalPaid ? finalPaymentPaidAmt : 0) + (isExtraPaid ? extraChargesTotal : 0);
+      const remainingBalance = Math.max(0, grandTotal - totalPaid);
+
+      invoiceBreakdown = `• Adults: ${adults} × £${pricePerPerson}/person\n` +
+        (kids4to10 > 0 ? `• Kids (4-10 yrs): ${kids4to10} guests\n` : '') +
+        `• Total Guests: ${adults + kids4to10 + kidsUnder4}\n` +
+        `• Base Amount: £${(booking.baseAmount || 0).toLocaleString()}\n` +
+        `• Grand Total: £${grandTotal.toLocaleString()}\n` +
+        `• Deposit Paid: £${(booking.deposit || 0).toLocaleString()}\n` +
+        `• Remaining Balance: £${remainingBalance.toLocaleString()}`;
+
+      const nonPreset = (booking.extraCharges || []).filter(c => !c.isPreset && !(editableUpgrades?.items || []).some((preset: MenuUpgradeItem) => preset.name === c.label));
+      extrasList = nonPreset.map(c => `• ${c.label}: £${c.amount.toLocaleString()}`).join('\n');
+      extraTotal = nonPreset.reduce((sum, c) => sum + c.amount, 0).toLocaleString();
+
+      completedSummary = `• Event: ${booking.eventType || ''}\n• Date: ${booking.date || ''}\n• Package: ${booking.selectedMenu || booking.package || ''}\n• Total Amount Paid: £${grandTotal.toLocaleString()} (Paid in Full ✅)`;
+
+      const menuType = booking.selectedMenu || booking.package || '';
+      const matchedCategory = editableMenuCategories.find(c => c.title.toLowerCase() === menuType.toLowerCase() || c.id === menuType);
+      if (matchedCategory) {
+        menuDetails = `🍽️ ${matchedCategory.title} (${matchedCategory.items.length} items):\n\n` +
+          matchedCategory.items.map(i => `• ${i.name}\n  ${i.description}`).join('\n\n');
+      } else {
+        menuDetails = menuType ? `Options for ${menuType}` : '';
+      }
+    }
+
+    const tags: Record<string, any> = {
+      customerName: customerDisplayName || firstName || '',
+      customerPhone: booking?.phone || '',
+      eventType: booking?.eventType || '',
+      eventDate: booking?.date || '',
+      eventTime: booking?.time || '',
+      guests: booking?.guests !== undefined && booking?.guests !== null ? String(booking.guests) : '',
+      venueType: (booking as any)?.venueType || booking?.location || '',
+      bookingId: data.bookingId || booking?.id || '',
+      orderId: data.bookingId || booking?.id || '',
+      deposit: booking?.deposit !== undefined && booking?.deposit !== null ? booking.deposit.toLocaleString() : '',
+      totalEstimatedAmount: booking ? getTotalAmount(booking).toLocaleString() : '',
+      packageName: booking?.selectedMenu || booking?.package || '',
+      menuType: booking?.selectedMenu || booking?.package || '',
+      bankAccountName: bankDetails?.accountName || '',
+      bankSortCode: bankDetails?.sortCode || '',
+      bankAccountNumber: bankDetails?.accountNumber || '',
+      contactWhatsApp: editableCommConfig.contactWhatsApp || '',
+      contactEmail: editableCommConfig.contactEmail || '',
+      invoiceBreakdown,
+      extrasList,
+      extraTotal,
+      completedSummary,
+      menuDetails,
+    };
+
+    const newSubject = renderCommunicationTemplate(tmpl.subject, tags);
+    const newBody = renderCommunicationTemplate(tmpl.body, tags);
+
+    setEmailModalData(prev => ({
+      ...prev,
+      templateId: tmplId,
+      subject: newSubject,
+      body: newBody,
+    }));
   };
 
   const renderMenuBroadcastBadges = (menuTitle: string) => {
@@ -2760,16 +3261,81 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               type="button"
               onClick={() => {
                 const { subject, body } = getMenuEmailContent(b.name, b.phone, b.email, menuTitle, b.guests, b);
-                openEmailComposer(b.email, b.name, subject, body, b.id);
+                openEmailComposer(b.email, b.name, subject, body, b.id, 'menu_sharing');
               }}
-              className="px-1.5 py-0.5 rounded text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 flex items-center gap-1 cursor-pointer"
+              className="px-1.5 py-0.5 rounded text-[11px] font-bold text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-200/90 flex items-center gap-1 cursor-pointer transition-colors"
               title="Send via Email"
             >
-              <Icon name="EnvelopeIcon" size={11} />
+              <Icon name="EnvelopeIcon" size={11} className="text-[#C8860A]" />
               Email
             </button>
           </div>
         ))}
+      </div>
+    );
+  };
+
+  const renderBookingStatusBadge = (booking: Booking, customOptions?: { value: BookingStatus; label: string; dot?: string }[]) => {
+    const isMenuOpen = openRowStatusId === booking.id;
+    const options = customOptions || ALL_ROW_STATUS_OPTIONS;
+    const currentLabel = STATUS_LABELS[booking.status] || booking.status;
+
+    return (
+      <div className="relative inline-flex items-center" data-custom-dropdown>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpenRowStatusId(prev => prev === booking.id ? null : booking.id);
+          }}
+          className={`inline-flex items-center gap-1 pl-2 pr-1.5 py-0.5 rounded-full text-xs font-semibold transition-all shadow-2xs hover:shadow-xs cursor-pointer border whitespace-nowrap ${STATUS_COLORS[booking.status] || 'bg-gray-100 text-gray-700 border-gray-300'}`}
+          title="Click to change status"
+        >
+          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT[booking.status] || 'bg-gray-400'}`} />
+          <span>{currentLabel}</span>
+          <Icon
+            name="ChevronDownIcon"
+            size={11}
+            className={`opacity-60 flex-shrink-0 transition-transform duration-200 ${isMenuOpen ? 'rotate-180' : ''}`}
+          />
+        </button>
+
+        {isMenuOpen && (
+          <div
+            className="absolute right-0 sm:left-0 top-full mt-1.5 w-52 bg-white rounded-xl shadow-xl border border-gray-200 ring-1 ring-black/5 p-1 z-[100] animate-in fade-in zoom-in-95 duration-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500 border-b border-gray-100 flex items-center justify-between mb-1 bg-white">
+              <span>Change Status</span>
+              <span className="text-[9px] font-normal text-gray-400">Esc to close</span>
+            </div>
+            <div className="max-h-60 overflow-y-auto py-0.5 space-y-0.5 bg-white">
+              {options.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => {
+                    updateStatus(booking.id, opt.value);
+                    setOpenRowStatusId(null);
+                  }}
+                  className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs rounded-lg transition-colors cursor-pointer ${
+                    booking.status === opt.value
+                      ? 'bg-amber-50 text-amber-900 font-bold border border-amber-200/70'
+                      : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${opt.dot || STATUS_DOT[opt.value] || 'bg-gray-400'}`} />
+                    <span className="truncate">{opt.label}</span>
+                  </div>
+                  {booking.status === opt.value && (
+                    <Icon name="CheckIcon" size={13} className="text-[#C8860A] flex-shrink-0" />
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -4086,7 +4652,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
   const isOnlineOrder = (b: Booking) => Boolean(b.isOnlineOrder || b.stripeSessionId || b.selectedMenuDishes);
 
   const enquiries = bookings.filter(b => b.status === 'new_enquiry' && !isOnlineOrder(b));
-  const activeBookings = bookings.filter(b => b.status !== 'new_enquiry' && b.status !== 'completed' && !isOnlineOrder(b));
+  const activeBookings = bookings.filter(b => b.status !== 'new_enquiry' && b.status !== 'completed' && b.status !== 'no_show' && b.status !== 'cancelled' && !isOnlineOrder(b));
   const completedBookings = bookings.filter(b => b.status === 'completed' && !isOnlineOrder(b)).sort((a, b) => {
     const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : new Date(a.date).getTime());
     const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : new Date(b.date).getTime());
@@ -4209,7 +4775,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
   const filtered = bookings.filter(b => {
     if (isOnlineOrder(b)) return false;
-    const statusMatch = filterStatus === 'all' || b.status === filterStatus;
+    const statusMatch =
+      filterStatus === 'all'
+        ? (b.status !== 'completed' && b.status !== 'no_show' && b.status !== 'cancelled')
+        : b.status === filterStatus;
     const eventMatch = filterEvent === 'all' || b.eventType === filterEvent;
 
     let monthMatch = true;
@@ -4239,6 +4808,11 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
     return statusMatch && eventMatch && monthMatch && dateRangeMatch && searchMatch;
   });
+
+  const totalBookingPages = bookingsPageSize === -1 ? 1 : Math.ceil(filtered.length / bookingsPageSize) || 1;
+  const paginatedBookings = bookingsPageSize === -1
+    ? filtered
+    : filtered.slice((bookingsPage - 1) * bookingsPageSize, bookingsPage * bookingsPageSize);
 
   const daysInMonth = getDaysInMonth(calendarYear, calendarMonth);
   const firstDay = getFirstDayOfMonth(calendarYear, calendarMonth);
@@ -4322,11 +4896,14 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     { id: 'online_orders', label: 'Online Orders', icon: 'ShoppingBagIcon', badge: onlineOrdersList.filter(o => o.status === 'deposit_confirmed' || o.depositPaid).length || undefined, requiredPerm: 'manage_bookings' },
     { id: 'enquiries', label: 'Enquiries', icon: 'InboxIcon', badge: stats.newEnquiries, requiredPerm: 'manage_enquiries' },
     { id: 'bookings', label: 'Bookings', icon: 'CalendarDaysIcon', badge: activeBookings.length || undefined, requiredPerm: 'manage_bookings' },
+    { id: 'completion_events', label: 'Completion Events', icon: 'CheckBadgeIcon', badge: completedBookings.length || undefined, requiredPerm: 'manage_bookings' },
+    { id: 'no_show', label: 'No Show', icon: 'UserMinusIcon', badge: bookings.filter(b => b.status === 'no_show').length || undefined, requiredPerm: 'manage_bookings' },
     { id: 'calendar', label: 'Calendar', icon: 'CalendarIcon', requiredPerm: 'manage_calendar' },
     { id: 'customers', label: 'Customers', icon: 'UsersIcon', requiredPerm: 'manage_customers' },
     { id: 'payments', label: 'Payments', icon: 'CreditCardIcon', requiredPerm: 'manage_payments' },
     { id: 'menus', label: 'Menus', icon: 'ClipboardDocumentListIcon', requiredPerm: 'manage_menus' },
     { id: 'website_content', label: 'Website Content', icon: 'PaintBrushIcon', requiredPerm: 'manage_settings' },
+    { id: 'email_templates', label: 'Email Templates', icon: 'EnvelopeIcon', requiredPerm: 'manage_settings' },
     { id: 'history', label: 'History', icon: 'ArchiveBoxIcon', requiredPerm: 'manage_history' },
     { id: 'discount_approvals', label: 'Discount Approvals', icon: 'TagIcon', badge: pendingDiscounts.length || undefined, requiredPerm: 'manage_discounts' },
     { id: 'settings', label: 'Settings', icon: 'Cog6ToothIcon', requiredPerm: 'manage_settings' },
@@ -4456,6 +5033,472 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     );
   }
 
+  const renderEmailTemplatesContent = () => (
+                <div className="space-y-6 animate-in fade-in duration-300">
+                  {/* Top Action Bar */}
+                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                        <span className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center flex-shrink-0">
+                          <Icon name="ChatBubbleBottomCenterTextIcon" size={18} />
+                        </span>
+                        Dynamic WhatsApp &amp; Email Communication Templates
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Customize pre-filled email subjects, email bodies, and WhatsApp scripts used throughout enquiries, menu sharing, deposits, invoices, event reminders, and completed reviews.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={saveCommunicationTemplates}
+                        disabled={isSavingCommConfig}
+                        className="px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-md active:scale-95 disabled:opacity-50 flex items-center gap-2 cursor-pointer transition-all hover:brightness-105"
+                        style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                      >
+                        {isSavingCommConfig ? (
+                          <>
+                            <span className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />
+                            <span>Saving Templates...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Icon name="CheckIcon" size={16} />
+                            <span>Save Communication Templates</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Business Sender & Contact Info */}
+                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
+                    <div className="border-b border-gray-100 pb-3 flex items-center justify-between">
+                      <div>
+                        <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide flex items-center gap-1.5">
+                          <span>🏢</span> Business Contact Details in Messages
+                        </h4>
+                        <p className="text-xs text-gray-500">
+                          These details are dynamically injected into every email &amp; WhatsApp template via <code className="text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded font-mono text-[11px]">&#123;contactEmail&#125;</code> and <code className="text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded font-mono text-[11px]">&#123;contactWhatsApp&#125;</code>.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          Customer Support &amp; Enquiries Email
+                        </label>
+                        <input
+                          type="email"
+                          value={editableCommConfig.contactEmail || ''}
+                          onChange={(e) => setEditableCommConfig(prev => ({ ...prev, contactEmail: e.target.value }))}
+                          placeholder="e.g. admin@vegchennaisrilalitha.co.uk"
+                          className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs font-mono text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          Customer Support &amp; WhatsApp Phone Number
+                        </label>
+                        <input
+                          type="text"
+                          value={editableCommConfig.contactWhatsApp || ''}
+                          onChange={(e) => setEditableCommConfig(prev => ({ ...prev, contactWhatsApp: e.target.value }))}
+                          placeholder="e.g. +44 7700 900000"
+                          className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs font-mono text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Template Editor with Navigation */}
+                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-5">
+                    {/* Template Pills / Subnav */}
+                    <div>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                        <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide flex items-center gap-1.5">
+                          <span>📝</span> Select Communication Template to Edit
+                        </h4>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewTemplateForm({
+                              name: '',
+                              description: '',
+                              subject: '',
+                              body: '',
+                            });
+                            setShowCreateTemplateModal(true);
+                          }}
+                          className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white shadow-sm flex items-center gap-1.5 cursor-pointer transition-all hover:brightness-105 active:scale-95 self-start sm:self-auto"
+                          style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                        >
+                          <Icon name="PlusCircleIcon" size={14} />
+                          <span>+ Create New Template</span>
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                        {Object.values(editableCommConfig.templates || {}).map((tmpl) => {
+                          const isSelected = selectedTemplateForEdit === tmpl.id;
+                          const isCustom = tmpl.id.startsWith('custom_');
+                          return (
+                            <div
+                              key={tmpl.id}
+                              onClick={() => setSelectedTemplateForEdit(tmpl.id)}
+                              className={`p-3 rounded-xl border transition-all cursor-pointer relative group flex flex-col justify-between ${
+                                isSelected
+                                  ? 'border-amber-500 bg-amber-50/70 shadow-2xs text-amber-950 font-bold'
+                                  : 'border-gray-200 bg-gray-50/60 hover:bg-gray-100/70 text-gray-700'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-1 mb-1">
+                                <div className="truncate flex-1">
+                                  <span className="text-xs font-bold truncate block">{tmpl.name}</span>
+                                  <span className="text-[10px] text-gray-400 truncate block mt-0.5">{tmpl.description}</span>
+                                </div>
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  {isCustom && (
+                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">
+                                      Custom
+                                    </span>
+                                  )}
+                                  {isSelected && !isCustom && <span className="w-2 h-2 rounded-full bg-amber-500" />}
+                                </div>
+                              </div>
+                              <div className="flex items-center justify-between border-t border-gray-200/50 pt-2 mt-2">
+                                <span className="text-[9px] font-mono text-gray-400 truncate">#{tmpl.id}</span>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingTemplateModal({ ...tmpl });
+                                    }}
+                                    className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                                    title={`Edit ${tmpl.name} in modal`}
+                                  >
+                                    <Icon name="PencilSquareIcon" size={13} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setTemplateToDelete(tmpl);
+                                    }}
+                                    className="p-1 rounded text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                                    title={`Delete ${tmpl.name}`}
+                                  >
+                                    <Icon name="TrashIcon" size={13} />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Active Template Editor Form */}
+                    {editableCommConfig.templates?.[selectedTemplateForEdit] && (() => {
+                      const activeTmpl = editableCommConfig.templates[selectedTemplateForEdit];
+                      const isCustom = activeTmpl.id.startsWith('custom_');
+                      return (
+                        <div className="space-y-5 border-t border-gray-100 pt-5">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div>
+                              <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                                <span>{activeTmpl.name}</span>
+                                {isCustom && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                                    Custom Template
+                                  </span>
+                                )}
+                                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                                  #{activeTmpl.id}
+                                </span>
+                              </h4>
+                              <p className="text-xs text-gray-500 mt-0.5">{activeTmpl.description}</p>
+                            </div>
+
+                            <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                              <button
+                                type="button"
+                                onClick={() => handleSaveEditedTemplate(activeTmpl)}
+                                disabled={isSavingEditedTemplate}
+                                className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white shadow-sm flex items-center gap-1.5 cursor-pointer transition-all hover:brightness-105 active:scale-95 disabled:opacity-50"
+                                style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                                title="Save changes for this template to database"
+                              >
+                                {isSavingEditedTemplate ? (
+                                  <>
+                                    <span className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent" />
+                                    <span>Saving...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Icon name="CheckIcon" size={14} />
+                                    <span>Save Template Changes</span>
+                                  </>
+                                )}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setTemplateToDelete(activeTmpl)}
+                                className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 flex items-center gap-1 cursor-pointer transition-colors"
+                                title="Delete this template"
+                              >
+                                <Icon name="TrashIcon" size={13} />
+                                <span>Delete</span>
+                              </button>
+
+                              {!isCustom && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const defaultTmpl = DEFAULT_COMMUNICATION_CONFIG.templates[selectedTemplateForEdit];
+                                    if (defaultTmpl) {
+                                      setEditableCommConfig(prev => ({
+                                        ...prev,
+                                        templates: {
+                                          ...prev.templates,
+                                          [selectedTemplateForEdit]: { ...defaultTmpl },
+                                        }
+                                      }));
+                                      setCustomAlert({
+                                        message: `Reset "${activeTmpl.name}" to standard default template. Remember to click Save.`,
+                                        type: 'success',
+                                      });
+                                    }
+                                  }}
+                                  className="text-xs text-gray-500 hover:text-gray-800 underline flex items-center gap-1 cursor-pointer"
+                                >
+                                  <Icon name="ArrowPathIcon" size={13} />
+                                  <span>Reset to Default</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-xs font-bold text-gray-700 mb-1">
+                                Template Display Name <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={activeTmpl.name}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setEditableCommConfig(prev => ({
+                                    ...prev,
+                                    templates: {
+                                      ...prev.templates,
+                                      [selectedTemplateForEdit]: {
+                                        ...prev.templates[selectedTemplateForEdit],
+                                        name: val,
+                                      }
+                                    }
+                                  }));
+                                }}
+                                className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs font-medium text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-bold text-gray-700 mb-1">
+                                Template Description / Purpose
+                              </label>
+                              <input
+                                type="text"
+                                value={activeTmpl.description}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setEditableCommConfig(prev => ({
+                                    ...prev,
+                                    templates: {
+                                      ...prev.templates,
+                                      [selectedTemplateForEdit]: {
+                                        ...prev.templates[selectedTemplateForEdit],
+                                        description: val,
+                                      }
+                                    }
+                                  }));
+                                }}
+                                className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs text-gray-700 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Subject Line */}
+                          <div>
+                            <label className="block text-xs font-bold text-gray-700 mb-1">
+                              Email Subject Line
+                            </label>
+                            <input
+                              type="text"
+                              value={activeTmpl.subject}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setEditableCommConfig(prev => ({
+                                  ...prev,
+                                  templates: {
+                                    ...prev.templates,
+                                    [selectedTemplateForEdit]: {
+                                      ...prev.templates[selectedTemplateForEdit],
+                                      subject: val,
+                                    }
+                                  }
+                                }));
+                              }}
+                              placeholder="e.g. SriLalitha Events: Thank You for Your {eventType} Enquiry"
+                              className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs font-medium text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                            />
+                          </div>
+
+                          {/* Message Body Textarea */}
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="block text-xs font-bold text-gray-700">
+                                Email &amp; WhatsApp Message Body
+                              </label>
+                              <span className="text-[11px] text-gray-400">
+                                Multi-line text template with automatic placeholder interpolation
+                              </span>
+                            </div>
+                            <textarea
+                              rows={11}
+                              value={activeTmpl.body}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setEditableCommConfig(prev => ({
+                                  ...prev,
+                                  templates: {
+                                    ...prev.templates,
+                                    [selectedTemplateForEdit]: {
+                                      ...prev.templates[selectedTemplateForEdit],
+                                      body: val,
+                                    }
+                                  }
+                                }));
+                              }}
+                              className="w-full border border-gray-300 rounded-xl p-3.5 text-xs text-gray-900 leading-relaxed font-mono focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                            />
+                          </div>
+
+                          {/* Dynamic Variables Legend */}
+                          <div className="bg-amber-50/50 rounded-xl border border-amber-200/60 p-3.5 space-y-2">
+                            <span className="text-xs font-bold text-amber-950 flex items-center gap-1">
+                              <span>🏷️</span> Available Dynamic Placeholders (Click to Copy):
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {[
+                                '{customerName}',
+                                '{customerPhone}',
+                                '{eventType}',
+                                '{eventDate}',
+                                '{eventTime}',
+                                '{guests}',
+                                '{venueType}',
+                                '{bookingId}',
+                                '{deposit}',
+                                '{totalEstimatedAmount}',
+                                '{menuType}',
+                                '{menuDetails}',
+                                '{invoiceBreakdown}',
+                                '{extrasList}',
+                                '{extraTotal}',
+                                '{completedSummary}',
+                                '{bankAccountName}',
+                                '{bankSortCode}',
+                                '{bankAccountNumber}',
+                                '{contactEmail}',
+                                '{contactWhatsApp}',
+                              ].map((tag) => (
+                                <button
+                                  key={tag}
+                                  type="button"
+                                  onClick={() => {
+                                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                                      navigator.clipboard.writeText(tag);
+                                      setCustomAlert({ message: `Copied ${tag} to clipboard!`, type: 'success' });
+                                    }
+                                  }}
+                                  className="px-2 py-0.5 bg-white border border-amber-300 rounded-md text-[11px] font-mono font-semibold text-amber-900 hover:bg-amber-100 hover:border-amber-400 transition-colors cursor-pointer"
+                                  title={`Click to copy ${tag}`}
+                                >
+                                  {tag}
+                                </button>
+                              ))}
+                            </div>
+                            <p className="text-[10px] text-amber-800">
+                              When an email is sent or WhatsApp message launched, these tags are automatically populated with real customer and booking values.
+                            </p>
+                          </div>
+
+                          {/* Live Sample Preview */}
+                          <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/60 space-y-3">
+                            <h5 className="text-xs font-bold text-gray-800 uppercase tracking-wide flex items-center gap-1.5">
+                              <span>👁️</span> Live Customer Preview Sample
+                            </h5>
+                            <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-2 text-xs text-gray-800 shadow-2xs">
+                              <div className="flex items-center gap-2 border-b border-gray-100 pb-2">
+                                <span className="font-bold text-gray-500 w-16">Subject:</span>
+                                <span className="font-bold text-gray-900">
+                                  {renderCommunicationTemplate(activeTmpl.subject, {
+                                    customerName: 'Rahul Sharma',
+                                    eventType: 'Wedding Reception',
+                                    eventDate: '24/10/2026',
+                                    eventTime: '12:00 PM',
+                                    guests: 150,
+                                    bookingId: 'BK-2026-108',
+                                    deposit: 300,
+                                    menuType: 'Live Dosa Option 1',
+                                    totalEstimatedAmount: 1850,
+                                    bankAccountName: bankDetails.accountName || 'SriLalitha Events Ltd',
+                                    bankSortCode: bankDetails.sortCode || '20-00-00',
+                                    bankAccountNumber: bankDetails.accountNumber || '12345678',
+                                    contactEmail: editableCommConfig.contactEmail,
+                                    contactWhatsApp: editableCommConfig.contactWhatsApp,
+                                  })}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 border-b border-gray-100 pb-2">
+                                <span className="font-bold text-gray-500 w-16">To:</span>
+                                <span className="font-mono text-gray-600">rahul.sharma@example.com</span>
+                              </div>
+                              <div className="pt-2 whitespace-pre-wrap font-sans leading-relaxed text-gray-700">
+                                {renderCommunicationTemplate(activeTmpl.body, {
+                                  customerName: 'Rahul Sharma',
+                                  eventType: 'Wedding Reception',
+                                  eventDate: '24/10/2026',
+                                  eventTime: '12:00 PM',
+                                  guests: 150,
+                                  bookingId: 'BK-2026-108',
+                                  deposit: 300,
+                                  menuType: 'Live Dosa Option 1',
+                                  menuDetails: '• 12 Live Signature Dosas (Masala, Mysore, Ghee Podi, Spring Dosa...)\n• Fresh Chutneys, Sambar & Live Counter Service (2 Hours)',
+                                  totalEstimatedAmount: 1850,
+                                  invoiceBreakdown: '• Base Package (150 Guests): £1,500\n• Extra Live Station: £200\n• Travel & Logistics: £150\n• Total: £1,850 (Deposit Paid: £300, Remaining: £1,550)',
+                                  extrasList: '• 20 Additional Guests @ £12/person = £240\n• Extra 1 Hour Service Floor = £120',
+                                  extraTotal: 360,
+                                  completedSummary: 'Booking #BK-2026-108 on 24/10/2026 (Wedding Reception, 150 Guests). All invoices settled.',
+                                  bankAccountName: bankDetails.accountName || 'SriLalitha Events Ltd',
+                                  bankSortCode: bankDetails.sortCode || '20-00-00',
+                                  bankAccountNumber: bankDetails.accountNumber || '12345678',
+                                  contactEmail: editableCommConfig.contactEmail,
+                                  contactWhatsApp: editableCommConfig.contactWhatsApp,
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+  );
+
   // ─── DASHBOARD ────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -4519,11 +5562,14 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 {activeTab === 'overview' && 'Business at a glance'}
                 {activeTab === 'enquiries' && `${stats.newEnquiries} new enquiries awaiting action`}
                 {activeTab === 'bookings' && `${activeBookings.length} active bookings in progress`}
+                {activeTab === 'completion_events' && `${completedBookings.length} events successfully completed`}
+                {activeTab === 'no_show' && `${bookings.filter(b => b.status === 'no_show').length} bookings marked as no-show`}
                 {activeTab === 'calendar' && `${MONTHS[calendarMonth]} ${calendarYear}`}
                 {activeTab === 'customers' && `${customers.length} registered customers`}
                 {activeTab === 'payments' && 'Track deposits and balances'}
                 {activeTab === 'menus' && 'Manage catering packages'}
                 {activeTab === 'website_content' && 'Manage Hero, Badges, Stats Ribbon, and Terms & Conditions'}
+                {activeTab === 'email_templates' && 'Customize WhatsApp & email notification templates'}
                 {activeTab === 'history' && `${historyBookings.length} history records`}
                 {activeTab === 'settings' && 'Venue configuration'}
                 {activeTab === 'access' && 'Manage roles and permissions'}
@@ -4551,8 +5597,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               <span>+ New Booking</span>
             </button>
             {stats.newEnquiries > 0 && (
-              <button onClick={() => setActiveTab('enquiries')} className="hidden sm:flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors cursor-pointer">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+              <button onClick={() => setActiveTab('enquiries')} className="hidden sm:flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-amber-100 transition-colors cursor-pointer">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
                 {stats.newEnquiries} new
               </button>
             )}
@@ -4566,7 +5612,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             <div className="space-y-6">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
-                  { label: 'New Enquiries', value: stats.newEnquiries, icon: 'InboxIcon', color: 'text-blue-600', bg: 'bg-blue-50', change: 'Awaiting action', onClick: () => setActiveTab('enquiries') },
+                  { label: 'New Enquiries', value: stats.newEnquiries, icon: 'InboxIcon', color: 'text-amber-700', bg: 'bg-amber-50', change: 'Awaiting action', onClick: () => setActiveTab('enquiries') },
                   { label: 'Active Bookings', value: stats.active, icon: 'CalendarDaysIcon', color: 'text-amber-600', bg: 'bg-amber-50', change: 'In progress', onClick: () => setActiveTab('bookings') },
                   { label: 'Completed Events', value: stats.completed, icon: 'CheckCircleIcon', color: 'text-emerald-600', bg: 'bg-emerald-50', change: 'All time', onClick: () => setActiveTab('history') },
                   { label: 'Revenue Collected', value: `£${stats.depositsCollected.toLocaleString()}`, icon: 'BanknotesIcon', color: 'text-yellow-700', bg: 'bg-yellow-50', change: `£${stats.outstanding.toLocaleString()} outstanding`, onClick: () => setActiveTab('payments') },
@@ -4628,12 +5674,12 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             type="button"
                             onClick={() => {
                               const { subject, body } = getEnquiryEmailContent(b);
-                              openEmailComposer(b.email, b.name, subject, body, b.id);
+                              openEmailComposer(b.email, b.name, subject, body, b.id, 'enquiry_reply');
                             }}
-                            className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 cursor-pointer"
+                            className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/90 shadow-2xs cursor-pointer"
                             title="Send Email to Customer"
                           >
-                            <Icon name="EnvelopeIcon" size={13} />
+                            <Icon name="EnvelopeIcon" size={13} className="text-[#C8860A]" />
                             Email
                           </button>
                         </div>
@@ -5042,11 +6088,11 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               type="button"
                               onClick={() => {
                                 const { subject, body } = getOrderEmailContent(order);
-                                openEmailComposer(order.email, order.name, subject, body, order.id);
+                                openEmailComposer(order.email, order.name, subject, body, order.id, 'order_confirmation');
                               }}
-                              className="px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-blue-200"
+                              className="px-3 py-1.5 rounded-xl bg-amber-50 text-amber-900 hover:bg-amber-100 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-amber-200/90 shadow-2xs"
                             >
-                              <Icon name="EnvelopeIcon" size={14} />
+                              <Icon name="EnvelopeIcon" size={14} className="text-[#C8860A]" />
                               Email
                             </button>
 
@@ -5506,11 +6552,11 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       type="button"
                       onClick={() => {
                         const { subject, body } = getEnquiryEmailContent(b);
-                        openEmailComposer(b.email, b.name, subject, body, b.id);
+                        openEmailComposer(b.email, b.name, subject, body, b.id, 'enquiry_reply');
                       }}
-                      className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-colors bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 cursor-pointer shadow-2xs"
+                      className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-colors bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/90 cursor-pointer shadow-2xs"
                     >
-                      <Icon name="EnvelopeIcon" size={14} />
+                      <Icon name="EnvelopeIcon" size={14} className="text-[#C8860A]" />
                       Reply on Email
                     </button>
                     <button onClick={() => { updateStatus(b.id, 'menu_sent'); setShowMenuPanel(true); setSelectedBooking(b); }}
@@ -5611,32 +6657,126 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 {/* Second row: Event Type, Month, Date Range, Clear */}
                 <div className="pt-2 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3 text-xs">
                   <div className="flex flex-wrap items-center gap-2">
-                    {/* Event Type selector */}
-                    <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1.5">
-                      <span className="text-gray-500 font-semibold">🎉 Event:</span>
-                      <select
-                        value={filterEvent}
-                        onChange={(e) => setFilterEvent(e.target.value)}
-                        className="bg-transparent font-bold text-gray-800 focus:outline-none cursor-pointer"
+                    {/* Event Type Custom Dropdown */}
+                    <div className="relative inline-flex items-center" data-custom-dropdown>
+                      <button
+                        type="button"
+                        onClick={() => setOpenFilterDropdown(prev => prev === 'event' ? null : 'event')}
+                        className="bg-white hover:bg-amber-50/50 border border-gray-200 hover:border-amber-200/90 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-gray-800 flex items-center gap-1.5 shadow-2xs cursor-pointer transition-all"
                       >
-                        <option value="all">All Event Types</option>
-                        {eventTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                      </select>
+                        <span>🎉</span>
+                        <span className="text-gray-500 font-medium">Event:</span>
+                        <span className="text-gray-900 font-bold max-w-[130px] truncate">
+                          {filterEvent === 'all' ? 'All Event Types' : filterEvent}
+                        </span>
+                        <Icon
+                          name="ChevronDownIcon"
+                          size={11}
+                          className={`text-gray-400 transition-transform duration-200 ${openFilterDropdown === 'event' ? 'rotate-180 text-[#C8860A]' : ''}`}
+                        />
+                      </button>
+
+                      {openFilterDropdown === 'event' && (
+                        <div
+                          className="absolute left-0 top-full mt-1.5 w-56 bg-white rounded-xl shadow-xl border border-gray-200 p-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 max-h-64 overflow-y-auto space-y-0.5"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFilterEvent('all');
+                              setOpenFilterDropdown(null);
+                            }}
+                            className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-xl transition-all cursor-pointer ${
+                              filterEvent === 'all'
+                                ? 'bg-amber-100/80 text-amber-950 font-bold'
+                                : 'text-gray-700 hover:bg-amber-50/80 hover:text-amber-950'
+                            }`}
+                          >
+                            <span>All Event Types</span>
+                            {filterEvent === 'all' && <Icon name="CheckIcon" size={13} className="text-[#C8860A]" />}
+                          </button>
+                          {eventTypes.map(t => (
+                            <button
+                              key={t}
+                              type="button"
+                              onClick={() => {
+                                setFilterEvent(t);
+                                setOpenFilterDropdown(null);
+                              }}
+                              className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-xl transition-all cursor-pointer ${
+                                filterEvent === t
+                                  ? 'bg-amber-100/80 text-amber-950 font-bold'
+                                  : 'text-gray-700 hover:bg-amber-50/80 hover:text-amber-950'
+                              }`}
+                            >
+                              <span className="truncate">{t}</span>
+                              {filterEvent === t && <Icon name="CheckIcon" size={13} className="text-[#C8860A] flex-shrink-0" />}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
-                    {/* Month selector */}
-                    <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1.5">
-                      <span className="text-gray-500 font-semibold">📅 Month:</span>
-                      <select
-                        value={bookingMonthFilter}
-                        onChange={(e) => setBookingMonthFilter(e.target.value)}
-                        className="bg-transparent font-bold text-gray-800 focus:outline-none cursor-pointer"
+                    {/* Month Custom Dropdown */}
+                    <div className="relative inline-flex items-center" data-custom-dropdown>
+                      <button
+                        type="button"
+                        onClick={() => setOpenFilterDropdown(prev => prev === 'month' ? null : 'month')}
+                        className="bg-white hover:bg-amber-50/50 border border-gray-200 hover:border-amber-200/90 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-gray-800 flex items-center gap-1.5 shadow-2xs cursor-pointer transition-all"
                       >
-                        <option value="all">All Months</option>
-                        {availableMonths.map((m) => (
-                          <option key={m} value={m}>{formatMonthLabel(m)}</option>
-                        ))}
-                      </select>
+                        <span>📅</span>
+                        <span className="text-gray-500 font-medium">Month:</span>
+                        <span className="text-gray-900 font-bold">
+                          {formatMonthLabel(bookingMonthFilter)}
+                        </span>
+                        <Icon
+                          name="ChevronDownIcon"
+                          size={11}
+                          className={`text-gray-400 transition-transform duration-200 ${openFilterDropdown === 'month' ? 'rotate-180 text-[#C8860A]' : ''}`}
+                        />
+                      </button>
+
+                      {openFilterDropdown === 'month' && (
+                        <div
+                          className="absolute left-0 top-full mt-1.5 w-56 bg-white rounded-xl shadow-xl border border-gray-200 p-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 max-h-64 overflow-y-auto space-y-0.5"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBookingMonthFilter('all');
+                              setOpenFilterDropdown(null);
+                            }}
+                            className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-xl transition-all cursor-pointer ${
+                              bookingMonthFilter === 'all'
+                                ? 'bg-amber-100/80 text-amber-950 font-bold'
+                                : 'text-gray-700 hover:bg-amber-50/80 hover:text-amber-950'
+                            }`}
+                          >
+                            <span>All Months</span>
+                            {bookingMonthFilter === 'all' && <Icon name="CheckIcon" size={13} className="text-[#C8860A]" />}
+                          </button>
+                          {availableMonths.map(m => (
+                            <button
+                              key={m}
+                              type="button"
+                              onClick={() => {
+                                setBookingMonthFilter(m);
+                                setOpenFilterDropdown(null);
+                              }}
+                              className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-xl transition-all cursor-pointer ${
+                                bookingMonthFilter === m
+                                  ? 'bg-amber-100/80 text-amber-950 font-bold'
+                                  : 'text-gray-700 hover:bg-amber-50/80 hover:text-amber-950'
+                              }`}
+                            >
+                              <span>{formatMonthLabel(m)}</span>
+                              {bookingMonthFilter === m && <Icon name="CheckIcon" size={13} className="text-[#C8860A] flex-shrink-0" />}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     {/* Date Range */}
@@ -5769,43 +6909,41 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 </div>
               )}
 
-              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm min-w-[750px]">
-                    <thead className="bg-gray-50 border-b border-gray-200">
+              <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-xs">
+                <div className="w-full overflow-hidden">
+                  <table className="w-full divide-y divide-gray-100 font-sans">
+                    <thead className="bg-gray-50/90 border-b border-gray-200">
                       <tr>
-                        <th className="px-3 py-3 w-8">
+                        <th className="pl-3 pr-2 py-2.5 w-7 text-center">
                           <input
                             type="checkbox"
-                            checked={filtered.filter(b => (filterStatus === 'all' ? b.status !== 'completed' : b.status === filterStatus)).length > 0 && filtered.filter(b => (filterStatus === 'all' ? b.status !== 'completed' : b.status === filterStatus)).every(b => selectedBookingIds.includes(b.id))}
+                            checked={paginatedBookings.length > 0 && paginatedBookings.every(b => selectedBookingIds.includes(b.id))}
                             onChange={(e) => {
-                              const visibleBookings = filtered.filter(b => (filterStatus === 'all' ? b.status !== 'completed' : b.status === filterStatus));
                               if (e.target.checked) {
-                                const allIds = visibleBookings.map(b => b.id);
+                                const allIds = paginatedBookings.map(b => b.id);
                                 setSelectedBookingIds(prev => Array.from(new Set([...prev, ...allIds])));
                               } else {
-                                const visibleSet = new Set(visibleBookings.map(b => b.id));
+                                const visibleSet = new Set(paginatedBookings.map(b => b.id));
                                 setSelectedBookingIds(prev => prev.filter(id => !visibleSet.has(id)));
                               }
                             }}
                             className="w-4 h-4 rounded text-[#C8860A] focus:ring-[#C8860A] border-gray-300 cursor-pointer"
-                            title="Select All"
+                            title="Select All on this page"
                           />
                         </th>
-                        <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Customer</th>
-                        <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Event</th>
-                        <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Date</th>
-                        <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Amount</th>
-                        <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Discount</th>
-                        <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Status</th>
-                        <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Contact</th>
-                        <th className="px-4 py-3 text-right">Actions</th>
+                        <th className="text-left px-2 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Customer</th>
+                        <th className="text-left px-2 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Event</th>
+                        <th className="text-left px-2 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Date</th>
+                        <th className="text-left px-2 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Amount</th>
+                        <th className="text-left px-2 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Status</th>
+                        <th className="text-left px-2 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Contact</th>
+                        <th className="pl-2 pr-4 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {filtered.filter(b => (filterStatus === 'all' ? b.status !== 'completed' : b.status === filterStatus)).map((booking) => (
-                        <tr key={booking.id} className={`hover:bg-gray-50/80 transition-colors ${selectedBookingIds.includes(booking.id) ? 'bg-amber-50/40' : ''}`}>
-                          <td className="px-3 py-3.5">
+                    <tbody className="divide-y divide-gray-100 bg-white">
+                      {paginatedBookings.map((booking) => (
+                        <tr key={booking.id} className={`hover:bg-amber-50/30 transition-colors ${selectedBookingIds.includes(booking.id) ? 'bg-amber-50/50' : ''}`}>
+                          <td className="pl-3 pr-2 py-2.5 text-center align-middle">
                             <input
                               type="checkbox"
                               checked={selectedBookingIds.includes(booking.id)}
@@ -5818,74 +6956,73 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               className="w-4 h-4 rounded text-[#C8860A] focus:ring-[#C8860A] border-gray-300 cursor-pointer"
                             />
                           </td>
-                          <td className="px-4 py-3.5">
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(200,134,10,0.1)' }}>
-                                <span className="text-xs font-bold" style={{ color: '#C8860A' }}>{booking.name.charAt(0)}</span>
+                          <td className="px-2 py-2.5 whitespace-nowrap align-middle">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-xs shadow-2xs border border-amber-200/60 bg-amber-100 text-amber-800">
+                                {booking.name.charAt(0).toUpperCase()}
                               </div>
-                              <div>
-                                <div className="font-medium text-gray-900 text-sm">{booking.name}</div>
-                                <div className="text-xs text-gray-400">{booking.phone}</div>
+                              <div className="min-w-0">
+                                <div className="font-bold text-gray-900 text-sm truncate max-w-[120px] xl:max-w-[135px] 2xl:max-w-[165px]" title={booking.name}>{booking.name}</div>
+                                <div className="text-xs text-gray-500">{booking.phone}</div>
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 py-3.5">
-                            <div className="text-sm text-gray-700">{booking.eventType}</div>
-                            <div className="text-xs text-gray-400">{booking.package}</div>
+                          <td className="px-2 py-2.5 align-middle">
+                            <div className="min-w-0 max-w-[110px] xl:max-w-[125px] 2xl:max-w-[160px]">
+                              <div className="text-sm font-semibold text-gray-900 truncate" title={booking.eventType}>{booking.eventType}</div>
+                              <div className="text-xs text-gray-500 truncate" title={booking.package}>{booking.package}</div>
+                            </div>
                           </td>
-                          <td className="px-4 py-3.5">
-                            <div className="text-sm text-gray-700">{booking.date}</div>
-                            <div className="text-xs text-gray-400">{booking.time}</div>
+                          <td className="px-2 py-2.5 whitespace-nowrap align-middle">
+                            <div className="text-sm font-medium text-gray-900">{booking.date}</div>
+                            <div className="text-xs text-gray-500">{booking.time}</div>
                           </td>
-                          <td className="px-4 py-3.5">
-                            <div className="text-sm font-semibold text-gray-900">£{getTotalAmount(booking).toLocaleString()}</div>
-                            {booking.depositPaid && <div className="text-xs text-emerald-600">Dep. paid</div>}
-                          </td>
-                          <td className="px-4 py-3.5">
+                          <td className="px-2 py-2.5 whitespace-nowrap align-middle">
+                            <div className="text-base font-bold text-gray-900">£{getTotalAmount(booking).toLocaleString()}</div>
                             {booking.discount ? (
-                              <div className="text-sm font-semibold text-red-600">-£{getDiscountAmount(booking).toLocaleString()}</div>
-                            ) : (
-                              <div className="text-sm text-gray-400 font-medium">£0</div>
-                            )}
+                              <div className="text-xs text-red-600 font-semibold leading-tight">-£{getDiscountAmount(booking).toLocaleString()} disc</div>
+                            ) : booking.depositPaid ? (
+                              <div className="text-xs text-emerald-600 font-medium leading-tight">Dep. paid</div>
+                            ) : null}
                           </td>
-                          <td className="px-4 py-3.5">
-                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_COLORS[booking.status]}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[booking.status]}`} />
-                              {STATUS_LABELS[booking.status]}
-                            </span>
+                          <td className="px-2 py-2.5 whitespace-nowrap align-middle">
+                            {renderBookingStatusBadge(booking)}
                           </td>
-                          <td className="px-4 py-3.5">
-                            <div className="flex items-center gap-1.5 flex-wrap">
+                          <td className="px-2 py-2.5 whitespace-nowrap align-middle">
+                            <div className="flex items-center gap-1 flex-nowrap">
                               <a href={buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]}, this is SriLalitha regarding your ${booking.eventType} booking on ${booking.date}.`)}
                                 target="_blank" rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-lg"
-                                style={{ background: '#25D366', color: 'white' }}
+                                className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg text-white shadow-2xs hover:brightness-105 active:scale-95 transition-all whitespace-nowrap bg-[#10B981]"
                                 title="Chat on WhatsApp">
-                                <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                                WhatsApp
+                                <Icon name="ChatBubbleLeftRightIcon" size={13} />
+                                <span>WhatsApp</span>
                               </a>
                               <button
                                 type="button"
                                 onClick={() => {
                                   const { subject, body } = getGeneralCustomerEmailContent(booking.name, booking.email, booking.id);
-                                  openEmailComposer(booking.email, booking.name, subject, body, booking.id);
+                                  openEmailComposer(booking.email, booking.name, subject, body, booking.id, 'general_message');
                                 }}
-                                className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 cursor-pointer"
+                                className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg bg-white text-sky-700 hover:bg-sky-50 border border-sky-200 shadow-2xs cursor-pointer active:scale-95 transition-all whitespace-nowrap"
                                 title="Send Email"
                               >
-                                <Icon name="EnvelopeIcon" size={12} />
-                                Email
+                                <Icon name="EnvelopeIcon" size={13} className="text-sky-600" />
+                                <span>Email</span>
                               </button>
                             </div>
                           </td>
-                          <td className="px-4 py-3.5 text-right">
-                            <div className="flex items-center justify-end gap-3">
-                              <button onClick={() => setSelectedBooking(booking)} className="text-xs font-semibold flex items-center gap-1 hover:underline whitespace-nowrap" style={{ color: '#C8860A' }}>
-                                Manage <Icon name="ChevronRightIcon" size={12} />
+                          <td className="pl-2 pr-4 py-2.5 text-right whitespace-nowrap align-middle">
+                            <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+                              <button
+                                onClick={() => setSelectedBooking(booking)}
+                                className="text-xs font-bold text-[#C8860A] hover:underline inline-flex items-center gap-0.5 cursor-pointer whitespace-nowrap"
+                              >
+                                <span>Manage</span>
+                                <Icon name="ChevronRightIcon" size={12} />
                               </button>
                               <button
                                 onClick={() => handleDeleteBooking(booking.id, booking.name)}
-                                className="text-red-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                                className="text-rose-500 hover:text-rose-700 p-1 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer inline-flex items-center justify-center"
                                 title="Delete Booking"
                               >
                                 <Icon name="TrashIcon" size={15} />
@@ -5896,10 +7033,529 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       ))}
                     </tbody>
                   </table>
-                  {filtered.filter(b => (filterStatus === 'all' ? b.status !== 'completed' : b.status === filterStatus)).length === 0 && (
-                    <div className="text-center py-12 text-gray-400 text-sm">
-                      <Icon name="CalendarDaysIcon" size={32} className="mx-auto mb-2 text-gray-300" />
+                  {filtered.length === 0 && (
+                    <div className="text-center py-10 text-gray-400 text-sm">
+                      <Icon name="CalendarDaysIcon" size={30} className="mx-auto mb-2 text-gray-300" />
                       No bookings match your filters
+                    </div>
+                  )}
+                </div>
+
+                {/* Pagination Controls */}
+                {filtered.length > 0 && (
+                  <div className="px-3.5 py-2 bg-gray-50/80 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2 text-gray-500 text-xs">
+                      <span>Showing <strong>{(bookingsPage - 1) * (bookingsPageSize === -1 ? filtered.length : bookingsPageSize) + 1}–{bookingsPageSize === -1 ? filtered.length : Math.min(bookingsPage * bookingsPageSize, filtered.length)}</strong> of <strong>{filtered.length}</strong></span>
+                      <span className="text-gray-300">|</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[11px] text-gray-400">Rows:</span>
+                        <select
+                          value={bookingsPageSize}
+                          onChange={(e) => {
+                            setBookingsPageSize(Number(e.target.value));
+                            setBookingsPage(1);
+                          }}
+                          className="bg-white border border-gray-200 rounded px-1.5 py-0.5 text-xs text-gray-700 font-semibold focus:outline-none cursor-pointer"
+                        >
+                          <option value={5}>5</option>
+                          <option value={6}>6</option>
+                          <option value={10}>10</option>
+                          <option value={-1}>All</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {totalBookingPages > 1 && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setBookingsPage(p => Math.max(1, p - 1))}
+                          disabled={bookingsPage === 1}
+                          className="px-2.5 py-1 rounded-lg border border-gray-200 bg-white text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 font-semibold text-xs transition-colors cursor-pointer"
+                        >
+                          Prev
+                        </button>
+                        {Array.from({ length: totalBookingPages }, (_, i) => i + 1)
+                          .filter(p => p === 1 || p === totalBookingPages || Math.abs(p - bookingsPage) <= 1)
+                          .map((p, idx, arr) => (
+                            <React.Fragment key={p}>
+                              {idx > 0 && p - arr[idx - 1] > 1 && <span className="text-gray-400 px-1">...</span>}
+                              <button
+                                type="button"
+                                onClick={() => setBookingsPage(p)}
+                                className={`min-w-[24px] h-6 px-1.5 rounded-md text-xs font-bold transition-colors cursor-pointer ${
+                                  bookingsPage === p
+                                    ? 'bg-[#C8860A] text-white shadow-2xs'
+                                    : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                                }`}
+                              >
+                                {p}
+                              </button>
+                            </React.Fragment>
+                          ))}
+                        <button
+                          type="button"
+                          onClick={() => setBookingsPage(p => Math.min(totalBookingPages, p + 1))}
+                          disabled={bookingsPage === totalBookingPages}
+                          className="px-2.5 py-1 rounded-lg border border-gray-200 bg-white text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 font-semibold text-xs transition-colors cursor-pointer"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ─── COMPLETION EVENTS ─── */}
+          {activeTab === 'completion_events' && (
+            <div className="space-y-4">
+              {/* Stat Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm flex items-center gap-3.5">
+                  <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+                    <Icon name="CheckBadgeIcon" size={24} />
+                  </div>
+                  <div>
+                    <span className="text-xs text-gray-500 font-semibold block">Completed Events</span>
+                    <span className="text-xl font-extrabold text-gray-900">{completedBookings.length}</span>
+                  </div>
+                </div>
+                <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm flex items-center gap-3.5">
+                  <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center flex-shrink-0">
+                    <Icon name="BanknotesIcon" size={24} />
+                  </div>
+                  <div>
+                    <span className="text-xs text-gray-500 font-semibold block">Total Revenue Closed</span>
+                    <span className="text-xl font-extrabold text-gray-900">
+                      £{completedBookings.reduce((sum, b) => sum + getTotalAmount(b), 0).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+                <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm flex items-center gap-3.5">
+                  <div className="w-11 h-11 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center flex-shrink-0">
+                    <Icon name="UserGroupIcon" size={24} />
+                  </div>
+                  <div>
+                    <span className="text-xs text-gray-500 font-semibold block">Total Guests Catered</span>
+                    <span className="text-xl font-extrabold text-gray-900">
+                      {completedBookings.reduce((sum, b) => sum + (b.guests || 0), 0).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Filter & Search Bar */}
+              <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
+                <div className="flex items-center gap-2 flex-wrap w-full md:w-auto">
+                  {/* Month Custom Dropdown */}
+                  <div className="relative inline-flex items-center" data-custom-dropdown>
+                    <button
+                      type="button"
+                      onClick={() => setOpenFilterDropdown(prev => prev === 'completion_month' ? null : 'completion_month')}
+                      className="bg-white hover:bg-amber-50/50 border border-gray-200 hover:border-amber-200/90 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-gray-800 flex items-center gap-1.5 shadow-2xs cursor-pointer transition-all"
+                    >
+                      <span>📅</span>
+                      <span className="text-gray-500 font-medium">Month:</span>
+                      <span className="text-gray-900 font-bold">
+                        {formatMonthLabel(completionMonthFilter)}
+                      </span>
+                      <Icon
+                        name="ChevronDownIcon"
+                        size={11}
+                        className={`text-gray-400 transition-transform duration-200 ${openFilterDropdown === 'completion_month' ? 'rotate-180 text-[#C8860A]' : ''}`}
+                      />
+                    </button>
+
+                    {openFilterDropdown === 'completion_month' && (
+                      <div
+                        className="absolute left-0 top-full mt-1.5 w-56 bg-white rounded-xl shadow-xl border border-gray-200 p-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 max-h-64 overflow-y-auto space-y-0.5"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCompletionMonthFilter('all');
+                            setOpenFilterDropdown(null);
+                          }}
+                          className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-xl transition-all cursor-pointer ${
+                            completionMonthFilter === 'all'
+                              ? 'bg-amber-100/80 text-amber-950 font-bold'
+                              : 'text-gray-700 hover:bg-amber-50/80 hover:text-amber-950'
+                          }`}
+                        >
+                          <span>All Months</span>
+                          {completionMonthFilter === 'all' && <Icon name="CheckIcon" size={13} className="text-[#C8860A]" />}
+                        </button>
+                        {availableMonths.map(m => (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => {
+                              setCompletionMonthFilter(m);
+                              setOpenFilterDropdown(null);
+                            }}
+                            className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-xl transition-all cursor-pointer ${
+                              completionMonthFilter === m
+                                ? 'bg-amber-100/80 text-amber-950 font-bold'
+                                : 'text-gray-700 hover:bg-amber-50/80 hover:text-amber-950'
+                            }`}
+                          >
+                            <span>{formatMonthLabel(m)}</span>
+                            {completionMonthFilter === m && <Icon name="CheckIcon" size={13} className="text-[#C8860A] flex-shrink-0" />}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {(completionMonthFilter !== 'all' || completionSearch) && (
+                    <button
+                      type="button"
+                      onClick={() => { setCompletionMonthFilter('all'); setCompletionSearch(''); }}
+                      className="text-red-600 hover:text-red-700 font-bold text-xs px-2.5 py-1 rounded-lg hover:bg-red-50 transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <Icon name="XMarkIcon" size={13} />
+                      Reset
+                    </button>
+                  )}
+                </div>
+
+                <div className="w-full md:w-72">
+                  <input
+                    type="text"
+                    placeholder="Search completed customer, phone, ID, venue..."
+                    value={completionSearch}
+                    onChange={(e) => setCompletionSearch(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-gray-50"
+                  />
+                </div>
+              </div>
+
+              {/* Table */}
+              <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-xs">
+                <div className="w-full overflow-hidden">
+                  <table className="w-full divide-y divide-gray-100 font-sans">
+                    <thead className="bg-gray-50/90 border-b border-gray-200">
+                      <tr>
+                        <th className="text-left pl-3 pr-2 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Customer</th>
+                        <th className="text-left px-2 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Event</th>
+                        <th className="text-left px-2 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Date</th>
+                        <th className="text-left px-2 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Amount</th>
+                        <th className="text-left px-2 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Status</th>
+                        <th className="text-left px-2 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Invoices</th>
+                        <th className="text-left px-2 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Contact &amp; Summary</th>
+                        <th className="pl-2 pr-4 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 bg-white">
+                      {completedBookings
+                        .filter(b => {
+                          const monthMatch = completionMonthFilter === 'all' || (b.date && b.date.startsWith(completionMonthFilter));
+                          const q = completionSearch.toLowerCase().trim();
+                          const searchMatch = !q || (
+                            (b.name || '').toLowerCase().includes(q) ||
+                            (b.phone || '').toLowerCase().includes(q) ||
+                            (b.email || '').toLowerCase().includes(q) ||
+                            (b.id || '').toLowerCase().includes(q) ||
+                            (b.eventType || '').toLowerCase().includes(q) ||
+                            (b.package || '').toLowerCase().includes(q)
+                          );
+                          return monthMatch && searchMatch;
+                        })
+                        .map((booking) => (
+                          <tr key={booking.id} className="hover:bg-emerald-50/30 transition-colors">
+                            <td className="pl-3 pr-2 py-2.5 whitespace-nowrap align-middle">
+                              <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 bg-emerald-100/90 text-emerald-800 font-bold text-xs border border-emerald-200 shadow-2xs">
+                                  {booking.name.charAt(0).toUpperCase()}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="font-bold text-gray-900 text-sm truncate max-w-[120px] xl:max-w-[135px] 2xl:max-w-[165px]" title={booking.name}>{booking.name}</div>
+                                  <div className="text-xs text-gray-500">{booking.phone}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-2 py-2.5 align-middle">
+                              <div className="min-w-0 max-w-[110px] xl:max-w-[125px] 2xl:max-w-[160px]">
+                                <div className="text-sm font-semibold text-gray-900 truncate" title={booking.eventType}>{booking.eventType}</div>
+                                <div className="text-xs text-gray-500 truncate" title={booking.package}>{booking.package}</div>
+                              </div>
+                            </td>
+                            <td className="px-2 py-2.5 whitespace-nowrap align-middle">
+                              <div className="text-sm font-medium text-gray-900">{booking.date}</div>
+                              <div className="text-xs text-gray-500">{booking.time}</div>
+                            </td>
+                            <td className="px-2 py-2.5 whitespace-nowrap align-middle">
+                              <div className="text-base font-bold text-gray-900">£{getTotalAmount(booking).toLocaleString()}</div>
+                              <div className="text-xs text-emerald-600 font-medium leading-tight">Fully Paid</div>
+                            </td>
+                            <td className="px-2 py-2.5 whitespace-nowrap align-middle">
+                              {renderBookingStatusBadge(booking)}
+                            </td>
+                            <td className="px-2 py-2.5 whitespace-nowrap align-middle">
+                              <div className="flex items-center gap-1 flex-nowrap">
+                                <button
+                                  type="button"
+                                  onClick={() => downloadInvoicePDF(booking, true)}
+                                  className="text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-lg transition-colors flex items-center gap-1 text-xs font-semibold border border-emerald-200 shadow-2xs cursor-pointer active:scale-95"
+                                  title="Download Deposit Invoice"
+                                >
+                                  <Icon name="ArrowDownTrayIcon" size={12} />
+                                  <span>Deposit</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => downloadInvoicePDF(booking)}
+                                  className="text-amber-800 hover:text-amber-950 bg-amber-50 hover:bg-amber-100 px-2 py-1 rounded-lg transition-colors flex items-center gap-1 text-xs font-semibold border border-amber-200 shadow-2xs cursor-pointer active:scale-95"
+                                  title="Download Final Invoice"
+                                >
+                                  <Icon name="ArrowDownTrayIcon" size={12} />
+                                  <span>Final</span>
+                                </button>
+                              </div>
+                            </td>
+                            <td className="px-2 py-2.5 whitespace-nowrap align-middle">
+                              <div className="flex items-center gap-1 flex-nowrap">
+                                <a
+                                  href={buildWhatsAppLink(booking.phone, buildCompletedWhatsAppText(booking))}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg text-white shadow-2xs hover:brightness-105 active:scale-95 transition-all whitespace-nowrap bg-[#10B981]"
+                                  title="Send Completed Event Summary on WhatsApp"
+                                >
+                                  <Icon name="ChatBubbleLeftRightIcon" size={13} />
+                                  <span>WhatsApp</span>
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const { subject, body } = getCompletedEmailContent(booking);
+                                    openEmailComposer(booking.email, booking.name, subject, body, booking.id, 'booking_completed');
+                                  }}
+                                  className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg bg-white text-sky-700 hover:bg-sky-50 border border-sky-200 shadow-2xs cursor-pointer active:scale-95 transition-all whitespace-nowrap"
+                                  title="Send Completed Event Summary via Email"
+                                >
+                                  <Icon name="EnvelopeIcon" size={13} className="text-sky-600" />
+                                  <span>Email</span>
+                                </button>
+                              </div>
+                            </td>
+                            <td className="pl-2 pr-4 py-2.5 text-right whitespace-nowrap align-middle">
+                              <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+                                <button
+                                  onClick={() => setSelectedBooking(booking)}
+                                  className="text-xs font-bold text-[#C8860A] hover:underline inline-flex items-center gap-0.5 cursor-pointer whitespace-nowrap"
+                                >
+                                  <span>Manage</span>
+                                  <Icon name="ChevronRightIcon" size={12} />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteBooking(booking.id, booking.name)}
+                                  className="text-rose-500 hover:text-rose-700 p-1 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer inline-flex items-center justify-center"
+                                  title="Delete Record"
+                                >
+                                  <Icon name="TrashIcon" size={15} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                  {completedBookings.filter(b => {
+                    const monthMatch = completionMonthFilter === 'all' || (b.date && b.date.startsWith(completionMonthFilter));
+                    const q = completionSearch.toLowerCase().trim();
+                    return monthMatch && (!q || (b.name || '').toLowerCase().includes(q) || (b.phone || '').toLowerCase().includes(q));
+                  }).length === 0 && (
+                    <div className="text-center py-12 text-gray-400 text-sm">
+                      <Icon name="CheckBadgeIcon" size={32} className="mx-auto mb-2 text-gray-300" />
+                      No completed events match your search
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ─── NO SHOW ─── */}
+          {activeTab === 'no_show' && (
+            <div className="space-y-4">
+              {/* Stat Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm flex items-center gap-3.5">
+                  <div className="w-11 h-11 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center flex-shrink-0">
+                    <Icon name="UserMinusIcon" size={24} />
+                  </div>
+                  <div>
+                    <span className="text-xs text-gray-500 font-semibold block">Total No Shows</span>
+                    <span className="text-xl font-extrabold text-gray-900">
+                      {bookings.filter(b => b.status === 'no_show').length}
+                    </span>
+                  </div>
+                </div>
+                <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm flex items-center gap-3.5">
+                  <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center flex-shrink-0">
+                    <Icon name="BanknotesIcon" size={24} />
+                  </div>
+                  <div>
+                    <span className="text-xs text-gray-500 font-semibold block">Estimated Lost Value</span>
+                    <span className="text-xl font-extrabold text-gray-900">
+                      £{bookings.filter(b => b.status === 'no_show').reduce((sum, b) => sum + getTotalAmount(b), 0).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+                <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm flex items-center gap-3.5">
+                  <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+                    <Icon name="ArrowPathIcon" size={24} />
+                  </div>
+                  <div>
+                    <span className="text-xs text-gray-500 font-semibold block">Reschedule / Restore</span>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('bookings')}
+                      className="text-xs font-bold text-[#C8860A] hover:underline cursor-pointer"
+                    >
+                      View Active Bookings →
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Search Bar */}
+              <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 font-medium">
+                    Showing {bookings.filter(b => b.status === 'no_show').length} no-show records
+                  </span>
+                </div>
+
+                <div className="w-full md:w-72">
+                  <input
+                    type="text"
+                    placeholder="Search no-show customer, phone, ID, venue..."
+                    value={noShowSearch}
+                    onChange={(e) => setNoShowSearch(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#C8860A] bg-gray-50"
+                  />
+                </div>
+              </div>
+
+              {/* Table */}
+              <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-xs">
+                <div className="w-full overflow-hidden">
+                  <table className="w-full divide-y divide-gray-100 font-sans">
+                    <thead className="bg-gray-50/90 border-b border-gray-200">
+                      <tr>
+                        <th className="text-left pl-3 pr-2 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Customer</th>
+                        <th className="text-left px-2 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Event</th>
+                        <th className="text-left px-2 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Event Date</th>
+                        <th className="text-left px-2 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Amount</th>
+                        <th className="text-left px-2 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Status</th>
+                        <th className="text-left px-2 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Contact Customer</th>
+                        <th className="pl-2 pr-4 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 bg-white">
+                      {bookings
+                        .filter(b => b.status === 'no_show')
+                        .filter(b => {
+                          const q = noShowSearch.toLowerCase().trim();
+                          return !q || (
+                            (b.name || '').toLowerCase().includes(q) ||
+                            (b.phone || '').toLowerCase().includes(q) ||
+                            (b.email || '').toLowerCase().includes(q) ||
+                            (b.id || '').toLowerCase().includes(q) ||
+                            (b.eventType || '').toLowerCase().includes(q) ||
+                            (b.package || '').toLowerCase().includes(q)
+                          );
+                        })
+                        .map((booking) => (
+                          <tr key={booking.id} className="hover:bg-rose-50/30 transition-colors">
+                            <td className="pl-3 pr-2 py-2.5 whitespace-nowrap align-middle">
+                              <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 bg-rose-100 text-rose-800 font-bold text-xs border border-rose-200 shadow-2xs">
+                                  {booking.name.charAt(0).toUpperCase()}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="font-bold text-gray-900 text-sm truncate max-w-[125px] xl:max-w-[140px] 2xl:max-w-[170px]" title={booking.name}>{booking.name}</div>
+                                  <div className="text-xs text-gray-500">{booking.phone}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-2 py-2.5 align-middle">
+                              <div className="min-w-0 max-w-[115px] xl:max-w-[130px] 2xl:max-w-[165px]">
+                                <div className="text-sm font-semibold text-gray-900 truncate" title={booking.eventType}>{booking.eventType}</div>
+                                <div className="text-xs text-gray-500 truncate" title={booking.package}>{booking.package}</div>
+                              </div>
+                            </td>
+                            <td className="px-2 py-2.5 whitespace-nowrap align-middle">
+                              <div className="text-sm font-medium text-gray-900">{booking.date}</div>
+                              <div className="text-xs text-gray-500">{booking.time}</div>
+                            </td>
+                            <td className="px-2 py-2.5 whitespace-nowrap align-middle">
+                              <div className="text-base font-bold text-gray-900">£{getTotalAmount(booking).toLocaleString()}</div>
+                              {booking.depositPaid && <div className="text-xs text-emerald-600 font-medium leading-tight">Dep. was paid</div>}
+                            </td>
+                            <td className="px-2 py-2.5 whitespace-nowrap align-middle">
+                              {renderBookingStatusBadge(booking)}
+                            </td>
+                            <td className="px-2 py-2.5 whitespace-nowrap align-middle">
+                              <div className="flex items-center gap-1 flex-nowrap">
+                                <a
+                                  href={buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]}, this is SriLalitha regarding your ${booking.eventType} booking on ${booking.date}. We noticed you missed your scheduled event, please let us know if you would like to reschedule.`)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg text-white shadow-2xs hover:brightness-105 active:scale-95 transition-all whitespace-nowrap bg-[#10B981]"
+                                  title="Contact customer on WhatsApp"
+                                >
+                                  <Icon name="ChatBubbleLeftRightIcon" size={13} />
+                                  <span>WhatsApp</span>
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const { subject, body } = getNoShowEmailContent(booking);
+                                    openEmailComposer(booking.email, booking.name, subject, body, booking.id, 'no_show');
+                                  }}
+                                  className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg bg-white text-sky-700 hover:bg-sky-50 border border-sky-200 shadow-2xs cursor-pointer active:scale-95 transition-all whitespace-nowrap"
+                                  title="Send Email"
+                                >
+                                  <Icon name="EnvelopeIcon" size={13} className="text-sky-600" />
+                                  <span>Email</span>
+                                </button>
+                              </div>
+                            </td>
+                            <td className="pl-2 pr-4 py-2.5 text-right whitespace-nowrap align-middle">
+                              <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+                                <button
+                                  onClick={() => setSelectedBooking(booking)}
+                                  className="text-xs font-bold text-[#C8860A] hover:underline inline-flex items-center gap-0.5 cursor-pointer whitespace-nowrap"
+                                >
+                                  <span>Manage</span>
+                                  <Icon name="ChevronRightIcon" size={12} />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteBooking(booking.id, booking.name)}
+                                  className="text-rose-500 hover:text-rose-700 p-1 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer inline-flex items-center justify-center"
+                                  title="Delete Record"
+                                >
+                                  <Icon name="TrashIcon" size={15} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                  {bookings.filter(b => b.status === 'no_show').length === 0 && (
+                    <div className="text-center py-12 text-gray-400 text-sm">
+                      <Icon name="UserMinusIcon" size={32} className="mx-auto mb-2 text-gray-300" />
+                      No bookings marked as No Show
+                      <p className="text-xs text-gray-400 mt-1">
+                        You can change any booking's status to No Show from the Bookings tab or manage drawer.
+                      </p>
                     </div>
                   )}
                 </div>
@@ -5995,12 +7651,12 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               type="button"
                               onClick={() => {
                                 const { subject, body } = getEventReminderEmailContent(b);
-                                openEmailComposer(b.email, b.name, subject, body, b.id);
+                                openEmailComposer(b.email, b.name, subject, body, b.id, 'event_reminder');
                               }}
-                              className="flex items-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 cursor-pointer"
+                              className="flex items-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-lg bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-200/90 shadow-2xs cursor-pointer transition-colors"
                               title="Remind via Email"
                             >
-                              <Icon name="EnvelopeIcon" size={12} />
+                              <Icon name="EnvelopeIcon" size={12} className="text-[#C8860A]" />
                               Email
                             </button>
                           </div>
@@ -6107,12 +7763,12 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                 type="button"
                                 onClick={() => {
                                   const { subject, body } = getGeneralCustomerEmailContent(customer.name, customer.email);
-                                  openEmailComposer(customer.email, customer.name, subject, body);
+                                  openEmailComposer(customer.email, customer.name, subject, body, undefined, 'general_message');
                                 }}
-                                className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 cursor-pointer"
+                                className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-lg bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-200/90 shadow-2xs cursor-pointer transition-colors"
                                 title="Send Email"
                               >
-                                <Icon name="EnvelopeIcon" size={12} />
+                                <Icon name="EnvelopeIcon" size={12} className="text-[#C8860A]" />
                                 Email
                               </button>
                               <button onClick={() => setSelectedCustomer(customer)} className="text-xs font-semibold hover:underline ml-1" style={{ color: '#C8860A' }}>View</button>
@@ -10915,6 +12571,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             />
           )}
 
+          {/* ─── EMAIL TEMPLATES TAB ─── */}
+          {activeTab === 'email_templates' && renderEmailTemplatesContent()}
+
           {/* ─── HISTORY ─── */}
           {activeTab === 'history' && (
             <div className="space-y-4">
@@ -13615,327 +15274,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               )}
 
               {/* ── SECTION 10: DYNAMIC MESSAGE & EMAIL TEMPLATES ── */}
-              {settingsSection === 'message_templates' && (
-                <div className="space-y-6 animate-in fade-in duration-300">
-                  {/* Top Action Bar */}
-                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                        <span className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center flex-shrink-0">
-                          <Icon name="ChatBubbleBottomCenterTextIcon" size={18} />
-                        </span>
-                        Dynamic WhatsApp &amp; Email Communication Templates
-                      </h3>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Customize pre-filled email subjects, email bodies, and WhatsApp scripts used throughout enquiries, menu sharing, deposits, invoices, event reminders, and completed reviews.
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <button
-                        type="button"
-                        onClick={saveCommunicationTemplates}
-                        disabled={isSavingCommConfig}
-                        className="px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-md active:scale-95 disabled:opacity-50 flex items-center gap-2 cursor-pointer transition-all hover:brightness-105"
-                        style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
-                      >
-                        {isSavingCommConfig ? (
-                          <>
-                            <span className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />
-                            <span>Saving Templates...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Icon name="CheckIcon" size={16} />
-                            <span>Save Communication Templates</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Business Sender & Contact Info */}
-                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
-                    <div className="border-b border-gray-100 pb-3 flex items-center justify-between">
-                      <div>
-                        <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide flex items-center gap-1.5">
-                          <span>🏢</span> Business Contact Details in Messages
-                        </h4>
-                        <p className="text-xs text-gray-500">
-                          These details are dynamically injected into every email &amp; WhatsApp template via <code className="text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded font-mono text-[11px]">&#123;contactEmail&#125;</code> and <code className="text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded font-mono text-[11px]">&#123;contactWhatsApp&#125;</code>.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-700 mb-1">
-                          Customer Support &amp; Enquiries Email
-                        </label>
-                        <input
-                          type="email"
-                          value={editableCommConfig.contactEmail || ''}
-                          onChange={(e) => setEditableCommConfig(prev => ({ ...prev, contactEmail: e.target.value }))}
-                          placeholder="e.g. admin@vegchennaisrilalitha.co.uk"
-                          className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs font-mono text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-700 mb-1">
-                          Customer Support &amp; WhatsApp Phone Number
-                        </label>
-                        <input
-                          type="text"
-                          value={editableCommConfig.contactWhatsApp || ''}
-                          onChange={(e) => setEditableCommConfig(prev => ({ ...prev, contactWhatsApp: e.target.value }))}
-                          placeholder="e.g. +44 7700 900000"
-                          className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs font-mono text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Template Editor with Navigation */}
-                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-5">
-                    {/* Template Pills / Subnav */}
-                    <div>
-                      <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                        <span>📝</span> Select Communication Template to Edit
-                      </h4>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        {Object.values(editableCommConfig.templates || {}).map((tmpl) => {
-                          const isSelected = selectedTemplateForEdit === tmpl.id;
-                          return (
-                            <button
-                              key={tmpl.id}
-                              type="button"
-                              onClick={() => setSelectedTemplateForEdit(tmpl.id)}
-                              className={`text-left p-3 rounded-xl border transition-all cursor-pointer ${
-                                isSelected
-                                  ? 'border-amber-500 bg-amber-50/70 shadow-2xs text-amber-950 font-bold'
-                                  : 'border-gray-200 bg-gray-50/60 hover:bg-gray-100/70 text-gray-700'
-                              }`}
-                            >
-                              <div className="text-xs font-bold truncate flex items-center justify-between">
-                                <span>{tmpl.name}</span>
-                                {isSelected && <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />}
-                              </div>
-                              <div className="text-[10px] text-gray-400 mt-1 line-clamp-1">
-                                {tmpl.description}
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Active Template Editor Form */}
-                    {editableCommConfig.templates?.[selectedTemplateForEdit] && (() => {
-                      const activeTmpl = editableCommConfig.templates[selectedTemplateForEdit];
-                      return (
-                        <div className="space-y-5 border-t border-gray-100 pt-5">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                            <div>
-                              <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                                <span>{activeTmpl.name}</span>
-                                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                                  {activeTmpl.id}
-                                </span>
-                              </h4>
-                              <p className="text-xs text-gray-500 mt-0.5">{activeTmpl.description}</p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const defaultTmpl = DEFAULT_COMMUNICATION_CONFIG.templates[selectedTemplateForEdit];
-                                if (defaultTmpl) {
-                                  setEditableCommConfig(prev => ({
-                                    ...prev,
-                                    templates: {
-                                      ...prev.templates,
-                                      [selectedTemplateForEdit]: { ...defaultTmpl },
-                                    }
-                                  }));
-                                  setCustomAlert({
-                                    message: `Reset "${activeTmpl.name}" to standard default template. Remember to click Save.`,
-                                    type: 'success',
-                                  });
-                                }
-                              }}
-                              className="text-xs text-gray-500 hover:text-gray-800 underline flex items-center gap-1 cursor-pointer self-start sm:self-auto"
-                            >
-                              <Icon name="ArrowPathIcon" size={13} />
-                              Reset to Default
-                            </button>
-                          </div>
-
-                          {/* Subject Line */}
-                          <div>
-                            <label className="block text-xs font-bold text-gray-700 mb-1">
-                              Email Subject Line
-                            </label>
-                            <input
-                              type="text"
-                              value={activeTmpl.subject}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setEditableCommConfig(prev => ({
-                                  ...prev,
-                                  templates: {
-                                    ...prev.templates,
-                                    [selectedTemplateForEdit]: {
-                                      ...prev.templates[selectedTemplateForEdit],
-                                      subject: val,
-                                    }
-                                  }
-                                }));
-                              }}
-                              placeholder="e.g. SriLalitha Events: Thank You for Your {eventType} Enquiry"
-                              className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs font-medium text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
-                            />
-                          </div>
-
-                          {/* Message Body Textarea */}
-                          <div>
-                            <div className="flex items-center justify-between mb-1">
-                              <label className="block text-xs font-bold text-gray-700">
-                                Email &amp; WhatsApp Message Body
-                              </label>
-                              <span className="text-[11px] text-gray-400">
-                                Multi-line text template with automatic placeholder interpolation
-                              </span>
-                            </div>
-                            <textarea
-                              rows={11}
-                              value={activeTmpl.body}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setEditableCommConfig(prev => ({
-                                  ...prev,
-                                  templates: {
-                                    ...prev.templates,
-                                    [selectedTemplateForEdit]: {
-                                      ...prev.templates[selectedTemplateForEdit],
-                                      body: val,
-                                    }
-                                  }
-                                }));
-                              }}
-                              className="w-full border border-gray-300 rounded-xl p-3.5 text-xs text-gray-900 leading-relaxed font-mono focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
-                            />
-                          </div>
-
-                          {/* Dynamic Variables Legend */}
-                          <div className="bg-amber-50/50 rounded-xl border border-amber-200/60 p-3.5 space-y-2">
-                            <span className="text-xs font-bold text-amber-950 flex items-center gap-1">
-                              <span>🏷️</span> Available Dynamic Placeholders (Click to Copy):
-                            </span>
-                            <div className="flex flex-wrap gap-1.5">
-                              {[
-                                '{customerName}',
-                                '{customerPhone}',
-                                '{eventType}',
-                                '{eventDate}',
-                                '{eventTime}',
-                                '{guests}',
-                                '{venueType}',
-                                '{bookingId}',
-                                '{deposit}',
-                                '{totalEstimatedAmount}',
-                                '{menuType}',
-                                '{menuDetails}',
-                                '{invoiceBreakdown}',
-                                '{extrasList}',
-                                '{extraTotal}',
-                                '{completedSummary}',
-                                '{bankAccountName}',
-                                '{bankSortCode}',
-                                '{bankAccountNumber}',
-                                '{contactEmail}',
-                                '{contactWhatsApp}',
-                              ].map((tag) => (
-                                <button
-                                  key={tag}
-                                  type="button"
-                                  onClick={() => {
-                                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                                      navigator.clipboard.writeText(tag);
-                                      setCustomAlert({ message: `Copied ${tag} to clipboard!`, type: 'success' });
-                                    }
-                                  }}
-                                  className="px-2 py-0.5 bg-white border border-amber-300 rounded-md text-[11px] font-mono font-semibold text-amber-900 hover:bg-amber-100 hover:border-amber-400 transition-colors cursor-pointer"
-                                  title={`Click to copy ${tag}`}
-                                >
-                                  {tag}
-                                </button>
-                              ))}
-                            </div>
-                            <p className="text-[10px] text-amber-800">
-                              When an email is sent or WhatsApp message launched, these tags are automatically populated with real customer and booking values.
-                            </p>
-                          </div>
-
-                          {/* Live Sample Preview */}
-                          <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/60 space-y-3">
-                            <h5 className="text-xs font-bold text-gray-800 uppercase tracking-wide flex items-center gap-1.5">
-                              <span>👁️</span> Live Customer Preview Sample
-                            </h5>
-                            <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-2 text-xs text-gray-800 shadow-2xs">
-                              <div className="flex items-center gap-2 border-b border-gray-100 pb-2">
-                                <span className="font-bold text-gray-500 w-16">Subject:</span>
-                                <span className="font-bold text-gray-900">
-                                  {renderCommunicationTemplate(activeTmpl.subject, {
-                                    customerName: 'Rahul Sharma',
-                                    eventType: 'Wedding Reception',
-                                    eventDate: '24/10/2026',
-                                    eventTime: '12:00 PM',
-                                    guests: 150,
-                                    bookingId: 'BK-2026-108',
-                                    deposit: 300,
-                                    menuType: 'Live Dosa Option 1',
-                                    totalEstimatedAmount: 1850,
-                                    bankAccountName: bankDetails.accountName || 'SriLalitha Events Ltd',
-                                    bankSortCode: bankDetails.sortCode || '20-00-00',
-                                    bankAccountNumber: bankDetails.accountNumber || '12345678',
-                                    contactEmail: editableCommConfig.contactEmail,
-                                    contactWhatsApp: editableCommConfig.contactWhatsApp,
-                                  })}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2 border-b border-gray-100 pb-2">
-                                <span className="font-bold text-gray-500 w-16">To:</span>
-                                <span className="font-mono text-gray-600">rahul.sharma@example.com</span>
-                              </div>
-                              <div className="pt-2 whitespace-pre-wrap font-sans leading-relaxed text-gray-700">
-                                {renderCommunicationTemplate(activeTmpl.body, {
-                                  customerName: 'Rahul Sharma',
-                                  eventType: 'Wedding Reception',
-                                  eventDate: '24/10/2026',
-                                  eventTime: '12:00 PM',
-                                  guests: 150,
-                                  bookingId: 'BK-2026-108',
-                                  deposit: 300,
-                                  menuType: 'Live Dosa Option 1',
-                                  menuDetails: '• 12 Live Signature Dosas (Masala, Mysore, Ghee Podi, Spring Dosa...)\n• Fresh Chutneys, Sambar & Live Counter Service (2 Hours)',
-                                  totalEstimatedAmount: 1850,
-                                  invoiceBreakdown: '• Base Package (150 Guests): £1,500\n• Extra Live Station: £200\n• Travel & Logistics: £150\n• Total: £1,850 (Deposit Paid: £300, Remaining: £1,550)',
-                                  extrasList: '• 20 Additional Guests @ £12/person = £240\n• Extra 1 Hour Service Floor = £120',
-                                  extraTotal: 360,
-                                  completedSummary: 'Booking #BK-2026-108 on 24/10/2026 (Wedding Reception, 150 Guests). All invoices settled.',
-                                  bankAccountName: bankDetails.accountName || 'SriLalitha Events Ltd',
-                                  bankSortCode: bankDetails.sortCode || '20-00-00',
-                                  bankAccountNumber: bankDetails.accountNumber || '12345678',
-                                  contactEmail: editableCommConfig.contactEmail,
-                                  contactWhatsApp: editableCommConfig.contactWhatsApp,
-                                })}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </div>
-              )}
+              {/* ── SECTION 10: DYNAMIC MESSAGE & EMAIL TEMPLATES ── */}
+              {settingsSection === 'message_templates' && renderEmailTemplatesContent()}
             </div>
           )}
           {/* ─── DISCOUNT APPROVALS ─── */}
@@ -14366,11 +15706,17 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   <span className={`w-2 h-2 rounded-full ${STATUS_DOT[selectedBooking.status]}`} />
                   {STATUS_LABELS[selectedBooking.status]}
                 </span>
-                <span className="text-xs text-gray-400">Step {STATUS_FLOW.indexOf(selectedBooking.status) + 1} of {STATUS_FLOW.length}</span>
+                {STATUS_FLOW.indexOf(selectedBooking.status) >= 0 ? (
+                  <span className="text-xs text-gray-400">Step {STATUS_FLOW.indexOf(selectedBooking.status) + 1} of {STATUS_FLOW.length}</span>
+                ) : (
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{STATUS_LABELS[selectedBooking.status]}</span>
+                )}
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-1.5">
-                <div className="h-1.5 rounded-full transition-all duration-500" style={{ width: `${((STATUS_FLOW.indexOf(selectedBooking.status) + 1) / STATUS_FLOW.length) * 100}%`, background: 'linear-gradient(90deg, #C8860A, #F0A830)' }} />
-              </div>
+              {STATUS_FLOW.indexOf(selectedBooking.status) >= 0 && (
+                <div className="w-full bg-gray-100 rounded-full h-1.5">
+                  <div className="h-1.5 rounded-full transition-all duration-500" style={{ width: `${((STATUS_FLOW.indexOf(selectedBooking.status) + 1) / STATUS_FLOW.length) * 100}%`, background: 'linear-gradient(90deg, #C8860A, #F0A830)' }} />
+                </div>
+              )}
             </div>
 
             <div className="flex-1 overflow-auto p-5 space-y-5">
@@ -14398,7 +15744,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       type="button"
                       onClick={() => {
                         const { subject, body } = getGeneralCustomerEmailContent(selectedBooking.name, selectedBooking.email, selectedBooking.id);
-                        openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id);
+                        openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id, 'general_message');
                       }}
                       className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 cursor-pointer shadow-2xs"
                     >
@@ -15232,7 +16578,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               type="button"
                               onClick={() => {
                                 const { subject, body } = getMenuEmailContent(selectedBooking.name, selectedBooking.phone, selectedBooking.email, pkg.name, totalGuests, selectedBooking);
-                                openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id);
+                                openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id, 'menu_sharing');
                               }}
                               className="flex items-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 cursor-pointer"
                               title="Send via Email"
@@ -15271,7 +16617,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               type="button"
                               onClick={() => {
                                 const { subject, body } = getMenuEmailContent(selectedBooking.name, selectedBooking.phone, selectedBooking.email, menuTitle, selectedBooking.guests, selectedBooking);
-                                openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id);
+                                openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id, 'menu_sharing');
                               }}
                               className="p-1 text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
                               title={`Send ${menuTitle} via Email`}
@@ -15311,7 +16657,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       type="button"
                       onClick={() => {
                         const { subject, body } = getDepositEmailContent(selectedBooking);
-                        openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id);
+                        openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id, 'deposit_request');
                       }}
                       className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold px-3 py-2.5 rounded-xl justify-center bg-blue-600 hover:bg-blue-700 text-white shadow-sm cursor-pointer"
                     >
@@ -15667,7 +17013,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       type="button"
                       onClick={() => {
                         const { subject, body } = getFinalInvoiceEmailContent(selectedBooking);
-                        openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id);
+                        openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id, 'final_invoice');
                       }}
                       className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold px-3 py-2.5 rounded-xl justify-center bg-blue-600 hover:bg-blue-700 text-white shadow-sm cursor-pointer"
                     >
@@ -16083,7 +17429,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       type="button"
                       onClick={() => {
                         const { subject, body } = getEventReminderEmailContent(selectedBooking);
-                        openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id);
+                        openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id, 'event_reminder');
                       }}
                       className="flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold px-3 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm cursor-pointer"
                     >
@@ -16127,7 +17473,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             type="button"
                             onClick={() => {
                               const { subject, body } = getExtraInvoiceEmailContent(selectedBooking);
-                              openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id);
+                              openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id, 'extra_invoice');
                             }}
                             className="flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold px-3 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm cursor-pointer"
                           >
@@ -16246,7 +17592,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       type="button"
                       onClick={() => {
                         const { subject, body } = getCompletedEmailContent(selectedBooking);
-                        openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id);
+                        openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id, 'booking_completed');
                       }}
                       className="flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold px-3 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm cursor-pointer"
                     >
@@ -16311,7 +17657,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   type="button"
                   onClick={() => {
                     const { subject, body } = getGeneralCustomerEmailContent(selectedCustomer.name, selectedCustomer.email);
-                    openEmailComposer(selectedCustomer.email, selectedCustomer.name, subject, body);
+                    openEmailComposer(selectedCustomer.email, selectedCustomer.name, subject, body, undefined, 'general_message');
                   }}
                   className="flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold px-3 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm cursor-pointer"
                 >
@@ -17478,6 +18824,148 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 </div>
               </div>
 
+              {/* Dynamic Email Template Picker & Action Buttons */}
+              <div className="bg-gradient-to-r from-amber-50/80 via-orange-50/30 to-blue-50/30 border border-amber-200/80 rounded-xl p-3.5 space-y-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-amber-600 font-bold text-sm">📑</span>
+                    <label className="text-xs font-bold text-gray-900">
+                      Email Template
+                    </label>
+                    <span className="text-[10px] text-amber-800 bg-amber-100/90 font-medium px-2 py-0.5 rounded-full">
+                      Select to dynamically fill &amp; edit
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewTemplateForm({
+                          name: '',
+                          description: '',
+                          subject: emailModalData.subject || '',
+                          body: emailModalData.body || '',
+                        });
+                        setShowCreateTemplateModal(true);
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-amber-900 bg-white border border-amber-300 hover:bg-amber-100 flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                      title="Create a new reusable custom template"
+                    >
+                      <Icon name="PlusCircleIcon" size={13} />
+                      <span>+ New Template</span>
+                    </button>
+                    {emailModalData.subject && emailModalData.body && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewTemplateForm({
+                            name: `Custom: ${emailModalData.subject.slice(0, 20)}...`,
+                            description: 'Created from email composer',
+                            subject: emailModalData.subject,
+                            body: emailModalData.body,
+                          });
+                          setShowCreateTemplateModal(true);
+                        }}
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-100 flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                        title="Save current message as a new reusable template"
+                      >
+                        <Icon name="DocumentDuplicateIcon" size={13} />
+                        <span>Save Current As Template</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <select
+                      value={emailModalData.templateId || 'custom'}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === '__create_new__') {
+                          setNewTemplateForm({
+                            name: '',
+                            description: '',
+                            subject: emailModalData.subject || '',
+                            body: emailModalData.body || '',
+                          });
+                          setShowCreateTemplateModal(true);
+                        } else {
+                          applyTemplateToEmailModal(val);
+                        }
+                      }}
+                      className="w-full bg-white border border-amber-300 rounded-xl px-3 py-2 text-xs font-semibold text-gray-800 shadow-2xs focus:ring-2 focus:ring-amber-500 focus:outline-none cursor-pointer appearance-none pr-8"
+                    >
+                      <option value="custom">✍️ Custom Message (Freeform / Current Edit)</option>
+                      <optgroup label="── System Email Templates ──">
+                        {Object.values(editableCommConfig.templates || {})
+                          .filter(t => !t.id.startsWith('custom_'))
+                          .map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name}
+                            </option>
+                          ))}
+                      </optgroup>
+                      {Object.values(editableCommConfig.templates || {}).some(t => t.id.startsWith('custom_')) && (
+                        <optgroup label="── Your Custom Templates ──">
+                          {Object.values(editableCommConfig.templates || {})
+                            .filter(t => t.id.startsWith('custom_'))
+                            .map((t) => (
+                              <option key={t.id} value={t.id}>
+                                ⭐ {t.name}
+                              </option>
+                            ))}
+                        </optgroup>
+                      )}
+                      <option value="__create_new__">➕ Create New Custom Email Template...</option>
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-amber-700">
+                      <Icon name="ChevronDownIcon" size={14} />
+                    </div>
+                  </div>
+
+                  {emailModalData.templateId && emailModalData.templateId !== 'custom' && (
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => applyTemplateToEmailModal(emailModalData.templateId!)}
+                        className="px-2.5 py-2 rounded-xl text-xs font-semibold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                        title="Reload pure template values for this customer"
+                      >
+                        <Icon name="ArrowPathIcon" size={13} />
+                        <span className="hidden sm:inline">Reload</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const tmpl = editableCommConfig.templates[emailModalData.templateId!];
+                          if (tmpl) setEditingTemplateModal({ ...tmpl });
+                        }}
+                        className="px-2.5 py-2 rounded-xl text-xs font-semibold text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                        title="Edit and save this template"
+                      >
+                        <Icon name="PencilSquareIcon" size={13} />
+                        <span className="hidden sm:inline">Edit Template</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const tmpl = editableCommConfig.templates[emailModalData.templateId!];
+                          if (tmpl) setTemplateToDelete(tmpl);
+                        }}
+                        className="px-2 py-2 rounded-xl text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                        title="Delete this template"
+                      >
+                        <Icon name="TrashIcon" size={13} />
+                        <span className="hidden sm:inline">Delete</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">
                   Email Subject <span className="text-red-500">*</span>
@@ -17509,10 +18997,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 />
               </div>
 
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-start gap-2.5">
-                <span className="text-blue-600 text-sm">💡</span>
-                <p className="text-[11px] text-blue-900 leading-relaxed">
-                  <strong>Delivery options:</strong> You can send directly through the verified mail server (Zingbite SMTP) without leaving this dashboard, or click <em>Open in Mail App</em> to launch Outlook/Apple Mail/Thunderbird with this content pre-filled.
+              <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3 flex items-start gap-2.5">
+                <span className="text-amber-700 text-sm">💡</span>
+                <p className="text-[11px] text-amber-900 leading-relaxed">
+                  <strong>Easy Delivery:</strong> Click <em>Open in Mail App</em> to immediately draft in Outlook/Apple Mail/Thunderbird, or <em>Copy Text</em> to paste into Gmail or any other email provider. No work mail server setup required.
                 </p>
               </div>
             </div>
@@ -17527,12 +19015,31 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 Cancel
               </button>
 
-              <div className="flex items-center gap-2 w-full sm:w-auto">
+              <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const textToCopy = `To: ${emailModalData.to}\nSubject: ${emailModalData.subject}\n\n${emailModalData.body}`;
+                    if (navigator.clipboard) {
+                      navigator.clipboard.writeText(textToCopy);
+                    }
+                    setCustomAlert({
+                      message: 'Email subject and message copied to clipboard!',
+                      type: 'success',
+                    });
+                  }}
+                  className="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl text-xs font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 flex items-center justify-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+                  title="Copy subject and content to clipboard"
+                >
+                  <Icon name="DocumentDuplicateIcon" size={13} />
+                  <span>Copy Text</span>
+                </button>
+
                 <a
                   href={buildMailtoLink(emailModalData.to, emailModalData.subject, emailModalData.body)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-bold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
+                  className="flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer"
                   title="Open draft in your local email application"
                 >
                   <Icon name="ArrowTopRightOnSquareIcon" size={13} />
@@ -17543,22 +19050,374 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   type="button"
                   onClick={handleSendCustomEmailDirectly}
                   disabled={isSendingCustomEmail}
-                  className="flex-1 sm:flex-initial px-5 py-2 rounded-xl text-xs font-bold text-white shadow-md active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 transition-all cursor-pointer hover:brightness-105"
-                  style={{ background: 'linear-gradient(135deg, #2563EB, #1D4ED8)' }}
+                  className="flex-1 sm:flex-initial px-3 py-2 rounded-xl text-[11px] font-semibold text-gray-500 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  title="Optional: attempt direct server dispatch"
                 >
                   {isSendingCustomEmail ? (
                     <>
-                      <span className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />
-                      <span>Dispatching Email...</span>
+                      <span className="animate-spin rounded-full h-3 w-3 border-2 border-gray-600 border-t-transparent" />
+                      <span>Sending...</span>
                     </>
                   ) : (
                     <>
-                      <Icon name="PaperAirplaneIcon" size={14} />
-                      <span>Send via Zingbite SMTP</span>
+                      <Icon name="PaperAirplaneIcon" size={12} />
+                      <span>Server Send</span>
                     </>
                   )}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL: CREATE NEW CUSTOM EMAIL TEMPLATE ─── */}
+      {showCreateTemplateModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-gray-100 overflow-hidden">
+            {/* Header */}
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-amber-50/70 via-orange-50/40 to-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 text-white flex items-center justify-center shadow-md shadow-amber-500/20">
+                  <Icon name="DocumentTextIcon" size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 text-base">
+                    Create New Custom Email Template
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    Add a reusable branded email template with dynamic placeholders
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreateTemplateModal(false)}
+                className="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 flex items-center justify-center transition-colors cursor-pointer"
+                title="Close modal"
+              >
+                <Icon name="XMarkIcon" size={18} />
+              </button>
+            </div>
+
+            {/* Form */}
+            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Template Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newTemplateForm.name}
+                  onChange={(e) => setNewTemplateForm(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="e.g. Special Festive Discount Offer"
+                  className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Description / Internal Notes
+                </label>
+                <input
+                  type="text"
+                  value={newTemplateForm.description}
+                  onChange={(e) => setNewTemplateForm(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="e.g. Sent to promote seasonal wedding packages"
+                  className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs text-gray-700 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Email Subject Line <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newTemplateForm.subject}
+                  onChange={(e) => setNewTemplateForm(prev => ({ ...prev, subject: e.target.value }))}
+                  placeholder="e.g. ✨ SriLalitha Events: Exclusive Offer for Your {eventType}"
+                  className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white font-medium"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-gray-700">
+                    Message Body <span className="text-red-500">*</span>
+                  </label>
+                  <span className="text-[11px] text-gray-400">
+                    Supports &#123;customerName&#125;, &#123;eventType&#125;, etc.
+                  </span>
+                </div>
+                <textarea
+                  rows={8}
+                  value={newTemplateForm.body}
+                  onChange={(e) => setNewTemplateForm(prev => ({ ...prev, body: e.target.value }))}
+                  placeholder="Hi {customerName},&#10;&#10;Enter your template message here..."
+                  className="w-full border border-gray-300 rounded-xl p-3.5 text-xs text-gray-800 leading-relaxed font-mono focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                />
+              </div>
+
+              {/* Tag Insertion Chips */}
+              <div className="bg-amber-50/60 rounded-xl border border-amber-200/70 p-3 space-y-1.5">
+                <span className="text-[11px] font-bold text-amber-950 flex items-center gap-1">
+                  🏷️ Click a tag to append to message:
+                </span>
+                <div className="flex flex-wrap gap-1">
+                  {['{customerName}', '{eventType}', '{eventDate}', '{eventTime}', '{guests}', '{bookingId}', '{deposit}', '{contactWhatsApp}', '{contactEmail}'].map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => setNewTemplateForm(prev => ({ ...prev, body: prev.body + (prev.body.endsWith(' ') || prev.body === '' ? '' : ' ') + tag }))}
+                      className="px-2 py-0.5 bg-white border border-amber-300 rounded text-[10px] font-mono font-bold text-amber-900 hover:bg-amber-100 cursor-pointer"
+                    >
+                      +{tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setShowCreateTemplateModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-200/70 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSaveNewCustomTemplate(emailModalOpen)}
+                disabled={isSavingNewTemplate || !newTemplateForm.name.trim() || !newTemplateForm.subject.trim() || !newTemplateForm.body.trim()}
+                className="px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-md active:scale-95 disabled:opacity-50 flex items-center gap-2 transition-all cursor-pointer hover:brightness-105"
+                style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+              >
+                {isSavingNewTemplate ? (
+                  <>
+                    <span className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />
+                    <span>Saving Template...</span>
+                  </>
+                ) : (
+                  <>
+                    <Icon name="CheckIcon" size={15} />
+                    <span>Save &amp; Add Template</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL: EDIT EXISTING EMAIL TEMPLATE ─── */}
+      {editingTemplateModal && (
+        <div className="fixed inset-0 z-[125] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-gray-100 overflow-hidden">
+            {/* Header */}
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
+                  <Icon name="PencilSquareIcon" size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
+                    Edit Email Template
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-900">
+                      {editingTemplateModal.id}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    Modify template name, subject line, and content
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingTemplateModal(null)}
+                className="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 flex items-center justify-center transition-colors cursor-pointer"
+                title="Close modal"
+              >
+                <Icon name="XMarkIcon" size={18} />
+              </button>
+            </div>
+
+            {/* Form */}
+            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Template Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editingTemplateModal.name}
+                  onChange={(e) => setEditingTemplateModal(prev => prev ? ({ ...prev, name: e.target.value }) : null)}
+                  placeholder="e.g. Enquiry Follow-up"
+                  className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs text-gray-900 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Description / Purpose
+                </label>
+                <input
+                  type="text"
+                  value={editingTemplateModal.description}
+                  onChange={(e) => setEditingTemplateModal(prev => prev ? ({ ...prev, description: e.target.value }) : null)}
+                  placeholder="e.g. Sent when replying to new booking enquiry"
+                  className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs text-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Email Subject Line <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editingTemplateModal.subject}
+                  onChange={(e) => setEditingTemplateModal(prev => prev ? ({ ...prev, subject: e.target.value }) : null)}
+                  placeholder="Subject line with dynamic tags..."
+                  className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs text-gray-900 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white font-medium"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-gray-700">
+                    Message Body <span className="text-red-500">*</span>
+                  </label>
+                  <span className="text-[11px] text-gray-400">
+                    Supports placeholder tags
+                  </span>
+                </div>
+                <textarea
+                  rows={9}
+                  value={editingTemplateModal.body}
+                  onChange={(e) => setEditingTemplateModal(prev => prev ? ({ ...prev, body: e.target.value }) : null)}
+                  className="w-full border border-gray-300 rounded-xl p-3.5 text-xs text-gray-800 leading-relaxed font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"
+                />
+              </div>
+
+              {/* Tag Insertion Chips */}
+              <div className="bg-blue-50/60 rounded-xl border border-blue-200/70 p-3 space-y-1.5">
+                <span className="text-[11px] font-bold text-blue-950 flex items-center gap-1">
+                  🏷️ Click a tag to append to message:
+                </span>
+                <div className="flex flex-wrap gap-1">
+                  {['{customerName}', '{eventType}', '{eventDate}', '{eventTime}', '{guests}', '{bookingId}', '{deposit}', '{contactWhatsApp}', '{contactEmail}'].map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => setEditingTemplateModal(prev => prev ? ({ ...prev, body: prev.body + (prev.body.endsWith(' ') || prev.body === '' ? '' : ' ') + tag }) : null)}
+                      className="px-2 py-0.5 bg-white border border-blue-300 rounded text-[10px] font-mono font-bold text-blue-900 hover:bg-blue-100 cursor-pointer"
+                    >
+                      +{tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setEditingTemplateModal(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-200/70 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => editingTemplateModal && handleSaveEditedTemplate(editingTemplateModal)}
+                disabled={isSavingEditedTemplate || !editingTemplateModal?.name.trim() || !editingTemplateModal?.subject.trim() || !editingTemplateModal?.body.trim()}
+                className="px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-md active:scale-95 disabled:opacity-50 flex items-center gap-2 transition-all cursor-pointer hover:brightness-105"
+                style={{ background: 'linear-gradient(135deg, #2563EB, #1D4ED8)' }}
+              >
+                {isSavingEditedTemplate ? (
+                  <>
+                    <span className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />
+                    <span>Saving Changes...</span>
+                  </>
+                ) : (
+                  <>
+                    <Icon name="CheckIcon" size={15} />
+                    <span>Save Template Changes</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL: CONFIRM TEMPLATE DELETION (DIALOG IN THE MIDDLE) ─── */}
+      {templateToDelete && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-7 w-full max-w-md border border-gray-100 animate-in zoom-in-95 duration-200 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-rose-100 text-rose-600 flex-shrink-0 shadow-inner">
+                <Icon name="TrashIcon" size={24} />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">
+                  Delete Email Template
+                </span>
+                <h3 className="text-base font-bold text-gray-900 mt-1 truncate">
+                  {templateToDelete.name}
+                </h3>
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-600 leading-relaxed">
+              Are you sure you want to permanently delete the email template <strong className="text-gray-900 font-semibold">"{templateToDelete.name}"</strong>?
+            </p>
+
+            {/* Warning Note */}
+            <div className="bg-rose-50 border border-rose-200 rounded-2xl p-3.5 flex items-start gap-2.5 text-xs text-rose-950">
+              <Icon name="ExclamationTriangleIcon" size={18} className="text-rose-600 flex-shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <span className="font-bold block text-rose-900 text-xs">⚠️ Confirmation Required</span>
+                <p className="text-[11px] text-rose-800 leading-relaxed">
+                  This template will be permanently removed from your saved communication templates and will no longer appear in the email dropdown.
+                </p>
+                <div className="text-[10px] font-mono text-rose-700 bg-rose-100/70 px-2 py-0.5 rounded mt-1 inline-block">
+                  Template ID: #{templateToDelete.id}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isDeletingTemplate}
+                onClick={() => setTemplateToDelete(null)}
+                className="flex-1 px-4 py-2.5 rounded-xl text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingTemplate}
+                onClick={() => executeDeleteTemplate(templateToDelete.id)}
+                className="flex-1 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition-colors shadow-sm disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                {isDeletingTemplate ? (
+                  <>
+                    <Icon name="ArrowPathIcon" size={14} className="animate-spin text-white" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Icon name="TrashIcon" size={14} />
+                    <span>Yes, Delete Template</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

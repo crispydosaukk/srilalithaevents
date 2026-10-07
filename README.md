@@ -23,7 +23,7 @@ A modern Next.js 15 application built with TypeScript and Tailwind CSS.
   # or
   yarn dev
   ```
-3. Open [http://localhost:4028](http://localhost:4028) with your browser to see the result.
+3. Open [http://localhost:4029](http://localhost:4029) with your browser to see the result.
 
 ## 📁 Project Structure
 
@@ -57,7 +57,7 @@ This project uses Tailwind CSS for styling with the following features:
 
 ## 📦 Available Scripts
 
-- `npm run dev` - Start development server on port 4028
+- `npm run dev` - Start development server on port 4029
 - `npm run build` - Build the application for production
 - `npm run start` - Start the development server
 - `npm run serve` - Start the production server

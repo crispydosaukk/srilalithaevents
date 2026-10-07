@@ -39,7 +39,7 @@
     "warning": "🚨 CRITICAL: DO NOT REMOVE OR MODIFY ABOVE DEPENDENCIES - Required for Next.js 15 TypeScript app functionality"
   },
   "scripts": {
-    "dev": "next dev -p 4028",
+    "dev": "next dev -p 4029",
     "build": "next build",
     "build:cpanel": "next build && node scripts/prepare-cpanel.js",
     "prepare:cpanel": "node scripts/prepare-cpanel.js",

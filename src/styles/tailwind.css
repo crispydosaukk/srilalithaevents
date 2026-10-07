@@ -82,14 +82,18 @@ body {
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {
-  width: 4px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--linen);
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--teal-primary);
-  border-radius: 2px;
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 /* Custom range slider */

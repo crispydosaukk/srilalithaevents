@@ -11,7 +11,22 @@ import {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { to, subject, message, customerName, bookingId } = body;
+    const { to, subject, message, customerName, bookingId, contactEmail: reqContactEmail, contactWhatsApp: reqContactWhatsApp } = body;
+
+    let contactEmail = reqContactEmail || 'admin@vegchennaisrilalitha.co.uk';
+    let contactWhatsApp = reqContactWhatsApp || '+44 7700 900000';
+    try {
+      if (!reqContactEmail || !reqContactWhatsApp) {
+        const commSnap = await getDoc(doc(db, 'site_data', 'communication_templates'));
+        if (commSnap.exists()) {
+          const commData = commSnap.data();
+          if (commData.contactEmail) contactEmail = commData.contactEmail;
+          if (commData.contactWhatsApp) contactWhatsApp = commData.contactWhatsApp;
+        }
+      }
+    } catch (e) {
+      // fallback
+    }
 
     if (!to || !to.includes('@')) {
       return NextResponse.json(
@@ -144,8 +159,8 @@ export async function POST(req: NextRequest) {
 
       <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #E5E7EB; font-size: 13px; color: #6B7280;">
         <p style="margin: 0; font-weight: 700; color: #111827;">SriLalitha Events &amp; Catering Team</p>
-        <p style="margin: 2px 0;">📞 Phone / WhatsApp: <a href="tel:+447700900000" style="color: #C8860A; text-decoration: none;">+44 7700 900000</a></p>
-        <p style="margin: 2px 0;">✉️ Email: <a href="mailto:admin@vegchennaisrilalitha.co.uk" style="color: #C8860A; text-decoration: none;">admin@vegchennaisrilalitha.co.uk</a></p>
+        <p style="margin: 2px 0;">📞 Phone / WhatsApp: <a href="tel:${contactWhatsApp}" style="color: #C8860A; text-decoration: none;">${contactWhatsApp}</a></p>
+        <p style="margin: 2px 0;">✉️ Email: <a href="mailto:${contactEmail}" style="color: #C8860A; text-decoration: none;">${contactEmail}</a></p>
         <p style="margin: 2px 0;">🌐 Website: <a href="https://vegchennaisrilalitha.events" style="color: #C8860A; text-decoration: none;">vegchennaisrilalitha.events</a></p>
       </div>
     </div>
