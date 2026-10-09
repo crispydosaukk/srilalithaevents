@@ -16897,7 +16897,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   </div>
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-xs font-semibold text-gray-500 mb-1">Select Banquet Package</label>
+                      <label className="block text-xs font-semibold text-gray-500 mb-1">Select Package</label>
                       <select
                         value={selectedBooking.selectedMenu || selectedBooking.package || ''}
                         onChange={async (e) => {
@@ -17004,13 +17004,6 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           {(editableUpgrades?.items || []).map((extra: MenuUpgradeItem) => (
                             <option key={extra.name} value={extra.name}>
                               {extra.name} ({extra.priceLabel})
-                            </option>
-                          ))}
-                        </optgroup>
-                        <optgroup label="Legacy Banquet Packages">
-                          {editableBanquetPackages.map(pkg => (
-                            <option key={pkg.id} value={pkg.name}>
-                              {pkg.name} (£{pkg.pricePerPerson}/person)
                             </option>
                           ))}
                         </optgroup>
@@ -18732,13 +18725,6 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       {(editableUpgrades?.items || []).map((extra: MenuUpgradeItem) => (
                         <option key={extra.name} value={extra.name}>
                           {extra.name} ({extra.priceLabel})
-                        </option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="Legacy Banquet Packages">
-                      {editableBanquetPackages.map(p => (
-                        <option key={p.id} value={p.name}>
-                          {p.name} (£{p.pricePerPerson}/pp)
                         </option>
                       ))}
                     </optgroup>
