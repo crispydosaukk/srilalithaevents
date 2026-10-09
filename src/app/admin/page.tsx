@@ -17043,51 +17043,98 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {/* Step: Menu Sent — show real menu packages */}
               {(selectedBooking.status === 'menu_sent' || showMenuPanel) && selectedBooking.status !== 'menu_selected' && selectedBooking.status !== 'deposit_pending' && selectedBooking.status !== 'deposit_confirmed' && selectedBooking.status !== 'event_scheduled' && selectedBooking.status !== 'event_completed' && selectedBooking.status !== 'final_invoice_sent' && selectedBooking.status !== 'final_payment_received' && selectedBooking.status !== 'completed' && (
                 <div className="border border-purple-200 rounded-xl p-4 bg-purple-50">
-                  <div className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-3">Send Menu Packages via WhatsApp</div>
+                  <div className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-3">Send Menu Packages via WhatsApp &amp; Email</div>
                   <div className="space-y-2">
-                    {editableBanquetPackages.map((pkg) => {
-                      const adults = selectedBooking.adults ?? selectedBooking.guests;
-                      const kids4to10 = selectedBooking.kids4to10 || 0;
-                      const kidsUnder4 = selectedBooking.kidsUnder4 || 0;
-                      const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
-                      const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
-                      const estTotal = (pkg.pricePerPerson * adults) + (kids4to10 * kidsPrice);
-                      const totalGuests = adults + kids4to10 + kidsUnder4;
-                      
-                      return (
-                        <div key={pkg.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2.5 border border-purple-100">
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">{pkg.name}</div>
-                            <div className="text-xs text-gray-500">£{pkg.pricePerPerson}/person · Est. £{estTotal.toLocaleString()} for {totalGuests} guests</div>
+                    {getWebsitePackagesForBooking(selectedBooking).map((pkg) => (
+                      <div key={pkg.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2.5 border border-purple-100 hover:border-purple-300 transition-colors shadow-2xs">
+                        <div className="min-w-0 pr-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-sm">{pkg.icon}</span>
+                            <span className="text-sm font-semibold text-gray-900">{pkg.name}</span>
+                            {pkg.badge && (
+                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 border border-purple-200">
+                                {pkg.badge}
+                              </span>
+                            )}
                           </div>
-                          <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
-                            <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n🥗 Starters: ${pkg.starters.veg} Veg + ${pkg.starters.nonVeg} Non-Veg\n🍛 Mains: ${pkg.mains.veg} Veg + ${pkg.mains.nonVeg} Non-Veg\n🍮 Desserts: ${pkg.desserts.join(', ')}\n${pkg.drinks.length > 0 ? `🥤 Drinks: ${pkg.drinks.join(', ')}\n` : ''}${pkg.guestLabel ? `\n👥 ${pkg.guestLabel}` : ''}\n\nFor ${adults} Adults and ${kids4to10} Kids, estimated total: *£${estTotal.toLocaleString()}* (Excl. VAT)\n\n🧒 *Kids Pricing* (Over 50 Adults):\n${editableKidsPricing.map(kp => `${kp.ageRange}: ${kp.price}`).join('\\n')}\n\n🏢 *Venue Hire Charges:*\n${editableVenueCharges.map(vc => `• ${vc.day}: ${vc.charge}${vc.note ? ` (${vc.note})` : ''}`).join('\\n')}\n\n✨ *Upgrades Available:*\n${(editableUpgrades?.items || []).map((e: MenuUpgradeItem) => `• ${e.name}: ${e.priceLabel}`).join('\\n')}\n\nPlease reply with your selection! 🙏`)}
-                              target="_blank" rel="noopener noreferrer"
-                              className="flex items-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-lg"
-                              style={{ background: '#25D366', color: 'white' }}
-                              title="Send via WhatsApp">
-                              <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                              WhatsApp
-                            </a>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const { subject, body } = getMenuEmailContent(selectedBooking.name, selectedBooking.phone, selectedBooking.email, pkg.name, totalGuests, selectedBooking);
-                                openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id);
-                              }}
-                              className="flex items-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 cursor-pointer"
-                              title="Send via Email"
-                            >
-                              <Icon name="EnvelopeIcon" size={12} />
-                              Email
-                            </button>
-                          </div>
+                          <div className="text-xs text-purple-700 font-medium mt-0.5">{pkg.priceDisplay}</div>
+                          {pkg.inclusionsSummary && (
+                            <div className="text-[11px] text-gray-500 truncate max-w-xs sm:max-w-md mt-0.5">{pkg.inclusionsSummary}</div>
+                          )}
                         </div>
-                      );
-                    })}
-                    {/* Also offer Indian & Sri Lankan menus */}
-                    <div className="mt-2 pt-2 border-t border-purple-100">
-                      <div className="text-xs text-purple-600 font-medium mb-2">Or send full menu list (WhatsApp / Email):</div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                          <a
+                            href={buildPackageWhatsAppLink(selectedBooking, pkg)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg shadow-2xs hover:opacity-90 transition-opacity"
+                            style={{ background: '#25D366', color: 'white' }}
+                            title="Send package via WhatsApp"
+                          >
+                            <Icon name="ChatBubbleLeftRightIcon" size={13} />
+                            WhatsApp
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => openPackageEmail(selectedBooking, pkg)}
+                            className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 cursor-pointer shadow-2xs"
+                            title="Send package via Email"
+                          >
+                            <Icon name="EnvelopeIcon" size={13} />
+                            Email
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Optional: Legacy Banquet Packages Collapsible */}
+                    {editableBanquetPackages.length > 0 && (
+                      <details className="mt-2 pt-2 border-t border-purple-100/70 text-xs">
+                        <summary className="text-[11px] font-semibold text-purple-700/80 hover:text-purple-900 cursor-pointer select-none">
+                          View Legacy Banquet Packages (Basic, Classic, Silver, Gold, Platinum...)
+                        </summary>
+                        <div className="space-y-1.5 mt-2">
+                          {editableBanquetPackages.map((pkg) => {
+                            const adults = selectedBooking.adults ?? selectedBooking.guests;
+                            const kids4to10 = selectedBooking.kids4to10 || 0;
+                            const kidsUnder4 = selectedBooking.kidsUnder4 || 0;
+                            const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
+                            const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
+                            const estTotal = (pkg.pricePerPerson * adults) + (kids4to10 * kidsPrice);
+                            const totalGuests = adults + kids4to10 + kidsUnder4;
+                            return (
+                              <div key={pkg.id} className="flex items-center justify-between bg-white/70 rounded-lg px-2.5 py-2 border border-gray-200 text-xs">
+                                <div>
+                                  <span className="font-medium text-gray-800">{pkg.name}</span>
+                                  <span className="text-gray-500 text-[11px] ml-2">£{pkg.pricePerPerson}/pp · Est. £{estTotal.toLocaleString()}</span>
+                                </div>
+                                <div className="flex gap-1.5">
+                                  <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n🥗 Starters: ${pkg.starters.veg} Veg + ${pkg.starters.nonVeg} Non-Veg\n🍛 Mains: ${pkg.mains.veg} Veg + ${pkg.mains.nonVeg} Non-Veg\n🍮 Desserts: ${pkg.desserts.join(', ')}\n${pkg.drinks.length > 0 ? `🥤 Drinks: ${pkg.drinks.join(', ')}\n` : ''}${pkg.guestLabel ? `\n👥 ${pkg.guestLabel}` : ''}\n\nFor ${adults} Adults and ${kids4to10} Kids, estimated total: *£${estTotal.toLocaleString()}* (Excl. VAT)\n\nPlease reply with your selection! 🙏`)}
+                                    target="_blank" rel="noopener noreferrer"
+                                    className="px-2 py-1 rounded text-[11px] font-semibold text-white"
+                                    style={{ background: '#25D366' }}>
+                                    WhatsApp
+                                  </a>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const { subject, body } = getMenuEmailContent(selectedBooking.name, selectedBooking.phone, selectedBooking.email, pkg.name, totalGuests, selectedBooking);
+                                      openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id);
+                                    }}
+                                    className="px-2 py-1 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                                    Email
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </details>
+                    )}
+
+                    {/* Send menus, extras & pricing lists */}
+                    <div className="mt-3 pt-3 border-t border-purple-100">
+                      <div className="text-xs text-purple-700 font-semibold mb-2">Or send menus, extras &amp; pricing lists (WhatsApp / Email):</div>
                       <div className="flex gap-2 flex-wrap">
                         {[
                           { title: 'Full Restaurant Menu', label: 'Full Menu 📋' },
@@ -17111,7 +17158,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             <button
                               type="button"
                               onClick={() => {
-                                const { subject, body } = getMenuEmailContent(selectedBooking.name, selectedBooking.phone, selectedBooking.email, menuTitle, selectedBooking.guests, selectedBooking);
+                                const { subject, body } = getMenuEmailContent(selectedBooking.name, selectedBooking.phone, selectedBooking.email, m.title, selectedBooking.guests, selectedBooking);
                                 openEmailComposer(selectedBooking.email, selectedBooking.name, subject, body, selectedBooking.id);
                               }}
                               className="p-1 text-blue-600 hover:bg-blue-50 rounded cursor-pointer transition-colors"
