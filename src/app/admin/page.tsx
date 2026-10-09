@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import Icon from '@/components/ui/AppIcon';
 import {
   INDIAN_MENU,
@@ -579,6 +580,7 @@ export default function AdminPage() {
   const [isSavingEditedTemplate, setIsSavingEditedTemplate] = useState(false);
   const [templateToDelete, setTemplateToDelete] = useState<CommunicationTemplate | null>(null);
   const [isDeletingTemplate, setIsDeletingTemplate] = useState(false);
+  const [returnToBookingId, setReturnToBookingId] = useState<string | null>(null);
 
   // Dynamic Website Content State (Hero, Badges, Stats Ribbon, Menu Header, Terms & Conditions)
   const [websiteContent, setWebsiteContent] = useState<WebsiteContentConfig>(DEFAULT_WEBSITE_CONTENT);
@@ -1057,11 +1059,39 @@ export default function AdminPage() {
       setSelectedTemplateForEdit(templateId);
 
       if (applyToComposer) {
+        const booking = emailModalData.bookingId
+          ? (bookings.find(b => b.id === emailModalData.bookingId) || enquiries.find(e => e.id === emailModalData.bookingId))
+          : undefined;
+        const customerName = emailModalData.customerName || booking?.name || '';
+        const firstName = customerName ? customerName.split(' ')[0] : '';
+        const eventType = booking?.eventType || 'Event';
+        const eventDate = booking?.date || '';
+        const eventTime = booking?.time || '';
+        const guests = booking?.guests ? String(booking.guests) : '';
+        const bookingId = booking?.id || emailModalData.bookingId || '';
+        const deposit = booking?.deposit ? `£${booking.deposit}` : '';
+        const contactEmail = sanitized.contactEmail || 'admin@vegchennaisrilalitha.co.uk';
+        const contactWhatsApp = sanitized.contactWhatsApp || '+44 7700 900000';
+
+        const fillPlaceholders = (text: string) => {
+          return text
+            .replace(/{customerName}/g, customerName)
+            .replace(/{firstName}/g, firstName)
+            .replace(/{eventType}/g, eventType)
+            .replace(/{eventDate}/g, eventDate)
+            .replace(/{eventTime}/g, eventTime)
+            .replace(/{guests}/g, guests)
+            .replace(/{bookingId}/g, bookingId)
+            .replace(/{deposit}/g, deposit)
+            .replace(/{contactEmail}/g, contactEmail)
+            .replace(/{contactWhatsApp}/g, contactWhatsApp);
+        };
+
         setEmailModalData(prev => ({
           ...prev,
           templateId,
-          subject: newTemplate.subject,
-          body: newTemplate.body,
+          subject: fillPlaceholders(newTemplate.subject),
+          body: fillPlaceholders(newTemplate.body),
         }));
       }
 
@@ -3780,18 +3810,112 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     );
   };
 
-  const renderBookingStatusBadge = (booking: Booking, customOptions?: { value: BookingStatus; label: string; dot?: string }[]) => {
-    const isMenuOpen = openRowStatusId === booking.id;
-    const options = customOptions || ALL_ROW_STATUS_OPTIONS;
+  const BookingStatusDropdown: React.FC<{
+    booking: Booking;
+    options: { value: BookingStatus; label: string; dot?: string }[];
+    isOpen: boolean;
+    onToggle: () => void;
+    onClose: () => void;
+    onSelect: (status: BookingStatus) => void;
+  }> = ({ booking, options, isOpen, onToggle, onClose, onSelect }) => {
+    const buttonRef = useRef<HTMLButtonElement | null>(null);
+    const menuRef = useRef<HTMLDivElement | null>(null);
+    const [mounted, setMounted] = useState(false);
+    const [coords, setCoords] = useState<{
+      top?: number;
+      bottom?: number;
+      left: number;
+      width: number;
+      placement: 'top' | 'bottom';
+      maxHeight: number;
+    } | null>(null);
+
+    useEffect(() => {
+      setMounted(true);
+    }, []);
+
+    const updatePosition = useCallback(() => {
+      if (!buttonRef.current) return;
+      const rect = buttonRef.current.getBoundingClientRect();
+
+      // If button scrolled completely off-screen, close menu
+      if (rect.bottom < 0 || rect.top > window.innerHeight) {
+        onClose();
+        return;
+      }
+
+      const menuWidth = 240;
+      // 12 items: each item ~32px, header ~38px, padding ~14px
+      const totalMenuNeeded = options.length * 32 + 52;
+      const spaceBelow = window.innerHeight - rect.bottom - 12;
+      const spaceAbove = rect.top - 12;
+
+      // Flip upwards if space below cannot fit the full menu and space above has more room
+      const openUp = spaceBelow < totalMenuNeeded && spaceAbove > spaceBelow;
+
+      // Horizontal positioning: align to button left, bounded within viewport
+      let left = rect.left;
+      if (left + menuWidth > window.innerWidth - 12) {
+        left = Math.max(12, rect.right - menuWidth);
+      }
+      if (left < 12) left = 12;
+
+      if (openUp) {
+        const maxHeight = Math.min(540, Math.max(180, spaceAbove));
+        setCoords({
+          bottom: window.innerHeight - rect.top + 6,
+          left,
+          width: menuWidth,
+          placement: 'top',
+          maxHeight,
+        });
+      } else {
+        const maxHeight = Math.min(540, Math.max(180, spaceBelow));
+        setCoords({
+          top: rect.bottom + 6,
+          left,
+          width: menuWidth,
+          placement: 'bottom',
+          maxHeight,
+        });
+      }
+    }, [options.length, onClose]);
+
+    useEffect(() => {
+      if (!isOpen) {
+        setCoords(null);
+        return;
+      }
+
+      updatePosition();
+
+      const handleScrollOrResize = (e: Event) => {
+        // If scrolling inside the dropdown menu itself, do nothing
+        if (menuRef.current && e.target instanceof Node && menuRef.current.contains(e.target)) {
+          return;
+        }
+        updatePosition();
+      };
+
+      window.addEventListener('resize', handleScrollOrResize);
+      window.addEventListener('scroll', handleScrollOrResize, true);
+
+      return () => {
+        window.removeEventListener('resize', handleScrollOrResize);
+        window.removeEventListener('scroll', handleScrollOrResize, true);
+      };
+    }, [isOpen, updatePosition]);
+
     const currentLabel = STATUS_LABELS[booking.status] || booking.status;
 
     return (
       <div className="relative inline-flex items-center" data-custom-dropdown>
         <button
+          ref={buttonRef}
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            setOpenRowStatusId(prev => prev === booking.id ? null : booking.id);
+            onToggle();
           }}
           className={`inline-flex items-center gap-1 pl-2 pr-1.5 py-0.5 rounded-full text-xs font-semibold transition-all shadow-2xs hover:shadow-xs cursor-pointer border whitespace-nowrap ${STATUS_COLORS[booking.status] || 'bg-gray-100 text-gray-700 border-gray-300'}`}
           title="Click to change status"
@@ -3801,35 +3925,63 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
           <Icon
             name="ChevronDownIcon"
             size={11}
-            className={`opacity-60 flex-shrink-0 transition-transform duration-200 ${isMenuOpen ? 'rotate-180' : ''}`}
+            className={`opacity-60 flex-shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
           />
         </button>
 
-        {isMenuOpen && (
+        {mounted && isOpen && coords && typeof document !== 'undefined' && createPortal(
           <div
-            className="absolute right-0 sm:left-0 top-full mt-1.5 w-52 bg-white rounded-xl shadow-xl border border-gray-200 ring-1 ring-black/5 p-1 z-[100] animate-in fade-in zoom-in-95 duration-100"
+            ref={menuRef}
+            data-custom-dropdown
+            className={`fixed w-60 bg-white rounded-2xl shadow-2xl border border-gray-200 ring-1 ring-black/5 p-1.5 z-[99999] transition-all duration-100 ${
+              coords.placement === 'top'
+                ? 'animate-in fade-in slide-in-from-bottom-2'
+                : 'animate-in fade-in slide-in-from-top-2'
+            }`}
+            style={{
+              top: coords.top !== undefined ? `${coords.top}px` : undefined,
+              bottom: coords.bottom !== undefined ? `${coords.bottom}px` : undefined,
+              left: `${coords.left}px`,
+              maxHeight: `${coords.maxHeight}px`,
+            }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500 border-b border-gray-100 flex items-center justify-between mb-1 bg-white">
-              <span>Change Status</span>
-              <span className="text-[9px] font-normal text-gray-400">Esc to close</span>
+            <div className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-600 border-b border-gray-100 flex items-center justify-between mb-1 bg-white sticky top-0 z-10">
+              <span className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#C8860A]" />
+                <span>Change Status</span>
+              </span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClose();
+                }}
+                className="w-5 h-5 rounded-full bg-red-50 hover:bg-red-500 text-red-500 hover:text-white border border-red-200 hover:border-red-500 flex items-center justify-center transition-all cursor-pointer shadow-2xs hover:scale-105 active:scale-95"
+                title="Close dropdown"
+              >
+                <Icon name="XMarkIcon" size={11} className="stroke-[2.5]" />
+              </button>
             </div>
-            <div className="max-h-60 overflow-y-auto py-0.5 space-y-0.5 bg-white">
+            <div
+              className="overflow-y-auto py-0.5 space-y-0.5 bg-white"
+              style={{ maxHeight: `${Math.max(120, coords.maxHeight - 44)}px` }}
+            >
               {options.map((opt) => (
                 <button
                   key={opt.value}
                   type="button"
-                  onClick={() => {
-                    updateStatus(booking.id, opt.value);
-                    setOpenRowStatusId(null);
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelect(opt.value);
                   }}
-                  className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs rounded-lg transition-colors cursor-pointer ${
+                  className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs rounded-xl transition-all cursor-pointer ${
                     booking.status === opt.value
-                      ? 'bg-amber-50 text-amber-900 font-bold border border-amber-200/70'
+                      ? 'bg-amber-100/90 text-amber-950 font-bold border border-amber-300 shadow-2xs'
                       : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
                   }`}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     <span className={`w-2 h-2 rounded-full flex-shrink-0 ${opt.dot || STATUS_DOT[opt.value] || 'bg-gray-400'}`} />
                     <span className="truncate">{opt.label}</span>
                   </div>
@@ -3839,9 +3991,26 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 </button>
               ))}
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
+    );
+  };
+
+  const renderBookingStatusBadge = (booking: Booking, customOptions?: { value: BookingStatus; label: string; dot?: string }[]) => {
+    return (
+      <BookingStatusDropdown
+        booking={booking}
+        options={customOptions || ALL_ROW_STATUS_OPTIONS}
+        isOpen={openRowStatusId === booking.id}
+        onToggle={() => setOpenRowStatusId(prev => prev === booking.id ? null : booking.id)}
+        onClose={() => setOpenRowStatusId(null)}
+        onSelect={(newStatus) => {
+          updateStatus(booking.id, newStatus);
+          setOpenRowStatusId(null);
+        }}
+      />
     );
   };
 
@@ -5538,6 +5707,37 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
   const renderEmailTemplatesContent = () => (
                 <div className="space-y-6 animate-in fade-in duration-300">
+                  {/* Return to Booking Banner if redirected */}
+                  {returnToBookingId && (
+                    <div className="bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-2xl p-4 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                          <Icon name="ArrowUturnLeftIcon" size={18} />
+                        </div>
+                        <div>
+                          <span className="font-bold text-sm block">Managing Templates for Booking #{returnToBookingId}</span>
+                          <p className="text-xs text-amber-100">After creating or editing templates, click return to go straight back to managing this booking.</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const b = bookings.find(x => x.id === returnToBookingId) || enquiries.find(x => x.id === returnToBookingId);
+                          if (b) {
+                            setSelectedBooking(b);
+                            const { subject, body } = getGeneralCustomerEmailContent(b.name, b.email, b.id);
+                            openEmailComposer(b.email, b.name, subject, body, b.id, 'general_message');
+                          }
+                          setReturnToBookingId(null);
+                        }}
+                        className="bg-white text-amber-900 hover:bg-amber-50 px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap self-start sm:self-auto hover:scale-105 active:scale-95"
+                      >
+                        <Icon name="ArrowUturnLeftIcon" size={13} />
+                        <span>← Back to Manage Booking</span>
+                      </button>
+                    </div>
+                  )}
+
                   {/* Top Action Bar */}
                   <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm flex flex-col xl:flex-row xl:items-center justify-between gap-4">
                     <div className="min-w-0 flex-1">
@@ -7181,7 +7381,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
                       {openFilterDropdown === 'event' && (
                         <div
-                          className="absolute left-0 top-full mt-1.5 w-56 bg-white rounded-xl shadow-xl border border-gray-200 p-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 max-h-64 overflow-y-auto space-y-0.5"
+                          className="absolute left-0 top-full mt-1.5 w-56 bg-white rounded-xl shadow-xl border border-gray-200 p-1.5 z-[100] animate-in fade-in zoom-in-95 duration-150 max-h-80 overflow-y-auto space-y-0.5"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <button
@@ -7242,7 +7442,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
                       {openFilterDropdown === 'month' && (
                         <div
-                          className="absolute left-0 top-full mt-1.5 w-56 bg-white rounded-xl shadow-xl border border-gray-200 p-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 max-h-64 overflow-y-auto space-y-0.5"
+                          className="absolute left-0 top-full mt-1.5 w-56 bg-white rounded-xl shadow-xl border border-gray-200 p-1.5 z-[100] animate-in fade-in zoom-in-95 duration-150 max-h-80 overflow-y-auto space-y-0.5"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <button
@@ -7413,7 +7613,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               )}
 
               <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-xs">
-                <div className="w-full overflow-hidden">
+                <div className="w-full overflow-x-auto">
                   <table className="w-full divide-y divide-gray-100 font-sans">
                     <thead className="bg-gray-50/90 border-b border-gray-200">
                       <tr>
@@ -7674,7 +7874,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
                     {openFilterDropdown === 'completion_month' && (
                       <div
-                        className="absolute left-0 top-full mt-1.5 w-56 bg-white rounded-xl shadow-xl border border-gray-200 p-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 max-h-64 overflow-y-auto space-y-0.5"
+                        className="absolute left-0 top-full mt-1.5 w-56 bg-white rounded-xl shadow-xl border border-gray-200 p-1.5 z-[100] animate-in fade-in zoom-in-95 duration-150 max-h-80 overflow-y-auto space-y-0.5"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <button
@@ -7738,7 +7938,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
               {/* Table */}
               <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-xs">
-                <div className="w-full overflow-hidden">
+                <div className="w-full overflow-x-auto">
                   <table className="w-full divide-y divide-gray-100 font-sans">
                     <thead className="bg-gray-50/90 border-b border-gray-200">
                       <tr>
@@ -7947,7 +8147,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
               {/* Table */}
               <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-xs">
-                <div className="w-full overflow-hidden">
+                <div className="w-full overflow-x-auto">
                   <table className="w-full divide-y divide-gray-100 font-sans">
                     <thead className="bg-gray-50/90 border-b border-gray-200">
                       <tr>
@@ -19322,7 +19522,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
       {/* ─── MODAL: QUICK EMAIL COMPOSER (DISPATCH VIA SMTP / MAILTO) ─── */}
       {emailModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-gray-100 overflow-hidden">
             {/* Modal Header */}
             <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-blue-50/50 via-indigo-50/30 to-white">
@@ -19347,10 +19547,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               <button
                 type="button"
                 onClick={() => setEmailModalOpen(false)}
-                className="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 flex items-center justify-center transition-colors cursor-pointer"
+                className="w-7 h-7 rounded-full bg-red-50 hover:bg-red-500 text-red-500 hover:text-white border border-red-200 hover:border-red-500 flex items-center justify-center transition-all cursor-pointer shadow-2xs hover:scale-105 active:scale-95"
                 title="Close modal"
               >
-                <Icon name="XMarkIcon" size={18} />
+                <Icon name="XMarkIcon" size={14} className="stroke-[2.5]" />
               </button>
             </div>
 
@@ -19432,6 +19632,19 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         <span>Save Current As Template</span>
                       </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReturnToBookingId(selectedBooking?.id || emailModalData.bookingId || null);
+                        setEmailModalOpen(false);
+                        setActiveTab('email_templates');
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-100 flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                      title="Open Email Templates tab to customize all templates"
+                    >
+                      <Icon name="Cog6ToothIcon" size={13} />
+                      <span>Manage All</span>
+                    </button>
                   </div>
                 </div>
 
@@ -19632,12 +19845,12 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
       {/* ─── MODAL: CREATE NEW CUSTOM EMAIL TEMPLATE ─── */}
       {showCreateTemplateModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl max-w-xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-gray-100 overflow-hidden">
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-gray-200 overflow-hidden">
             {/* Header */}
             <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-amber-50/70 via-orange-50/40 to-white">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 text-white flex items-center justify-center shadow-md shadow-amber-500/20">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 text-white flex items-center justify-center shadow-md shadow-amber-500/20">
                   <Icon name="DocumentTextIcon" size={20} />
                 </div>
                 <div>
@@ -19652,10 +19865,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               <button
                 type="button"
                 onClick={() => setShowCreateTemplateModal(false)}
-                className="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 flex items-center justify-center transition-colors cursor-pointer"
-                title="Close modal"
+                className="w-7 h-7 rounded-full bg-red-50 hover:bg-red-500 text-red-500 hover:text-white border border-red-200 hover:border-red-500 flex items-center justify-center transition-all cursor-pointer shadow-2xs hover:scale-105 active:scale-95"
+                title="Close dialog"
               >
-                <Icon name="XMarkIcon" size={18} />
+                <Icon name="XMarkIcon" size={14} className="stroke-[2.5]" />
               </button>
             </div>
 
@@ -19773,12 +19986,12 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
       {/* ─── MODAL: EDIT EXISTING EMAIL TEMPLATE ─── */}
       {editingTemplateModal && (
-        <div className="fixed inset-0 z-[125] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl max-w-xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-gray-100 overflow-hidden">
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-gray-200 overflow-hidden">
             {/* Header */}
             <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-white">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
                   <Icon name="PencilSquareIcon" size={20} />
                 </div>
                 <div>
@@ -19796,10 +20009,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               <button
                 type="button"
                 onClick={() => setEditingTemplateModal(null)}
-                className="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 flex items-center justify-center transition-colors cursor-pointer"
-                title="Close modal"
+                className="w-7 h-7 rounded-full bg-red-50 hover:bg-red-500 text-red-500 hover:text-white border border-red-200 hover:border-red-500 flex items-center justify-center transition-all cursor-pointer shadow-2xs hover:scale-105 active:scale-95"
+                title="Close dialog"
               >
-                <Icon name="XMarkIcon" size={18} />
+                <Icon name="XMarkIcon" size={14} className="stroke-[2.5]" />
               </button>
             </div>
 
@@ -19916,7 +20129,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
       {/* ─── MODAL: CONFIRM TEMPLATE DELETION (DIALOG IN THE MIDDLE) ─── */}
       {templateToDelete && (
-        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-7 w-full max-w-md border border-gray-100 animate-in zoom-in-95 duration-200 space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-rose-100 text-rose-600 flex-shrink-0 shadow-inner">
