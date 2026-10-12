@@ -2961,11 +2961,10 @@ export default function AdminPage() {
   const buildPackageWhatsAppLink = (booking: Booking, pkg: ReturnType<typeof getWebsitePackagesForBooking>[0]) => {
     const adults = booking.adults ?? booking.guests;
     const kids4to10 = booking.kids4to10 || 0;
-    
+
     const text = `Hi ${booking.name.split(' ')[0]}, here is our *${pkg.name}* from SriLalitha:\n\n` +
       `${pkg.detailsWhatsApp}\n\n` +
       `🧒 *Kids Pricing* (Over 50 Adults):\n${editableKidsPricing.map(kp => `${kp.ageRange}: ${kp.price}`).join('\n')}\n\n` +
-      `🏢 *Venue Hire Charges:*\n${editableVenueCharges.map(vc => `• ${vc.day}: ${vc.charge}${vc.note ? ` (${vc.note})` : ''}`).join('\n')}\n\n` +
       `✨ *Upgrades Available:*\n${(editableUpgrades?.items || []).map((e: MenuUpgradeItem) => `• ${e.name}: ${e.priceLabel}`).join('\n')}\n\n` +
       `Please reply with your selection! 🙏`;
 
@@ -2975,7 +2974,7 @@ export default function AdminPage() {
   const openPackageEmail = (booking: Booking, pkg: ReturnType<typeof getWebsitePackagesForBooking>[0]) => {
     const totalGuests = (booking.adults ?? booking.guests) + (booking.kids4to10 || 0) + (booking.kidsUnder4 || 0);
     const tmpl = editableCommConfig.templates.menu_sharing || DEFAULT_COMMUNICATION_CONFIG.templates.menu_sharing;
-    
+
     const menuDetails = `${pkg.detailsEmail}\n\n` +
       `✨ Available Event Upgrades:\n` +
       (editableUpgrades?.items || []).map((e: MenuUpgradeItem) => `• ${e.name}: ${e.priceLabel}`).join('\n') + `\n\n` +
@@ -3103,11 +3102,6 @@ export default function AdminPage() {
       text += editableLiveDosa1.items.map(i => `• *${i.name}*\n  ${i.description}`).join('\n\n') + '\n\n';
       text += `*✨ Optional Upgrades:*\n`;
       text += (editableUpgrades?.items || []).map(u => `• *${u.name}:* ${u.priceLabel}\n  ${u.description}`).join('\n\n') + '\n\n';
-    } else if (mtLower === 'venue hall charges') {
-      text += editableVenueCharges.map(row => `• *${row.day}:* ${row.charge} ${row.note ? `(${row.note})` : ''}`).join('\n') + '\n\n';
-      text += `🍷 *ALCOHOL:*\nCorkage fee - Charges for outside Alcohol in Venue which will be discussed as per guests.\n\n`;
-    } else if (mtLower === 'dry hire') {
-      text += editableDryHirePrices.map(row => `• *${row.day} (${row.session}):* £${row.price}`).join('\n') + '\n\n';
     } else if (mtLower === 'kids pricing') {
       text += `(Only Applies for over 50 Adults)\n\n`;
       text += editableKidsPricing.map(kp => `• *${kp.ageRange}:* ${kp.price}`).join('\n') + '\n\n';
@@ -3147,9 +3141,6 @@ export default function AdminPage() {
       discountText = `\n• Discount (${booking.discount.reason}): -£${getDiscountAmount(booking).toLocaleString()}`;
     }
 
-    const hallCharge = getVenueHallCharge(booking.date, booking.time);
-    const hallText = hallCharge ? `\n• ${hallCharge.label}: £${hallCharge.amount.toLocaleString()}` : '';
-
     let extrasText = '';
     if (extraChargesTotal > 0) {
       extrasText = '\n\n*➕ Additional Adjustments:*\n' + booking.extraCharges.map(c => `• ${c.label}: +£${c.amount.toLocaleString()}`).join('\n');
@@ -3178,7 +3169,7 @@ ${guestBreakdown}
 • Total Guests: ${adults + kids4to10 + kidsUnder4}${extrasText}
 
 *💰 Final Invoice Details:*
-• Base Amount: £${booking.baseAmount.toLocaleString()}${discountText}${hallText}
+• Base Amount: £${booking.baseAmount.toLocaleString()}${discountText}
 • Grand Total: £${total}
 
 *💳 Payments Received:*
@@ -3201,9 +3192,6 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
       discountText = `\n\n*🏷️ Discount (${booking.discount.reason}):* -£${getDiscountAmount(booking).toLocaleString()}`;
     }
 
-    const hallCharge = getVenueHallCharge(booking.date, booking.time);
-    const hallText = hallCharge ? `\n\n*🏛️ ${hallCharge.label}:* £${hallCharge.amount.toLocaleString()}` : '';
-
     const dueDateText = booking.dueDate ? `\n\n*⏰ Payment Due By:* ${booking.dueDate}` : '';
 
     const adults = booking.adults ?? booking.guests;
@@ -3218,17 +3206,17 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
     const grandTotal = getTotalAmount(booking);
     const extraChargesTotal = (booking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
     const finalPaymentPaidAmt = grandTotal - booking.deposit - extraChargesTotal;
-    
+
     const isDepositPaid = booking.depositPaid || !['new_enquiry', 'menu_sent', 'menu_selected', 'deposit_pending'].includes(booking.status);
     const isFinalPaid = booking.finalPaymentPaid;
     const isExtraPaid = booking.status === 'completed' || !!booking.paymentProofExtra || booking.finalPaymentPaid;
-    
+
     const totalPaid = (isDepositPaid ? booking.deposit : 0) +
-                      (isFinalPaid ? finalPaymentPaidAmt : 0) +
-                      (isExtraPaid ? extraChargesTotal : 0);
-                      
+      (isFinalPaid ? finalPaymentPaidAmt : 0) +
+      (isExtraPaid ? extraChargesTotal : 0);
+
     const remainingBalance = grandTotal - totalPaid;
-    
+
     const breakdownText = `*💳 Payment Breakdown:*\n` +
       `• Deposit Paid: £${booking.deposit.toLocaleString()} (${isDepositPaid ? (booking.paymentMethodDeposit ? `Paid via ${booking.paymentMethodDeposit.replace('Paid by ', '')}` : 'Paid') : 'Pending'})\n` +
       `• Final Payment (Main Balance): £${finalPaymentPaidAmt.toLocaleString()} (${isFinalPaid ? (booking.paymentMethodFinal ? `Paid via ${booking.paymentMethodFinal.replace('Paid by ', '')}` : 'Paid') : 'Pending'})\n` +
@@ -3236,7 +3224,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
       `• Total Paid: £${totalPaid.toLocaleString()}\n` +
       `• *Remaining Balance Due: ${remainingBalance <= 0 ? 'PAID IN FULL ✓' : `£${remainingBalance.toLocaleString()}`}*`;
 
-    return `Hi ${booking.name.split(' ')[0]}, thank you for choosing SriLalitha Events for your ${booking.eventType}! 🎉\n\nHere is your final invoice summary:\n\n*📋 Booking Ref:* ${booking.id}\n*📦 Package:* ${booking.selectedMenu || booking.package}\n\n${guestBreakdown}\n\n*💰 Base Amount:* £${booking.baseAmount.toLocaleString()}${extrasText}${discountText}${hallText}\n\n${breakdownText}${dueDateText}\n\nPlease transfer the balance to:\n🏦 Account Name: ${bank.accountName}\n📋 Sort Code: ${bank.sortCode}\n🔢 Account No: ${bank.accountNumber}\n📌 Reference: ${booking.id}\n\nOnce paid, please send a screenshot of the transfer confirmation here. Thank you!`;
+    return `Hi ${booking.name.split(' ')[0]}, thank you for choosing SriLalitha Events for your ${booking.eventType}! 🎉\n\nHere is your final invoice summary:\n\n*📋 Booking Ref:* ${booking.id}\n*📦 Package:* ${booking.selectedMenu || booking.package}\n\n${guestBreakdown}\n\n*💰 Base Amount:* £${booking.baseAmount.toLocaleString()}${extrasText}${discountText}\n\n${breakdownText}${dueDateText}\n\nPlease transfer the balance to:\n🏦 Account Name: ${bank.accountName}\n📋 Sort Code: ${bank.sortCode}\n🔢 Account No: ${bank.accountNumber}\n📌 Reference: ${booking.id}\n\nOnce paid, please send a screenshot of the transfer confirmation here. Thank you!`;
   };
 
   const buildExtraInvoiceWhatsAppText = (booking: Booking, bank: typeof bankDetails) => {
@@ -3308,7 +3296,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
   const getMenuEmailContent = (customerName: string, customerPhone: string, customerEmail: string, menuType: string, guestCount: number, booking?: Booking) => {
     const tmpl = editableCommConfig.templates.menu_sharing || DEFAULT_COMMUNICATION_CONFIG.templates.menu_sharing;
     const mtLower = menuType.toLowerCase();
-    
+
     let menuDetails = `Menu Category: ${menuType}\n\n`;
 
     // 1. Extras / Upgrades
@@ -3360,15 +3348,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
         `• Weekdays: £${editableLiveDosa1.pricing?.weekday?.pricePerPerson || 11}/person\n` +
         `• Weekends: £${editableLiveDosa1.pricing?.weekend?.pricePerPerson || 12}/person\n\n` +
         `Inclusions: 12 Live On-site Specialties (Dosas, Uthappams, Meduvada, Idly), Chutneys & Sambar.`;
-    } else if (mtLower === 'venue hall charges') {
-      menuDetails += `🏢 Venue Hall Hire Charges:\n` +
-        editableVenueCharges.map(vc => `• ${vc.day}: ${vc.charge}${vc.note ? ` (${vc.note})` : ''}`).join('\n');
     } else if (mtLower === 'kids pricing') {
       menuDetails += `🧒 Kids Pricing (Over 50 Adults):\n` +
         editableKidsPricing.map(kp => `• ${kp.ageRange}: ${kp.price}`).join('\n');
-    } else if (mtLower === 'dry hire') {
-      menuDetails += `🏢 Dry Hire Prices:\n` +
-        editableDryHirePrices.map(dh => `• ${dh.day} (${dh.session}): £${dh.price}`).join('\n');
     } else {
       const custom = editableCustomPackages.find(p => !p.isDeleted && (p.title.toLowerCase() === mtLower || p.id === menuType));
       if (custom) {
@@ -3433,14 +3415,14 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     const grandTotal = getTotalAmount(booking);
     const extraChargesTotal = (booking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
     const finalPaymentPaidAmt = grandTotal - booking.deposit - extraChargesTotal;
-    
+
     const isDepositPaid = booking.depositPaid || !['new_enquiry', 'menu_sent', 'menu_selected', 'deposit_pending'].includes(booking.status);
     const isFinalPaid = booking.finalPaymentPaid;
     const isExtraPaid = booking.status === 'completed' || !!booking.paymentProofExtra || booking.finalPaymentPaid;
-    
+
     const totalPaid = (isDepositPaid ? booking.deposit : 0) +
-                      (isFinalPaid ? finalPaymentPaidAmt : 0) +
-                      (isExtraPaid ? extraChargesTotal : 0);
+      (isFinalPaid ? finalPaymentPaidAmt : 0) +
+      (isExtraPaid ? extraChargesTotal : 0);
     const remainingBalance = Math.max(0, grandTotal - totalPaid);
 
     const breakdownText = `• Adults: ${adults} × £${pricePerPerson}/person\n` +
@@ -3823,11 +3805,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     updateStatus(booking.id, opt.value);
                     setOpenRowStatusId(null);
                   }}
-                  className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs rounded-lg transition-colors cursor-pointer ${
-                    booking.status === opt.value
+                  className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs rounded-lg transition-colors cursor-pointer ${booking.status === opt.value
                       ? 'bg-amber-50 text-amber-900 font-bold border border-amber-200/70'
                       : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full flex-shrink-0 ${opt.dot || STATUS_DOT[opt.value] || 'bg-gray-400'}`} />
@@ -4231,13 +4212,13 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
   const confirmFinalPayment = async (id: string, method: string) => {
     const currentBooking = bookings.find(b => b.id === id);
-    
+
     setBookings(prev => prev.map(b => b.id === id ? { ...b, finalPaymentPaid: true, status: 'final_payment_received', paymentMethodFinal: method } : b));
     setSelectedBooking(prev => prev?.id === id ? { ...prev, finalPaymentPaid: true, status: 'final_payment_received', paymentMethodFinal: method } : prev);
     try {
-      await setDoc(doc(db, 'booking_requests', id), { 
-        finalPaymentPaid: true, 
-        status: 'final_payment_received', 
+      await setDoc(doc(db, 'booking_requests', id), {
+        finalPaymentPaid: true,
+        status: 'final_payment_received',
         paymentMethodFinal: method
       }, { merge: true });
       if (currentBooking) {
@@ -4388,21 +4369,21 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
   const handleDiscountApproval = async (bookingId: string, approved: boolean) => {
     const b = bookings.find(x => x.id === bookingId);
     if (!b || !b.discountRequest) return;
-    
+
     if (approved) {
       const discount: Discount = {
         type: b.discountRequest.type,
         value: b.discountRequest.value,
         reason: b.discountRequest.reason
       };
-      
+
       const reqUpdated = { ...b.discountRequest, status: 'approved' as const };
-      
+
       setBookings(prev => prev.map(x => x.id === bookingId ? { ...x, discount, discountRequest: reqUpdated } : x));
       if (selectedBooking?.id === bookingId) {
         setSelectedBooking(prev => prev ? { ...prev, discount, discountRequest: reqUpdated } : prev);
       }
-      
+
       try {
         await setDoc(doc(db, 'booking_requests', bookingId), { discount, discountRequest: reqUpdated }, { merge: true });
         const cleanBookingData = { ...b, discount, discountRequest: reqUpdated, updatedAt: new Date().toISOString() };
@@ -4594,13 +4575,13 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
   // ── DIETARY LABELS ──────────────────────────────────────────────────────────
   const DEFAULT_DIETARY_LABELS = [
-    { code: 'V',  emoji: '🌿', label: 'Vegan',        color: '#10B981' },
-    { code: 'M',  emoji: '🥛', label: 'Milk / Dairy', color: '#3B82F6' },
-    { code: 'N',  emoji: '🥜', label: 'Nuts',         color: '#F59E0B' },
+    { code: 'V', emoji: '🌿', label: 'Vegan', color: '#10B981' },
+    { code: 'M', emoji: '🥛', label: 'Milk / Dairy', color: '#3B82F6' },
+    { code: 'N', emoji: '🥜', label: 'Nuts', color: '#F59E0B' },
     { code: 'OJ', emoji: '🪷', label: 'Jain / No Onion', color: '#8B5CF6' },
-    { code: 'J',  emoji: '💜', label: 'Jain',         color: '#6366F1' },
-    { code: 'O',  emoji: '🧅', label: 'Onion-Free',   color: '#A855F7' },
-    { code: 'S',  emoji: '⭐', label: 'Signature',    color: '#F43F5E' },
+    { code: 'J', emoji: '💜', label: 'Jain', color: '#6366F1' },
+    { code: 'O', emoji: '🧅', label: 'Onion-Free', color: '#A855F7' },
+    { code: 'S', emoji: '⭐', label: 'Signature', color: '#F43F5E' },
   ];
 
   const [dietaryLabels, setDietaryLabels] = useState(DEFAULT_DIETARY_LABELS);
@@ -4681,29 +4662,6 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
   };
 
   const getVenueHallCharge = (date: string, time: string): { label: string; amount: number } | null => {
-    if (!date || date === 'N/A') return null;
-    const d = new Date(date);
-    const dayOfWeek = d.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
-    const timeLower = (time || '').toLowerCase();
-    const isDinner = timeLower.includes('dinner') || timeLower.includes('evening') || timeLower.includes('pm');
-
-    if (dayOfWeek >= 1 && dayOfWeek <= 4) {
-      // Mon–Thu: £100
-      return { label: 'Venue Hall Hire (Mon–Thu)', amount: 100 };
-    } else if (dayOfWeek === 5) {
-      // Friday: £250
-      return { label: 'Venue Hall Hire (Friday)', amount: 250 };
-    } else if (dayOfWeek === 0) {
-      // Sunday: £250
-      return { label: 'Venue Hall Hire (Sunday)', amount: 250 };
-    } else if (dayOfWeek === 6) {
-      // Saturday: Lunch=£250, Dinner=£500
-      if (isDinner) {
-        return { label: 'Venue Hall Hire (Saturday Dinner)', amount: 500 };
-      } else {
-        return { label: 'Venue Hall Hire (Saturday Lunch)', amount: 250 };
-      }
-    }
     return null;
   };
 
@@ -4713,9 +4671,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
   };
 
   const getTotalAmount = (b: Booking) => {
-    const food = getFoodPackageTotal(b);
-    const hall = getVenueHallCharge(b.date, b.time);
-    return food + (hall?.amount || 0);
+    return getFoodPackageTotal(b);
   };
 
   const downloadInvoicePDF = (bookingData: Booking, isDepositOnly: boolean = false) => {
@@ -4742,7 +4698,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     const finalPaymentPaidAmt = grandTotal - booking.deposit - extraChargesTotal;
     const isDepositPaid = booking.depositPaid || !['new_enquiry', 'menu_sent', 'menu_selected', 'deposit_pending'].includes(booking.status);
     const isExtraPaid = booking.status === 'completed' || !!booking.paymentProofExtra || booking.finalPaymentPaid;
-    
+
     // Format dates
     const formattedDate = booking.date ? new Date(booking.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A';
     const formattedEnquiryDate = booking.enquiryDate ? new Date(booking.enquiryDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A';
@@ -5021,12 +4977,6 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               </td>
               <td class="text-right" style="vertical-align: middle;">£${booking.baseAmount.toLocaleString()}</td>
             </tr>
-            ${hallCharge ? `
-            <tr>
-              <td>🏛️ ${hallCharge.label}</td>
-              <td class="text-right">£${hallCharge.amount.toLocaleString()}</td>
-            </tr>
-            ` : ''}
             ${extrasRows}
           </tbody>
         </table>
@@ -5036,7 +4986,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
           <tbody>
             <tr>
               <td>Subtotal:</td>
-              <td class="text-right">£${(booking.baseAmount + (hallCharge?.amount || 0) + extraChargesTotal).toLocaleString()}</td>
+              <td class="text-right">£${(booking.baseAmount + extraChargesTotal).toLocaleString()}</td>
             </tr>
             ${booking.discount ? `
             <tr>
@@ -5045,7 +4995,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             </tr>
             ` : ''}
             <tr class="grand-total">
-              <td>Grand Total (Incl. Hall):</td>
+              <td>Grand Total:</td>
               <td class="text-right">£${grandTotal.toLocaleString()}</td>
             </tr>
             
@@ -5102,30 +5052,29 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               <td style="font-weight: bold; padding-top: 10px;">Total Paid:</td>
               <td class="text-right" style="font-weight: bold; color: #2b7a4a; padding-top: 10px;">
                 £${(
-                  (isDepositPaid ? booking.deposit : 0) +
-                  (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) +
-                  (isExtraPaid ? extraChargesTotal : 0)
-                ).toLocaleString()}
+        (isDepositPaid ? booking.deposit : 0) +
+        (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) +
+        (isExtraPaid ? extraChargesTotal : 0)
+      ).toLocaleString()}
               </td>
             </tr>
             <tr>
               <td style="font-weight: bold; padding-bottom: 10px;">Remaining Balance Due:</td>
-              <td class="text-right" style="font-weight: bold; color: ${
-                (grandTotal - (
-                  (isDepositPaid ? booking.deposit : 0) +
-                  (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) +
-                  (isExtraPaid ? extraChargesTotal : 0)
-                )) <= 0 ? '#2b7a4a' : '#c86a00'
-              }; padding-bottom: 10px;">
+              <td class="text-right" style="font-weight: bold; color: ${(grandTotal - (
+        (isDepositPaid ? booking.deposit : 0) +
+        (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) +
+        (isExtraPaid ? extraChargesTotal : 0)
+      )) <= 0 ? '#2b7a4a' : '#c86a00'
+      }; padding-bottom: 10px;">
                 ${(grandTotal - (
-                  (isDepositPaid ? booking.deposit : 0) +
-                  (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) +
-                  (isExtraPaid ? extraChargesTotal : 0)
-                )) <= 0 ? 'PAID IN FULL ✓' : `£${(grandTotal - (
-                  (isDepositPaid ? booking.deposit : 0) +
-                  (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) +
-                  (isExtraPaid ? extraChargesTotal : 0)
-                )).toLocaleString()}`}
+        (isDepositPaid ? booking.deposit : 0) +
+        (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) +
+        (isExtraPaid ? extraChargesTotal : 0)
+      )) <= 0 ? 'PAID IN FULL ✓' : `£${(grandTotal - (
+        (isDepositPaid ? booking.deposit : 0) +
+        (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) +
+        (isExtraPaid ? extraChargesTotal : 0)
+      )).toLocaleString()}`}
               </td>
             </tr>
           </tbody>
@@ -5393,7 +5342,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
       return true;
     });
   }, [enquiries, enquiryMonthFilter, enquiryStartDate, enquiryEndDate, enquirySearch]);
-  
+
   const navItems: { id: AdminTab; label: string; icon: string; badge?: number; requiredPerm?: string }[] = [
     { id: 'overview', label: 'Overview', icon: 'Squares2X2Icon' },
     { id: 'online_orders', label: 'Online Orders', icon: 'ShoppingBagIcon', badge: onlineOrdersList.filter(o => o.status === 'deposit_confirmed' || o.depositPaid).length || undefined, requiredPerm: 'manage_bookings' },
@@ -5455,11 +5404,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
         <button
           type="button"
           onClick={onToggleActive}
-          className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-2xs ${
-            isActive
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-2xs ${isActive
               ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
               : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
-          }`}
+            }`}
         >
           <span className="text-sm">{isActive ? '✓' : '✕'}</span>
           <span>{isActive ? 'Package is ON' : 'Package is OFF'}</span>
@@ -5537,469 +5485,468 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
   }
 
   const renderEmailTemplatesContent = () => (
-                <div className="space-y-6 animate-in fade-in duration-300">
-                  {/* Top Action Bar */}
-                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                        <span className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center flex-shrink-0">
-                          <Icon name="ChatBubbleBottomCenterTextIcon" size={18} />
-                        </span>
-                        Dynamic WhatsApp &amp; Email Communication Templates
-                      </h3>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Customize pre-filled email subjects, email bodies, and WhatsApp scripts used throughout enquiries, menu sharing, deposits, invoices, event reminders, and completed reviews.
-                      </p>
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Top Action Bar */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+            <span className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center flex-shrink-0">
+              <Icon name="ChatBubbleBottomCenterTextIcon" size={18} />
+            </span>
+            Dynamic WhatsApp &amp; Email Communication Templates
+          </h3>
+          <p className="text-xs text-gray-500 mt-1">
+            Customize pre-filled email subjects, email bodies, and WhatsApp scripts used throughout enquiries, menu sharing, deposits, invoices, event reminders, and completed reviews.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            type="button"
+            onClick={saveCommunicationTemplates}
+            disabled={isSavingCommConfig}
+            className="px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-md active:scale-95 disabled:opacity-50 flex items-center gap-2 cursor-pointer transition-all hover:brightness-105"
+            style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+          >
+            {isSavingCommConfig ? (
+              <>
+                <span className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />
+                <span>Saving Templates...</span>
+              </>
+            ) : (
+              <>
+                <Icon name="CheckIcon" size={16} />
+                <span>Save Communication Templates</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Business Sender & Contact Info */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
+        <div className="border-b border-gray-100 pb-3 flex items-center justify-between">
+          <div>
+            <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide flex items-center gap-1.5">
+              <span>🏢</span> Business Contact Details in Messages
+            </h4>
+            <p className="text-xs text-gray-500">
+              These details are dynamically injected into every email &amp; WhatsApp template via <code className="text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded font-mono text-[11px]">&#123;contactEmail&#125;</code> and <code className="text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded font-mono text-[11px]">&#123;contactWhatsApp&#125;</code>.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">
+              Customer Support &amp; Enquiries Email
+            </label>
+            <input
+              type="email"
+              value={editableCommConfig.contactEmail || ''}
+              onChange={(e) => setEditableCommConfig(prev => ({ ...prev, contactEmail: e.target.value }))}
+              placeholder="e.g. admin@vegchennaisrilalitha.co.uk"
+              className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs font-mono text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">
+              Customer Support &amp; WhatsApp Phone Number
+            </label>
+            <input
+              type="text"
+              value={editableCommConfig.contactWhatsApp || ''}
+              onChange={(e) => setEditableCommConfig(prev => ({ ...prev, contactWhatsApp: e.target.value }))}
+              placeholder="e.g. +44 7700 900000"
+              className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs font-mono text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Template Editor with Navigation */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-5">
+        {/* Template Pills / Subnav */}
+        <div>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+            <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide flex items-center gap-1.5">
+              <span>📝</span> Select Communication Template to Edit
+            </h4>
+            <button
+              type="button"
+              onClick={() => {
+                setNewTemplateForm({
+                  name: '',
+                  description: '',
+                  subject: '',
+                  body: '',
+                });
+                setShowCreateTemplateModal(true);
+              }}
+              className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white shadow-sm flex items-center gap-1.5 cursor-pointer transition-all hover:brightness-105 active:scale-95 self-start sm:self-auto"
+              style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+            >
+              <Icon name="PlusCircleIcon" size={14} />
+              <span>+ Create New Template</span>
+            </button>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            {Object.values(editableCommConfig.templates || {}).map((tmpl) => {
+              const isSelected = selectedTemplateForEdit === tmpl.id;
+              const isCustom = tmpl.id.startsWith('custom_');
+              return (
+                <div
+                  key={tmpl.id}
+                  onClick={() => setSelectedTemplateForEdit(tmpl.id)}
+                  className={`p-3 rounded-xl border transition-all cursor-pointer relative group flex flex-col justify-between ${isSelected
+                      ? 'border-amber-500 bg-amber-50/70 shadow-2xs text-amber-950 font-bold'
+                      : 'border-gray-200 bg-gray-50/60 hover:bg-gray-100/70 text-gray-700'
+                    }`}
+                >
+                  <div className="flex items-start justify-between gap-1 mb-1">
+                    <div className="truncate flex-1">
+                      <span className="text-xs font-bold truncate block">{tmpl.name}</span>
+                      <span className="text-[10px] text-gray-400 truncate block mt-0.5">{tmpl.description}</span>
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {isCustom && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">
+                          Custom
+                        </span>
+                      )}
+                      {isSelected && !isCustom && <span className="w-2 h-2 rounded-full bg-amber-500" />}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-gray-200/50 pt-2 mt-2">
+                    <span className="text-[9px] font-mono text-gray-400 truncate">#{tmpl.id}</span>
+                    <div className="flex items-center gap-1">
                       <button
                         type="button"
-                        onClick={saveCommunicationTemplates}
-                        disabled={isSavingCommConfig}
-                        className="px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-md active:scale-95 disabled:opacity-50 flex items-center gap-2 cursor-pointer transition-all hover:brightness-105"
-                        style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingTemplateModal({ ...tmpl });
+                        }}
+                        className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                        title={`Edit ${tmpl.name} in modal`}
                       >
-                        {isSavingCommConfig ? (
-                          <>
-                            <span className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />
-                            <span>Saving Templates...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Icon name="CheckIcon" size={16} />
-                            <span>Save Communication Templates</span>
-                          </>
-                        )}
+                        <Icon name="PencilSquareIcon" size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTemplateToDelete(tmpl);
+                        }}
+                        className="p-1 rounded text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                        title={`Delete ${tmpl.name}`}
+                      >
+                        <Icon name="TrashIcon" size={13} />
                       </button>
                     </div>
                   </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
-                  {/* Business Sender & Contact Info */}
-                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
-                    <div className="border-b border-gray-100 pb-3 flex items-center justify-between">
-                      <div>
-                        <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide flex items-center gap-1.5">
-                          <span>🏢</span> Business Contact Details in Messages
-                        </h4>
-                        <p className="text-xs text-gray-500">
-                          These details are dynamically injected into every email &amp; WhatsApp template via <code className="text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded font-mono text-[11px]">&#123;contactEmail&#125;</code> and <code className="text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded font-mono text-[11px]">&#123;contactWhatsApp&#125;</code>.
-                        </p>
-                      </div>
-                    </div>
+        {/* Active Template Editor Form */}
+        {editableCommConfig.templates?.[selectedTemplateForEdit] && (() => {
+          const activeTmpl = editableCommConfig.templates[selectedTemplateForEdit];
+          const isCustom = activeTmpl.id.startsWith('custom_');
+          return (
+            <div className="space-y-5 border-t border-gray-100 pt-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                    <span>{activeTmpl.name}</span>
+                    {isCustom && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                        Custom Template
+                      </span>
+                    )}
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                      #{activeTmpl.id}
+                    </span>
+                  </h4>
+                  <p className="text-xs text-gray-500 mt-0.5">{activeTmpl.description}</p>
+                </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-700 mb-1">
-                          Customer Support &amp; Enquiries Email
-                        </label>
-                        <input
-                          type="email"
-                          value={editableCommConfig.contactEmail || ''}
-                          onChange={(e) => setEditableCommConfig(prev => ({ ...prev, contactEmail: e.target.value }))}
-                          placeholder="e.g. admin@vegchennaisrilalitha.co.uk"
-                          className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs font-mono text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-700 mb-1">
-                          Customer Support &amp; WhatsApp Phone Number
-                        </label>
-                        <input
-                          type="text"
-                          value={editableCommConfig.contactWhatsApp || ''}
-                          onChange={(e) => setEditableCommConfig(prev => ({ ...prev, contactWhatsApp: e.target.value }))}
-                          placeholder="e.g. +44 7700 900000"
-                          className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs font-mono text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
-                        />
-                      </div>
-                    </div>
+                <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => handleSaveEditedTemplate(activeTmpl)}
+                    disabled={isSavingEditedTemplate}
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white shadow-sm flex items-center gap-1.5 cursor-pointer transition-all hover:brightness-105 active:scale-95 disabled:opacity-50"
+                    style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                    title="Save changes for this template to database"
+                  >
+                    {isSavingEditedTemplate ? (
+                      <>
+                        <span className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent" />
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Icon name="CheckIcon" size={14} />
+                        <span>Save Template Changes</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTemplateToDelete(activeTmpl)}
+                    className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 flex items-center gap-1 cursor-pointer transition-colors"
+                    title="Delete this template"
+                  >
+                    <Icon name="TrashIcon" size={13} />
+                    <span>Delete</span>
+                  </button>
+
+                  {!isCustom && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const defaultTmpl = DEFAULT_COMMUNICATION_CONFIG.templates[selectedTemplateForEdit];
+                        if (defaultTmpl) {
+                          setEditableCommConfig(prev => ({
+                            ...prev,
+                            templates: {
+                              ...prev.templates,
+                              [selectedTemplateForEdit]: { ...defaultTmpl },
+                            }
+                          }));
+                          setCustomAlert({
+                            message: `Reset "${activeTmpl.name}" to standard default template. Remember to click Save.`,
+                            type: 'success',
+                          });
+                        }
+                      }}
+                      className="text-xs text-gray-500 hover:text-gray-800 underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Icon name="ArrowPathIcon" size={13} />
+                      <span>Reset to Default</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                    Template Display Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={activeTmpl.name}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setEditableCommConfig(prev => ({
+                        ...prev,
+                        templates: {
+                          ...prev.templates,
+                          [selectedTemplateForEdit]: {
+                            ...prev.templates[selectedTemplateForEdit],
+                            name: val,
+                          }
+                        }
+                      }));
+                    }}
+                    className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs font-medium text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                    Template Description / Purpose
+                  </label>
+                  <input
+                    type="text"
+                    value={activeTmpl.description}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setEditableCommConfig(prev => ({
+                        ...prev,
+                        templates: {
+                          ...prev.templates,
+                          [selectedTemplateForEdit]: {
+                            ...prev.templates[selectedTemplateForEdit],
+                            description: val,
+                          }
+                        }
+                      }));
+                    }}
+                    className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs text-gray-700 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                  />
+                </div>
+              </div>
+
+              {/* Subject Line */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Email Subject Line
+                </label>
+                <input
+                  type="text"
+                  value={activeTmpl.subject}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setEditableCommConfig(prev => ({
+                      ...prev,
+                      templates: {
+                        ...prev.templates,
+                        [selectedTemplateForEdit]: {
+                          ...prev.templates[selectedTemplateForEdit],
+                          subject: val,
+                        }
+                      }
+                    }));
+                  }}
+                  placeholder="e.g. SriLalitha Events: Thank You for Your {eventType} Enquiry"
+                  className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs font-medium text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                />
+              </div>
+
+              {/* Message Body Textarea */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-gray-700">
+                    Email &amp; WhatsApp Message Body
+                  </label>
+                  <span className="text-[11px] text-gray-400">
+                    Multi-line text template with automatic placeholder interpolation
+                  </span>
+                </div>
+                <textarea
+                  rows={11}
+                  value={activeTmpl.body}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setEditableCommConfig(prev => ({
+                      ...prev,
+                      templates: {
+                        ...prev.templates,
+                        [selectedTemplateForEdit]: {
+                          ...prev.templates[selectedTemplateForEdit],
+                          body: val,
+                        }
+                      }
+                    }));
+                  }}
+                  className="w-full border border-gray-300 rounded-xl p-3.5 text-xs text-gray-900 leading-relaxed font-mono focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
+                />
+              </div>
+
+              {/* Dynamic Variables Legend */}
+              <div className="bg-amber-50/50 rounded-xl border border-amber-200/60 p-3.5 space-y-2">
+                <span className="text-xs font-bold text-amber-950 flex items-center gap-1">
+                  <span>🏷️</span> Available Dynamic Placeholders (Click to Copy):
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    '{customerName}',
+                    '{customerPhone}',
+                    '{eventType}',
+                    '{eventDate}',
+                    '{eventTime}',
+                    '{guests}',
+                    '{venueType}',
+                    '{bookingId}',
+                    '{deposit}',
+                    '{totalEstimatedAmount}',
+                    '{menuType}',
+                    '{menuDetails}',
+                    '{invoiceBreakdown}',
+                    '{extrasList}',
+                    '{extraTotal}',
+                    '{completedSummary}',
+                    '{bankAccountName}',
+                    '{bankSortCode}',
+                    '{bankAccountNumber}',
+                    '{contactEmail}',
+                    '{contactWhatsApp}',
+                  ].map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => {
+                        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                          navigator.clipboard.writeText(tag);
+                          setCustomAlert({ message: `Copied ${tag} to clipboard!`, type: 'success' });
+                        }
+                      }}
+                      className="px-2 py-0.5 bg-white border border-amber-300 rounded-md text-[11px] font-mono font-semibold text-amber-900 hover:bg-amber-100 hover:border-amber-400 transition-colors cursor-pointer"
+                      title={`Click to copy ${tag}`}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-amber-800">
+                  When an email is sent or WhatsApp message launched, these tags are automatically populated with real customer and booking values.
+                </p>
+              </div>
+
+              {/* Live Sample Preview */}
+              <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/60 space-y-3">
+                <h5 className="text-xs font-bold text-gray-800 uppercase tracking-wide flex items-center gap-1.5">
+                  <span>👁️</span> Live Customer Preview Sample
+                </h5>
+                <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-2 text-xs text-gray-800 shadow-2xs">
+                  <div className="flex items-center gap-2 border-b border-gray-100 pb-2">
+                    <span className="font-bold text-gray-500 w-16">Subject:</span>
+                    <span className="font-bold text-gray-900">
+                      {renderCommunicationTemplate(activeTmpl.subject, {
+                        customerName: 'Rahul Sharma',
+                        eventType: 'Wedding Reception',
+                        eventDate: '24/10/2026',
+                        eventTime: '12:00 PM',
+                        guests: 150,
+                        bookingId: 'BK-2026-108',
+                        deposit: 300,
+                        menuType: 'Live Dosa Option 1',
+                        totalEstimatedAmount: 1850,
+                        bankAccountName: bankDetails.accountName || 'SriLalitha Events Ltd',
+                        bankSortCode: bankDetails.sortCode || '20-00-00',
+                        bankAccountNumber: bankDetails.accountNumber || '12345678',
+                        contactEmail: editableCommConfig.contactEmail,
+                        contactWhatsApp: editableCommConfig.contactWhatsApp,
+                      })}
+                    </span>
                   </div>
-
-                  {/* Template Editor with Navigation */}
-                  <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-5">
-                    {/* Template Pills / Subnav */}
-                    <div>
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-                        <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide flex items-center gap-1.5">
-                          <span>📝</span> Select Communication Template to Edit
-                        </h4>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setNewTemplateForm({
-                              name: '',
-                              description: '',
-                              subject: '',
-                              body: '',
-                            });
-                            setShowCreateTemplateModal(true);
-                          }}
-                          className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white shadow-sm flex items-center gap-1.5 cursor-pointer transition-all hover:brightness-105 active:scale-95 self-start sm:self-auto"
-                          style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
-                        >
-                          <Icon name="PlusCircleIcon" size={14} />
-                          <span>+ Create New Template</span>
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                        {Object.values(editableCommConfig.templates || {}).map((tmpl) => {
-                          const isSelected = selectedTemplateForEdit === tmpl.id;
-                          const isCustom = tmpl.id.startsWith('custom_');
-                          return (
-                            <div
-                              key={tmpl.id}
-                              onClick={() => setSelectedTemplateForEdit(tmpl.id)}
-                              className={`p-3 rounded-xl border transition-all cursor-pointer relative group flex flex-col justify-between ${
-                                isSelected
-                                  ? 'border-amber-500 bg-amber-50/70 shadow-2xs text-amber-950 font-bold'
-                                  : 'border-gray-200 bg-gray-50/60 hover:bg-gray-100/70 text-gray-700'
-                              }`}
-                            >
-                              <div className="flex items-start justify-between gap-1 mb-1">
-                                <div className="truncate flex-1">
-                                  <span className="text-xs font-bold truncate block">{tmpl.name}</span>
-                                  <span className="text-[10px] text-gray-400 truncate block mt-0.5">{tmpl.description}</span>
-                                </div>
-                                <div className="flex items-center gap-1 flex-shrink-0">
-                                  {isCustom && (
-                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">
-                                      Custom
-                                    </span>
-                                  )}
-                                  {isSelected && !isCustom && <span className="w-2 h-2 rounded-full bg-amber-500" />}
-                                </div>
-                              </div>
-                              <div className="flex items-center justify-between border-t border-gray-200/50 pt-2 mt-2">
-                                <span className="text-[9px] font-mono text-gray-400 truncate">#{tmpl.id}</span>
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setEditingTemplateModal({ ...tmpl });
-                                    }}
-                                    className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
-                                    title={`Edit ${tmpl.name} in modal`}
-                                  >
-                                    <Icon name="PencilSquareIcon" size={13} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setTemplateToDelete(tmpl);
-                                    }}
-                                    className="p-1 rounded text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                                    title={`Delete ${tmpl.name}`}
-                                  >
-                                    <Icon name="TrashIcon" size={13} />
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Active Template Editor Form */}
-                    {editableCommConfig.templates?.[selectedTemplateForEdit] && (() => {
-                      const activeTmpl = editableCommConfig.templates[selectedTemplateForEdit];
-                      const isCustom = activeTmpl.id.startsWith('custom_');
-                      return (
-                        <div className="space-y-5 border-t border-gray-100 pt-5">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <div>
-                              <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                                <span>{activeTmpl.name}</span>
-                                {isCustom && (
-                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
-                                    Custom Template
-                                  </span>
-                                )}
-                                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                                  #{activeTmpl.id}
-                                </span>
-                              </h4>
-                              <p className="text-xs text-gray-500 mt-0.5">{activeTmpl.description}</p>
-                            </div>
-
-                            <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
-                              <button
-                                type="button"
-                                onClick={() => handleSaveEditedTemplate(activeTmpl)}
-                                disabled={isSavingEditedTemplate}
-                                className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white shadow-sm flex items-center gap-1.5 cursor-pointer transition-all hover:brightness-105 active:scale-95 disabled:opacity-50"
-                                style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
-                                title="Save changes for this template to database"
-                              >
-                                {isSavingEditedTemplate ? (
-                                  <>
-                                    <span className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent" />
-                                    <span>Saving...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Icon name="CheckIcon" size={14} />
-                                    <span>Save Template Changes</span>
-                                  </>
-                                )}
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => setTemplateToDelete(activeTmpl)}
-                                className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 flex items-center gap-1 cursor-pointer transition-colors"
-                                title="Delete this template"
-                              >
-                                <Icon name="TrashIcon" size={13} />
-                                <span>Delete</span>
-                              </button>
-
-                              {!isCustom && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const defaultTmpl = DEFAULT_COMMUNICATION_CONFIG.templates[selectedTemplateForEdit];
-                                    if (defaultTmpl) {
-                                      setEditableCommConfig(prev => ({
-                                        ...prev,
-                                        templates: {
-                                          ...prev.templates,
-                                          [selectedTemplateForEdit]: { ...defaultTmpl },
-                                        }
-                                      }));
-                                      setCustomAlert({
-                                        message: `Reset "${activeTmpl.name}" to standard default template. Remember to click Save.`,
-                                        type: 'success',
-                                      });
-                                    }
-                                  }}
-                                  className="text-xs text-gray-500 hover:text-gray-800 underline flex items-center gap-1 cursor-pointer"
-                                >
-                                  <Icon name="ArrowPathIcon" size={13} />
-                                  <span>Reset to Default</span>
-                                </button>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                              <label className="block text-xs font-bold text-gray-700 mb-1">
-                                Template Display Name <span className="text-red-500">*</span>
-                              </label>
-                              <input
-                                type="text"
-                                value={activeTmpl.name}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setEditableCommConfig(prev => ({
-                                    ...prev,
-                                    templates: {
-                                      ...prev.templates,
-                                      [selectedTemplateForEdit]: {
-                                        ...prev.templates[selectedTemplateForEdit],
-                                        name: val,
-                                      }
-                                    }
-                                  }));
-                                }}
-                                className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs font-medium text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-bold text-gray-700 mb-1">
-                                Template Description / Purpose
-                              </label>
-                              <input
-                                type="text"
-                                value={activeTmpl.description}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setEditableCommConfig(prev => ({
-                                    ...prev,
-                                    templates: {
-                                      ...prev.templates,
-                                      [selectedTemplateForEdit]: {
-                                        ...prev.templates[selectedTemplateForEdit],
-                                        description: val,
-                                      }
-                                    }
-                                  }));
-                                }}
-                                className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs text-gray-700 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
-                              />
-                            </div>
-                          </div>
-
-                          {/* Subject Line */}
-                          <div>
-                            <label className="block text-xs font-bold text-gray-700 mb-1">
-                              Email Subject Line
-                            </label>
-                            <input
-                              type="text"
-                              value={activeTmpl.subject}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setEditableCommConfig(prev => ({
-                                  ...prev,
-                                  templates: {
-                                    ...prev.templates,
-                                    [selectedTemplateForEdit]: {
-                                      ...prev.templates[selectedTemplateForEdit],
-                                      subject: val,
-                                    }
-                                  }
-                                }));
-                              }}
-                              placeholder="e.g. SriLalitha Events: Thank You for Your {eventType} Enquiry"
-                              className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs font-medium text-gray-900 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
-                            />
-                          </div>
-
-                          {/* Message Body Textarea */}
-                          <div>
-                            <div className="flex items-center justify-between mb-1">
-                              <label className="block text-xs font-bold text-gray-700">
-                                Email &amp; WhatsApp Message Body
-                              </label>
-                              <span className="text-[11px] text-gray-400">
-                                Multi-line text template with automatic placeholder interpolation
-                              </span>
-                            </div>
-                            <textarea
-                              rows={11}
-                              value={activeTmpl.body}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setEditableCommConfig(prev => ({
-                                  ...prev,
-                                  templates: {
-                                    ...prev.templates,
-                                    [selectedTemplateForEdit]: {
-                                      ...prev.templates[selectedTemplateForEdit],
-                                      body: val,
-                                    }
-                                  }
-                                }));
-                              }}
-                              className="w-full border border-gray-300 rounded-xl p-3.5 text-xs text-gray-900 leading-relaxed font-mono focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white"
-                            />
-                          </div>
-
-                          {/* Dynamic Variables Legend */}
-                          <div className="bg-amber-50/50 rounded-xl border border-amber-200/60 p-3.5 space-y-2">
-                            <span className="text-xs font-bold text-amber-950 flex items-center gap-1">
-                              <span>🏷️</span> Available Dynamic Placeholders (Click to Copy):
-                            </span>
-                            <div className="flex flex-wrap gap-1.5">
-                              {[
-                                '{customerName}',
-                                '{customerPhone}',
-                                '{eventType}',
-                                '{eventDate}',
-                                '{eventTime}',
-                                '{guests}',
-                                '{venueType}',
-                                '{bookingId}',
-                                '{deposit}',
-                                '{totalEstimatedAmount}',
-                                '{menuType}',
-                                '{menuDetails}',
-                                '{invoiceBreakdown}',
-                                '{extrasList}',
-                                '{extraTotal}',
-                                '{completedSummary}',
-                                '{bankAccountName}',
-                                '{bankSortCode}',
-                                '{bankAccountNumber}',
-                                '{contactEmail}',
-                                '{contactWhatsApp}',
-                              ].map((tag) => (
-                                <button
-                                  key={tag}
-                                  type="button"
-                                  onClick={() => {
-                                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                                      navigator.clipboard.writeText(tag);
-                                      setCustomAlert({ message: `Copied ${tag} to clipboard!`, type: 'success' });
-                                    }
-                                  }}
-                                  className="px-2 py-0.5 bg-white border border-amber-300 rounded-md text-[11px] font-mono font-semibold text-amber-900 hover:bg-amber-100 hover:border-amber-400 transition-colors cursor-pointer"
-                                  title={`Click to copy ${tag}`}
-                                >
-                                  {tag}
-                                </button>
-                              ))}
-                            </div>
-                            <p className="text-[10px] text-amber-800">
-                              When an email is sent or WhatsApp message launched, these tags are automatically populated with real customer and booking values.
-                            </p>
-                          </div>
-
-                          {/* Live Sample Preview */}
-                          <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/60 space-y-3">
-                            <h5 className="text-xs font-bold text-gray-800 uppercase tracking-wide flex items-center gap-1.5">
-                              <span>👁️</span> Live Customer Preview Sample
-                            </h5>
-                            <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-2 text-xs text-gray-800 shadow-2xs">
-                              <div className="flex items-center gap-2 border-b border-gray-100 pb-2">
-                                <span className="font-bold text-gray-500 w-16">Subject:</span>
-                                <span className="font-bold text-gray-900">
-                                  {renderCommunicationTemplate(activeTmpl.subject, {
-                                    customerName: 'Rahul Sharma',
-                                    eventType: 'Wedding Reception',
-                                    eventDate: '24/10/2026',
-                                    eventTime: '12:00 PM',
-                                    guests: 150,
-                                    bookingId: 'BK-2026-108',
-                                    deposit: 300,
-                                    menuType: 'Live Dosa Option 1',
-                                    totalEstimatedAmount: 1850,
-                                    bankAccountName: bankDetails.accountName || 'SriLalitha Events Ltd',
-                                    bankSortCode: bankDetails.sortCode || '20-00-00',
-                                    bankAccountNumber: bankDetails.accountNumber || '12345678',
-                                    contactEmail: editableCommConfig.contactEmail,
-                                    contactWhatsApp: editableCommConfig.contactWhatsApp,
-                                  })}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2 border-b border-gray-100 pb-2">
-                                <span className="font-bold text-gray-500 w-16">To:</span>
-                                <span className="font-mono text-gray-600">rahul.sharma@example.com</span>
-                              </div>
-                              <div className="pt-2 whitespace-pre-wrap font-sans leading-relaxed text-gray-700">
-                                {renderCommunicationTemplate(activeTmpl.body, {
-                                  customerName: 'Rahul Sharma',
-                                  eventType: 'Wedding Reception',
-                                  eventDate: '24/10/2026',
-                                  eventTime: '12:00 PM',
-                                  guests: 150,
-                                  bookingId: 'BK-2026-108',
-                                  deposit: 300,
-                                  menuType: 'Live Dosa Option 1',
-                                  menuDetails: '• 12 Live Signature Dosas (Masala, Mysore, Ghee Podi, Spring Dosa...)\n• Fresh Chutneys, Sambar & Live Counter Service (2 Hours)',
-                                  totalEstimatedAmount: 1850,
-                                  invoiceBreakdown: '• Base Package (150 Guests): £1,500\n• Extra Live Station: £200\n• Travel & Logistics: £150\n• Total: £1,850 (Deposit Paid: £300, Remaining: £1,550)',
-                                  extrasList: '• 20 Additional Guests @ £12/person = £240\n• Extra 1 Hour Service Floor = £120',
-                                  extraTotal: 360,
-                                  completedSummary: 'Booking #BK-2026-108 on 24/10/2026 (Wedding Reception, 150 Guests). All invoices settled.',
-                                  bankAccountName: bankDetails.accountName || 'SriLalitha Events Ltd',
-                                  bankSortCode: bankDetails.sortCode || '20-00-00',
-                                  bankAccountNumber: bankDetails.accountNumber || '12345678',
-                                  contactEmail: editableCommConfig.contactEmail,
-                                  contactWhatsApp: editableCommConfig.contactWhatsApp,
-                                })}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
+                  <div className="flex items-center gap-2 border-b border-gray-100 pb-2">
+                    <span className="font-bold text-gray-500 w-16">To:</span>
+                    <span className="font-mono text-gray-600">rahul.sharma@example.com</span>
+                  </div>
+                  <div className="pt-2 whitespace-pre-wrap font-sans leading-relaxed text-gray-700">
+                    {renderCommunicationTemplate(activeTmpl.body, {
+                      customerName: 'Rahul Sharma',
+                      eventType: 'Wedding Reception',
+                      eventDate: '24/10/2026',
+                      eventTime: '12:00 PM',
+                      guests: 150,
+                      bookingId: 'BK-2026-108',
+                      deposit: 300,
+                      menuType: 'Live Dosa Option 1',
+                      menuDetails: '• 12 Live Signature Dosas (Masala, Mysore, Ghee Podi, Spring Dosa...)\n• Fresh Chutneys, Sambar & Live Counter Service (2 Hours)',
+                      totalEstimatedAmount: 1850,
+                      invoiceBreakdown: '• Base Package (150 Guests): £1,500\n• Extra Live Station: £200\n• Travel & Logistics: £150\n• Total: £1,850 (Deposit Paid: £300, Remaining: £1,550)',
+                      extrasList: '• 20 Additional Guests @ £12/person = £240\n• Extra 1 Hour Service Floor = £120',
+                      extraTotal: 360,
+                      completedSummary: 'Booking #BK-2026-108 on 24/10/2026 (Wedding Reception, 150 Guests). All invoices settled.',
+                      bankAccountName: bankDetails.accountName || 'SriLalitha Events Ltd',
+                      bankSortCode: bankDetails.sortCode || '20-00-00',
+                      bankAccountNumber: bankDetails.accountNumber || '12345678',
+                      contactEmail: editableCommConfig.contactEmail,
+                      contactWhatsApp: editableCommConfig.contactWhatsApp,
+                    })}
                   </div>
                 </div>
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+    </div>
   );
 
   // ─── DASHBOARD ────────────────────────────────────────────────────────────
@@ -6281,11 +6228,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         key={f}
                         type="button"
                         onClick={() => setOnlineOrderFilter(f)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold capitalize transition-all cursor-pointer ${
-                          onlineOrderFilter === f
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold capitalize transition-all cursor-pointer ${onlineOrderFilter === f
                             ? 'bg-[#C8860A] text-white shadow-sm'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
+                          }`}
                       >
                         {f === 'all' && `All Orders (${onlineOrdersList.length})`}
                         {f === 'paid' && `Paid Online (${onlineOrdersList.filter(o => o.depositPaid).length})`}
@@ -6522,9 +6468,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     return (
                       <div
                         key={order.id}
-                        className={`bg-white rounded-2xl border p-5 sm:p-6 shadow-sm hover:shadow-md transition-all space-y-5 ${
-                          selectedOnlineOrderIds.includes(order.id) ? 'border-amber-400 ring-2 ring-amber-200/60' : 'border-gray-200'
-                        }`}
+                        className={`bg-white rounded-2xl border p-5 sm:p-6 shadow-sm hover:shadow-md transition-all space-y-5 ${selectedOnlineOrderIds.includes(order.id) ? 'border-amber-400 ring-2 ring-amber-200/60' : 'border-gray-200'
+                          }`}
                       >
                         {/* Order Card Top Bar */}
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
@@ -6644,129 +6589,129 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           </div>
                         </div>
 
-                          {/* Event & Delivery Info Row */}
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-gray-50 p-4 rounded-xl text-xs">
-                            <div>
-                              <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Event Date &amp; Time</span>
-                              <div className="font-bold text-gray-900">📅 {order.date}</div>
-                              <div className="text-gray-600">⏰ {order.time || order.timeOfDay || 'Time TBD'}</div>
-                              <div className="text-gray-600">👥 {order.guests} Guests</div>
-                            </div>
-
-                            <div>
-                              <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Package &amp; Cuisine</span>
-                              <div className="font-bold text-[#C8860A]">{order.package || order.packageName || 'Banquet Package'}</div>
-                              <div className="text-gray-600 capitalize">Cuisine: {order.cuisineType || 'Indian'}</div>
-                              {order.notes && (
-                                <div className="text-amber-900 italic mt-1 truncate">Note: &quot;{order.notes}&quot;</div>
-                              )}
-                            </div>
-
-                            <div>
-                              <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Delivery &amp; Venue</span>
-                              <div className="font-bold text-gray-900 truncate">📍 {order.location || 'Base Venue'}</div>
-                              {order.distanceMiles && order.distanceMiles > 0 ? (
-                                <div className="text-gray-600">
-                                  🚗 {order.distanceMiles} miles ({order.deliveryCharge && order.deliveryCharge > 0 ? `+£${order.deliveryCharge} delivery` : 'Free delivery'})
-                                </div>
-                              ) : null}
-                            </div>
+                        {/* Event & Delivery Info Row */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-gray-50 p-4 rounded-xl text-xs">
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Event Date &amp; Time</span>
+                            <div className="font-bold text-gray-900">📅 {order.date}</div>
+                            <div className="text-gray-600">⏰ {order.time || order.timeOfDay || 'Time TBD'}</div>
+                            <div className="text-gray-600">👥 {order.guests} Guests</div>
                           </div>
 
-                          {/* Selected Menu Dishes Breakdown */}
-                          {dishes && Object.keys(dishes).length > 0 && (
-                            <div className="space-y-2 border border-gray-100 rounded-xl p-4 bg-amber-50/20">
-                              <span className="text-xs font-bold text-amber-950 uppercase tracking-wide flex items-center gap-1.5">
-                                <Icon name="SparklesIcon" size={14} className="text-[#C8860A]" />
-                                Customer Selected Menu Dishes ({order.package || 'Package'})
-                              </span>
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Package &amp; Cuisine</span>
+                            <div className="font-bold text-[#C8860A]">{order.package || order.packageName || 'Banquet Package'}</div>
+                            <div className="text-gray-600 capitalize">Cuisine: {order.cuisineType || 'Indian'}</div>
+                            {order.notes && (
+                              <div className="text-amber-900 italic mt-1 truncate">Note: &quot;{order.notes}&quot;</div>
+                            )}
+                          </div>
 
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1 text-xs">
-                                {Object.entries(dishes).map(([catKey, dishList]: [string, any]) => {
-                                  if (!Array.isArray(dishList) || dishList.length === 0) return null;
-                                  const catTitle = catKey
-                                    .replace(/([A-Z])/g, ' $1')
-                                    .replace(/^./, str => str.toUpperCase());
-
-                                  return (
-                                    <div key={catKey} className="p-2.5 rounded-lg bg-white border border-gray-200">
-                                      <span className="font-bold text-gray-800 text-[11px] block mb-1">
-                                        • {catTitle} ({dishList.length})
-                                      </span>
-                                      <div className="text-gray-600 space-y-0.5 pl-1">
-                                        {dishList.map((d: any, dIdx: number) => {
-                                          const dishText = typeof d === 'string'
-                                            ? d
-                                            : d?.name
-                                              ? `${d.name}${d.price ? ` (+£${d.price}${d.perPerson ? '/person' : ''})` : ''}`
-                                              : JSON.stringify(d);
-                                          return (
-                                            <div key={dIdx} className="truncate">
-                                              {dishText}
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Delivery &amp; Venue</span>
+                            <div className="font-bold text-gray-900 truncate">📍 {order.location || 'Base Venue'}</div>
+                            {order.distanceMiles && order.distanceMiles > 0 ? (
+                              <div className="text-gray-600">
+                                🚗 {order.distanceMiles} miles ({order.deliveryCharge && order.deliveryCharge > 0 ? `+£${order.deliveryCharge} delivery` : 'Free delivery'})
                               </div>
-                            </div>
-                          )}
-
-                          {/* Financial & Status Bar */}
-                          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2 border-t border-gray-100">
-                            <div className="flex items-center gap-4 text-xs">
-                              <div>
-                                <span className="text-gray-400 block text-[10px] uppercase font-bold">Total Bill</span>
-                                <span className="font-bold text-gray-900 text-sm">£{totalAmt.toFixed(2)}</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-400 block text-[10px] uppercase font-bold">Deposit / Paid</span>
-                                {order.depositPaid ? (
-                                  <span className="font-bold text-emerald-700 text-sm">£{paidAmt.toFixed(2)}</span>
-                                ) : (
-                                  <span className="font-bold text-amber-600 text-xs">Awaiting Payment</span>
-                                )}
-                              </div>
-                              {remAmt > 0 && (
-                                <div>
-                                  <span className="text-gray-400 block text-[10px] uppercase font-bold">Remaining Balance</span>
-                                  <span className="font-bold text-amber-800 text-sm">£{remAmt.toFixed(2)}</span>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Kitchen Status Selector */}
-                            <div className="flex items-center gap-2 w-full sm:w-auto">
-                              <label className="text-xs font-semibold text-gray-600 whitespace-nowrap">Kitchen Status:</label>
-                              <select
-                                value={order.kitchenStatus || 'received'}
-                                onChange={async (e) => {
-                                  const newStatus = e.target.value;
-                                  try {
-                                    await setDoc(doc(db, 'booking_requests', order.id), {
-                                      kitchenStatus: newStatus,
-                                      updatedAt: new Date().toISOString(),
-                                    }, { merge: true });
-                                    setCustomAlert({ message: `Updated order kitchen status to ${newStatus}`, type: 'success' });
-                                  } catch (err: any) {
-                                    setCustomAlert({ message: 'Failed to update status', type: 'error' });
-                                  }
-                                }}
-                                className="border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-bold bg-gray-50 focus:bg-white focus:outline-none"
-                              >
-                                <option value="received">Order Received</option>
-                                <option value="prep">👨‍🍳 Kitchen Preparing</option>
-                                <option value="ready">📦 Ready for Dispatch</option>
-                                <option value="dispatched">🚚 Dispatched / Delivered</option>
-                                <option value="completed">✓ Event Completed</option>
-                              </select>
-                            </div>
+                            ) : null}
                           </div>
                         </div>
-                      );
-                    })}
+
+                        {/* Selected Menu Dishes Breakdown */}
+                        {dishes && Object.keys(dishes).length > 0 && (
+                          <div className="space-y-2 border border-gray-100 rounded-xl p-4 bg-amber-50/20">
+                            <span className="text-xs font-bold text-amber-950 uppercase tracking-wide flex items-center gap-1.5">
+                              <Icon name="SparklesIcon" size={14} className="text-[#C8860A]" />
+                              Customer Selected Menu Dishes ({order.package || 'Package'})
+                            </span>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1 text-xs">
+                              {Object.entries(dishes).map(([catKey, dishList]: [string, any]) => {
+                                if (!Array.isArray(dishList) || dishList.length === 0) return null;
+                                const catTitle = catKey
+                                  .replace(/([A-Z])/g, ' $1')
+                                  .replace(/^./, str => str.toUpperCase());
+
+                                return (
+                                  <div key={catKey} className="p-2.5 rounded-lg bg-white border border-gray-200">
+                                    <span className="font-bold text-gray-800 text-[11px] block mb-1">
+                                      • {catTitle} ({dishList.length})
+                                    </span>
+                                    <div className="text-gray-600 space-y-0.5 pl-1">
+                                      {dishList.map((d: any, dIdx: number) => {
+                                        const dishText = typeof d === 'string'
+                                          ? d
+                                          : d?.name
+                                            ? `${d.name}${d.price ? ` (+£${d.price}${d.perPerson ? '/person' : ''})` : ''}`
+                                            : JSON.stringify(d);
+                                        return (
+                                          <div key={dIdx} className="truncate">
+                                            {dishText}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Financial & Status Bar */}
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2 border-t border-gray-100">
+                          <div className="flex items-center gap-4 text-xs">
+                            <div>
+                              <span className="text-gray-400 block text-[10px] uppercase font-bold">Total Bill</span>
+                              <span className="font-bold text-gray-900 text-sm">£{totalAmt.toFixed(2)}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-400 block text-[10px] uppercase font-bold">Deposit / Paid</span>
+                              {order.depositPaid ? (
+                                <span className="font-bold text-emerald-700 text-sm">£{paidAmt.toFixed(2)}</span>
+                              ) : (
+                                <span className="font-bold text-amber-600 text-xs">Awaiting Payment</span>
+                              )}
+                            </div>
+                            {remAmt > 0 && (
+                              <div>
+                                <span className="text-gray-400 block text-[10px] uppercase font-bold">Remaining Balance</span>
+                                <span className="font-bold text-amber-800 text-sm">£{remAmt.toFixed(2)}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Kitchen Status Selector */}
+                          <div className="flex items-center gap-2 w-full sm:w-auto">
+                            <label className="text-xs font-semibold text-gray-600 whitespace-nowrap">Kitchen Status:</label>
+                            <select
+                              value={order.kitchenStatus || 'received'}
+                              onChange={async (e) => {
+                                const newStatus = e.target.value;
+                                try {
+                                  await setDoc(doc(db, 'booking_requests', order.id), {
+                                    kitchenStatus: newStatus,
+                                    updatedAt: new Date().toISOString(),
+                                  }, { merge: true });
+                                  setCustomAlert({ message: `Updated order kitchen status to ${newStatus}`, type: 'success' });
+                                } catch (err: any) {
+                                  setCustomAlert({ message: 'Failed to update status', type: 'error' });
+                                }
+                              }}
+                              className="border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-bold bg-gray-50 focus:bg-white focus:outline-none"
+                            >
+                              <option value="received">Order Received</option>
+                              <option value="prep">👨‍🍳 Kitchen Preparing</option>
+                              <option value="ready">📦 Ready for Dispatch</option>
+                              <option value="dispatched">🚚 Dispatched / Delivered</option>
+                              <option value="completed">✓ Event Completed</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -6943,9 +6888,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {filteredEnquiries.map((b) => (
                 <div
                   key={b.id}
-                  className={`bg-white rounded-xl border p-5 transition-all ${
-                    selectedEnquiryIds.includes(b.id) ? 'border-amber-400 ring-2 ring-amber-200/60' : 'border-gray-200'
-                  }`}
+                  className={`bg-white rounded-xl border p-5 transition-all ${selectedEnquiryIds.includes(b.id) ? 'border-amber-400 ring-2 ring-amber-200/60' : 'border-gray-200'
+                    }`}
                 >
                   <div className="flex items-start justify-between gap-4 flex-wrap">
                     <div className="flex items-center gap-3">
@@ -7190,11 +7134,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               setFilterEvent('all');
                               setOpenFilterDropdown(null);
                             }}
-                            className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-xl transition-all cursor-pointer ${
-                              filterEvent === 'all'
+                            className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-xl transition-all cursor-pointer ${filterEvent === 'all'
                                 ? 'bg-amber-100/80 text-amber-950 font-bold'
                                 : 'text-gray-700 hover:bg-amber-50/80 hover:text-amber-950'
-                            }`}
+                              }`}
                           >
                             <span>All Event Types</span>
                             {filterEvent === 'all' && <Icon name="CheckIcon" size={13} className="text-[#C8860A]" />}
@@ -7207,11 +7150,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                 setFilterEvent(t);
                                 setOpenFilterDropdown(null);
                               }}
-                              className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-xl transition-all cursor-pointer ${
-                                filterEvent === t
+                              className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-xl transition-all cursor-pointer ${filterEvent === t
                                   ? 'bg-amber-100/80 text-amber-950 font-bold'
                                   : 'text-gray-700 hover:bg-amber-50/80 hover:text-amber-950'
-                              }`}
+                                }`}
                             >
                               <span className="truncate">{t}</span>
                               {filterEvent === t && <Icon name="CheckIcon" size={13} className="text-[#C8860A] flex-shrink-0" />}
@@ -7251,11 +7193,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               setBookingMonthFilter('all');
                               setOpenFilterDropdown(null);
                             }}
-                            className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-xl transition-all cursor-pointer ${
-                              bookingMonthFilter === 'all'
+                            className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-xl transition-all cursor-pointer ${bookingMonthFilter === 'all'
                                 ? 'bg-amber-100/80 text-amber-950 font-bold'
                                 : 'text-gray-700 hover:bg-amber-50/80 hover:text-amber-950'
-                            }`}
+                              }`}
                           >
                             <span>All Months</span>
                             {bookingMonthFilter === 'all' && <Icon name="CheckIcon" size={13} className="text-[#C8860A]" />}
@@ -7268,11 +7209,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                 setBookingMonthFilter(m);
                                 setOpenFilterDropdown(null);
                               }}
-                              className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-xl transition-all cursor-pointer ${
-                                bookingMonthFilter === m
+                              className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-xl transition-all cursor-pointer ${bookingMonthFilter === m
                                   ? 'bg-amber-100/80 text-amber-950 font-bold'
                                   : 'text-gray-700 hover:bg-amber-50/80 hover:text-amber-950'
-                              }`}
+                                }`}
                             >
                               <span>{formatMonthLabel(m)}</span>
                               {bookingMonthFilter === m && <Icon name="CheckIcon" size={13} className="text-[#C8860A] flex-shrink-0" />}
@@ -7586,11 +7526,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               <button
                                 type="button"
                                 onClick={() => setBookingsPage(p)}
-                                className={`min-w-[24px] h-6 px-1.5 rounded-md text-xs font-bold transition-colors cursor-pointer ${
-                                  bookingsPage === p
+                                className={`min-w-[24px] h-6 px-1.5 rounded-md text-xs font-bold transition-colors cursor-pointer ${bookingsPage === p
                                     ? 'bg-[#C8860A] text-white shadow-2xs'
                                     : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-                                }`}
+                                  }`}
                               >
                                 {p}
                               </button>
@@ -7683,11 +7622,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             setCompletionMonthFilter('all');
                             setOpenFilterDropdown(null);
                           }}
-                          className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-xl transition-all cursor-pointer ${
-                            completionMonthFilter === 'all'
+                          className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-xl transition-all cursor-pointer ${completionMonthFilter === 'all'
                               ? 'bg-amber-100/80 text-amber-950 font-bold'
                               : 'text-gray-700 hover:bg-amber-50/80 hover:text-amber-950'
-                          }`}
+                            }`}
                         >
                           <span>All Months</span>
                           {completionMonthFilter === 'all' && <Icon name="CheckIcon" size={13} className="text-[#C8860A]" />}
@@ -7700,11 +7638,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               setCompletionMonthFilter(m);
                               setOpenFilterDropdown(null);
                             }}
-                            className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-xl transition-all cursor-pointer ${
-                              completionMonthFilter === m
+                            className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-xl transition-all cursor-pointer ${completionMonthFilter === m
                                 ? 'bg-amber-100/80 text-amber-950 font-bold'
                                 : 'text-gray-700 hover:bg-amber-50/80 hover:text-amber-950'
-                            }`}
+                              }`}
                           >
                             <span>{formatMonthLabel(m)}</span>
                             {completionMonthFilter === m && <Icon name="CheckIcon" size={13} className="text-[#C8860A] flex-shrink-0" />}
@@ -7872,11 +7809,11 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     const q = completionSearch.toLowerCase().trim();
                     return monthMatch && (!q || (b.name || '').toLowerCase().includes(q) || (b.phone || '').toLowerCase().includes(q));
                   }).length === 0 && (
-                    <div className="text-center py-12 text-gray-400 text-sm">
-                      <Icon name="CheckBadgeIcon" size={32} className="mx-auto mb-2 text-gray-300" />
-                      No completed events match your search
-                    </div>
-                  )}
+                      <div className="text-center py-12 text-gray-400 text-sm">
+                        <Icon name="CheckBadgeIcon" size={32} className="mx-auto mb-2 text-gray-300" />
+                        No completed events match your search
+                      </div>
+                    )}
                 </div>
               </div>
             </div>
@@ -8437,11 +8374,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <button
                       key={tab.id}
                       onClick={() => setAdminMenuTab(tab.id)}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs ${
-                        isSelected
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs ${isSelected
                           ? 'text-white shadow-md scale-[1.02]'
                           : 'bg-white border border-gray-200 text-gray-700 hover:border-amber-400 hover:bg-amber-50/30'
-                      }`}
+                        }`}
                       style={isSelected ? { background: 'linear-gradient(135deg, #C8860A, #F0A830)' } : {}}
                     >
                       <span>{tab.label}</span>
@@ -8478,26 +8414,26 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   (editableGujarati8.isDeleted ? 1 : 0) +
                   (editablePunjabi9.isDeleted ? 1 : 0)
                 ) > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditableLiveDosa1(p => ({ ...p, isDeleted: false, isActive: true }));
-                      setEditableLiveDosa2(p => ({ ...p, isDeleted: false, isActive: true }));
-                      setEditableMadrasThali(p => ({ ...p, isDeleted: false, isActive: true }));
-                      setEditableTailorMenu4(p => ({ ...p, isDeleted: false, isActive: true }));
-                      setEditableDosaFestival5(p => ({ ...p, isDeleted: false, isActive: true }));
-                      setEditableCanape6(p => ({ ...p, isDeleted: false, isActive: true }));
-                      setEditableNorthIndian7(p => ({ ...p, isDeleted: false, isActive: true }));
-                      setEditableGujarati8(p => ({ ...p, isDeleted: false, isActive: true }));
-                      setEditablePunjabi9(p => ({ ...p, isDeleted: false, isActive: true }));
-                      setCustomAlert({ message: 'All deleted/hidden standard packages restored!', type: 'success' });
-                    }}
-                    className="px-3 py-1.5 rounded-xl text-[11px] font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-dashed border-gray-300 transition-all flex items-center gap-1 cursor-pointer"
-                  >
-                    <Icon name="ArrowPathIcon" size={13} />
-                    <span>Restore Hidden Packages</span>
-                  </button>
-                )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditableLiveDosa1(p => ({ ...p, isDeleted: false, isActive: true }));
+                        setEditableLiveDosa2(p => ({ ...p, isDeleted: false, isActive: true }));
+                        setEditableMadrasThali(p => ({ ...p, isDeleted: false, isActive: true }));
+                        setEditableTailorMenu4(p => ({ ...p, isDeleted: false, isActive: true }));
+                        setEditableDosaFestival5(p => ({ ...p, isDeleted: false, isActive: true }));
+                        setEditableCanape6(p => ({ ...p, isDeleted: false, isActive: true }));
+                        setEditableNorthIndian7(p => ({ ...p, isDeleted: false, isActive: true }));
+                        setEditableGujarati8(p => ({ ...p, isDeleted: false, isActive: true }));
+                        setEditablePunjabi9(p => ({ ...p, isDeleted: false, isActive: true }));
+                        setCustomAlert({ message: 'All deleted/hidden standard packages restored!', type: 'success' });
+                      }}
+                      className="px-3 py-1.5 rounded-xl text-[11px] font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-dashed border-gray-300 transition-all flex items-center gap-1 cursor-pointer"
+                    >
+                      <Icon name="ArrowPathIcon" size={13} />
+                      <span>Restore Hidden Packages</span>
+                    </button>
+                  )}
               </div>
 
               {/* ─── TAB 1: RESTAURANT CATEGORIES (9 EXACT CATEGORIES) ─── */}
@@ -8514,9 +8450,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         <button
                           key={cat.id}
                           onClick={() => setSelectedAdminCategoryIndex(idx)}
-                          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                            isSelected ? 'text-white shadow-md ring-2 ring-amber-400 ring-offset-1' : 'opacity-85 hover:opacity-100 text-white'
-                          }`}
+                          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${isSelected ? 'text-white shadow-md ring-2 ring-amber-400 ring-offset-1' : 'opacity-85 hover:opacity-100 text-white'
+                            }`}
                           style={{ background: bg }}
                         >
                           <span>{cat.icon || '🍽️'}</span>
@@ -11894,17 +11829,17 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       currentPkg.isActive !== false,
                       () => updateCurrentPkg({ isActive: currentPkg.isActive === false ? true : false }),
                       () => {
-                      setConfirmDialog({
-                        title: 'Delete Custom Package',
-                        message: `Are you sure you want to permanently delete "${currentPkg.title}"?`,
-                        confirmText: 'Delete Package',
-                        cancelText: 'Cancel',
-                        type: 'danger',
-                        onConfirm: () => {
-                          setEditableCustomPackages(prev => prev.filter(p => p.id !== currentPkg.id));
-                          setAdminMenuTab('categories');
-                        },
-                      });
+                        setConfirmDialog({
+                          title: 'Delete Custom Package',
+                          message: `Are you sure you want to permanently delete "${currentPkg.title}"?`,
+                          confirmText: 'Delete Package',
+                          cancelText: 'Cancel',
+                          type: 'danger',
+                          onConfirm: () => {
+                            setEditableCustomPackages(prev => prev.filter(p => p.id !== currentPkg.id));
+                            setAdminMenuTab('categories');
+                          },
+                        });
                       },
                       false
                     )}
@@ -12002,22 +11937,20 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               <button
                                 type="button"
                                 onClick={() => updateCurrentPkg({ pricingType: 'tiered' })}
-                                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                                  currentPkg.pricingType === 'tiered'
+                                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${currentPkg.pricingType === 'tiered'
                                     ? 'bg-amber-500 text-white shadow-xs'
                                     : 'bg-white border border-gray-200 text-gray-700'
-                                }`}
+                                  }`}
                               >
                                 Tiered (Weekday &amp; Weekend)
                               </button>
                               <button
                                 type="button"
                                 onClick={() => updateCurrentPkg({ pricingType: 'flat' })}
-                                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                                  currentPkg.pricingType === 'flat'
+                                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${currentPkg.pricingType === 'flat'
                                     ? 'bg-amber-500 text-white shadow-xs'
                                     : 'bg-white border border-gray-200 text-gray-700'
-                                }`}
+                                  }`}
                               >
                                 Flat Rate (£/person)
                               </button>
@@ -12571,22 +12504,20 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           <button
                             type="button"
                             onClick={() => setNewPackageDraft(p => ({ ...p, pricingType: 'tiered' }))}
-                            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                              newPackageDraft.pricingType === 'tiered'
+                            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${newPackageDraft.pricingType === 'tiered'
                                 ? 'bg-amber-500 text-white shadow-xs'
                                 : 'bg-white border border-gray-200 text-gray-700'
-                            }`}
+                              }`}
                           >
                             Tiered (Weekday &amp; Weekend Rates)
                           </button>
                           <button
                             type="button"
                             onClick={() => setNewPackageDraft(p => ({ ...p, pricingType: 'flat' }))}
-                            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                              newPackageDraft.pricingType === 'flat'
+                            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${newPackageDraft.pricingType === 'flat'
                                 ? 'bg-amber-500 text-white shadow-xs'
                                 : 'bg-white border border-gray-200 text-gray-700'
-                            }`}
+                              }`}
                           >
                             Flat Rate (£/person)
                           </button>
@@ -12988,17 +12919,15 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       {editableKidsPricing.map((kp, idx) => (
-                        <div key={idx} className={`p-4 rounded-2xl border space-y-2 shadow-2xs ${
-                          idx === 0 ? 'border-blue-200 bg-blue-50/40' :
-                          idx === 1 ? 'border-emerald-200 bg-emerald-50/40' :
-                          'border-amber-200 bg-amber-50/40'
-                        }`}>
+                        <div key={idx} className={`p-4 rounded-2xl border space-y-2 shadow-2xs ${idx === 0 ? 'border-blue-200 bg-blue-50/40' :
+                            idx === 1 ? 'border-emerald-200 bg-emerald-50/40' :
+                              'border-amber-200 bg-amber-50/40'
+                          }`}>
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-xl">{idx === 0 ? '👶' : idx === 1 ? '🧒' : '🧑'}</span>
                             <div>
-                              <div className={`text-[10px] font-extrabold uppercase tracking-wider ${
-                                idx === 0 ? 'text-blue-700' : idx === 1 ? 'text-emerald-700' : 'text-amber-800'
-                              }`}>Age Range Label</div>
+                              <div className={`text-[10px] font-extrabold uppercase tracking-wider ${idx === 0 ? 'text-blue-700' : idx === 1 ? 'text-emerald-700' : 'text-amber-800'
+                                }`}>Age Range Label</div>
                             </div>
                           </div>
                           <input
@@ -13026,14 +12955,13 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               placeholder="e.g. £20 or Free or Full Price"
                             />
                           </div>
-                          <div className={`text-[9px] font-semibold rounded-lg px-2 py-1 ${
-                            idx === 0 ? 'text-blue-700 bg-blue-100/60' :
-                            idx === 1 ? 'text-emerald-700 bg-emerald-100/60' :
-                            'text-amber-800 bg-amber-100/60'
-                          }`}>
+                          <div className={`text-[9px] font-semibold rounded-lg px-2 py-1 ${idx === 0 ? 'text-blue-700 bg-blue-100/60' :
+                              idx === 1 ? 'text-emerald-700 bg-emerald-100/60' :
+                                'text-amber-800 bg-amber-100/60'
+                            }`}>
                             {idx === 0 ? '✓ Shown as FREE in customer checkout' :
-                             idx === 1 ? '✓ Customer checkout: 50% of adult package rate' :
-                             '✓ Charged full adult package rate'}
+                              idx === 1 ? '✓ Customer checkout: 50% of adult package rate' :
+                                '✓ Charged full adult package rate'}
                           </div>
                         </div>
                       ))}
@@ -13246,11 +13174,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 pb-3">
                 <button
                   onClick={() => setSettingsSection('form_builder')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                    settingsSection === 'form_builder'
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${settingsSection === 'form_builder'
                       ? 'bg-[#C8860A] text-white shadow-sm'
                       : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-                  }`}
+                    }`}
                 >
                   <Icon name="ClipboardDocumentListIcon" size={16} />
                   Dynamic Form Builder
@@ -13260,55 +13187,50 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 </button>
                 <button
                   onClick={() => setSettingsSection('location_delivery')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                    settingsSection === 'location_delivery'
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${settingsSection === 'location_delivery'
                       ? 'bg-[#C8860A] text-white shadow-sm'
                       : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-                  }`}
+                    }`}
                 >
                   <Icon name="MapPinIcon" size={16} />
                   Restaurant Location &amp; Delivery Rules
                 </button>
                 <button
                   onClick={() => setSettingsSection('pricing')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                    settingsSection === 'pricing'
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${settingsSection === 'pricing'
                       ? 'bg-[#C8860A] text-white shadow-sm'
                       : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-                  }`}
+                    }`}
                 >
                   <Icon name="CalendarDaysIcon" size={16} />
                   Pricing & Deposits
                 </button>
                 <button
                   onClick={() => setSettingsSection('stripe_gateway')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                    settingsSection === 'stripe_gateway'
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${settingsSection === 'stripe_gateway'
                       ? 'bg-[#635BFF] text-white shadow-sm'
                       : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-                  }`}
+                    }`}
                 >
                   <Icon name="CreditCardIcon" size={16} />
                   💳 Stripe Gateway
                 </button>
                 <button
                   onClick={() => setSettingsSection('bank')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                    settingsSection === 'bank'
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${settingsSection === 'bank'
                       ? 'bg-[#C8860A] text-white shadow-sm'
                       : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-                  }`}
+                    }`}
                 >
                   <Icon name="CreditCardIcon" size={16} />
                   Bank Details
                 </button>
                 <button
                   onClick={() => setSettingsSection('block_dates')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                    settingsSection === 'block_dates'
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${settingsSection === 'block_dates'
                       ? 'bg-[#C8860A] text-white shadow-sm'
                       : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-                  }`}
+                    }`}
                 >
                   <Icon name="NoSymbolIcon" size={16} />
                   <span>Block Dates &amp; Slots</span>
@@ -13320,54 +13242,48 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 </button>
                 <button
                   onClick={() => setSettingsSection('website_content')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                    settingsSection === 'website_content'
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${settingsSection === 'website_content'
                       ? 'bg-[#C8860A] text-white shadow-sm'
                       : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-                  }`}
+                    }`}
                 >
                   <Icon name="PaintBrushIcon" size={16} />
                   Website Content
                 </button>
                 <button
                   onClick={() => setSettingsSection('email_notifications')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                    settingsSection === 'email_notifications'
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${settingsSection === 'email_notifications'
                       ? 'bg-[#C8860A] text-white shadow-sm'
                       : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-                  }`}
+                    }`}
                 >
                   <Icon name="EnvelopeIcon" size={16} />
                   <span>Email Notifications</span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                    settingsSection === 'email_notifications' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-900'
-                  }`}>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${settingsSection === 'email_notifications' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-900'
+                    }`}>
                     {editableEmailConfig.recipients.filter(r => r.enabled).length} Active
                   </span>
                 </button>
                 <button
                   onClick={() => setSettingsSection('message_templates')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                    settingsSection === 'message_templates'
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${settingsSection === 'message_templates'
                       ? 'bg-[#C8860A] text-white shadow-sm'
                       : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-                  }`}
+                    }`}
                 >
                   <Icon name="ChatBubbleBottomCenterTextIcon" size={16} />
                   <span>Message & Email Templates</span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                    settingsSection === 'message_templates' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-900'
-                  }`}>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${settingsSection === 'message_templates' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-900'
+                    }`}>
                     {Object.keys(editableCommConfig.templates || {}).length}
                   </span>
                 </button>
                 <button
                   onClick={() => setSettingsSection('dietary_labels')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                    settingsSection === 'dietary_labels'
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${settingsSection === 'dietary_labels'
                       ? 'bg-[#C8860A] text-white shadow-sm'
                       : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-                  }`}
+                    }`}
                 >
                   🥗 Dietary Labels
                 </button>
@@ -13695,22 +13611,20 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                   return (
                                     <span
                                       key={idx}
-                                      className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border shadow-2xs transition-all ${
-                                        isBlocked
+                                      className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border shadow-2xs transition-all ${isBlocked
                                           ? 'bg-red-50 border-red-300 text-red-700'
                                           : 'bg-white border-amber-300 text-amber-950'
-                                      }`}
+                                        }`}
                                     >
                                       {isBlocked && <span className="text-red-500">🚫</span>}
                                       <span className={isBlocked ? 'line-through opacity-60' : ''}>{slot}</span>
                                       <button
                                         type="button"
                                         onClick={() => toggleBlockSlot(slot)}
-                                        className={`text-xs font-bold px-1.5 py-0.5 rounded-md transition-all ${
-                                          isBlocked
+                                        className={`text-xs font-bold px-1.5 py-0.5 rounded-md transition-all ${isBlocked
                                             ? 'bg-green-100 text-green-700 hover:bg-green-200'
                                             : 'bg-red-100 text-red-600 hover:bg-red-200'
-                                        }`}
+                                          }`}
                                         title={isBlocked ? 'Unblock this slot' : 'Block this slot (show as Full)'}
                                       >
                                         {isBlocked ? 'Unblock' : 'Block'}
@@ -13804,22 +13718,20 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                   return (
                                     <span
                                       key={idx}
-                                      className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border shadow-2xs transition-all ${
-                                        isBlocked
+                                      className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border shadow-2xs transition-all ${isBlocked
                                           ? 'bg-red-50 border-red-300 text-red-700'
                                           : 'bg-white border-amber-300 text-amber-950'
-                                      }`}
+                                        }`}
                                     >
                                       {isBlocked && <span className="text-red-500">🚫</span>}
                                       <span className={isBlocked ? 'line-through opacity-60' : ''}>{slot}</span>
                                       <button
                                         type="button"
                                         onClick={() => toggleBlockSlot(slot)}
-                                        className={`text-xs font-bold px-1.5 py-0.5 rounded-md transition-all ${
-                                          isBlocked
+                                        className={`text-xs font-bold px-1.5 py-0.5 rounded-md transition-all ${isBlocked
                                             ? 'bg-green-100 text-green-700 hover:bg-green-200'
                                             : 'bg-red-100 text-red-600 hover:bg-red-200'
-                                        }`}
+                                          }`}
                                         title={isBlocked ? 'Unblock this slot' : 'Block this slot (show as Full)'}
                                       >
                                         {isBlocked ? 'Unblock' : 'Block'}
@@ -13932,11 +13844,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             .map((field, idx) => (
                               <div
                                 key={field.id}
-                                className={`rounded-xl border transition-all p-3.5 ${
-                                  field.enabled
+                                className={`rounded-xl border transition-all p-3.5 ${field.enabled
                                     ? 'bg-white border-gray-200 hover:border-amber-300 shadow-sm'
                                     : 'bg-gray-50/80 border-gray-200/60 opacity-60'
-                                }`}
+                                  }`}
                               >
                                 <div className="flex items-start justify-between gap-3">
                                   {/* Left: Reorder Arrows & Info */}
@@ -13999,11 +13910,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                     <button
                                       type="button"
                                       onClick={() => handleToggleField(field.id)}
-                                      className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ${
-                                        field.enabled
+                                      className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ${field.enabled
                                           ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                                           : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                                      }`}
+                                        }`}
                                       title={field.enabled ? 'Click to disable' : 'Click to enable'}
                                     >
                                       <Icon name={field.enabled ? 'EyeIcon' : 'EyeSlashIcon'} size={14} />
@@ -14185,7 +14095,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                             <option key={`out-${idx}`} value={o}>{o}</option>
                                           ))}
                                         </optgroup>
-                                        <optgroup label="── Venue Hall Standard ──">
+                                        <optgroup label="── Standard Slots ──">
                                           {(f.options || DEFAULT_TIME_SLOTS).map((o, idx) => (
                                             <option key={`std-${idx}`} value={o}>{o}</option>
                                           ))}
@@ -14745,11 +14655,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         Configure dynamic Stripe API keys for real-time online menu ordering and deposit payments.
                       </p>
                     </div>
-                    <span className={`text-[11px] font-bold px-2.5 py-1 rounded-md border flex items-center gap-1 ${
-                      paymentGatewaySettings.enabled
+                    <span className={`text-[11px] font-bold px-2.5 py-1 rounded-md border flex items-center gap-1 ${paymentGatewaySettings.enabled
                         ? 'text-emerald-800 bg-emerald-50 border-emerald-200'
                         : 'text-gray-600 bg-gray-50 border-gray-200'
-                    }`}>
+                      }`}>
                       <span className={`w-1.5 h-1.5 rounded-full ${paymentGatewaySettings.enabled ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`} />
                       {paymentGatewaySettings.enabled ? 'Gateway Active' : 'Gateway Disabled'}
                     </span>
@@ -14884,11 +14793,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <button
                       type="button"
                       onClick={() => setBlockDatesSubTab('date_slots')}
-                      className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                        blockDatesSubTab === 'date_slots'
+                      className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${blockDatesSubTab === 'date_slots'
                           ? 'bg-white text-gray-900 shadow-xs'
                           : 'text-gray-500 hover:text-gray-900'
-                      }`}
+                        }`}
                     >
                       <span>⏰</span>
                       <span>Date-Specific Timeslots</span>
@@ -14896,11 +14804,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <button
                       type="button"
                       onClick={() => setBlockDatesSubTab('full_dates')}
-                      className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                        blockDatesSubTab === 'full_dates'
+                      className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${blockDatesSubTab === 'full_dates'
                           ? 'bg-white text-gray-900 shadow-xs'
                           : 'text-gray-500 hover:text-gray-900'
-                      }`}
+                        }`}
                     >
                       <span>🚫</span>
                       <span>Full Calendar Days</span>
@@ -15048,13 +14955,12 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                 return (
                                   <div
                                     key={slot}
-                                    className={`p-3 rounded-xl border flex items-center justify-between gap-3 transition-all ${
-                                      isDateBlocked
+                                    className={`p-3 rounded-xl border flex items-center justify-between gap-3 transition-all ${isDateBlocked
                                         ? 'bg-rose-50/80 border-rose-200 text-rose-900'
                                         : isGloballyBlocked
-                                        ? 'bg-amber-50/70 border-amber-200 text-amber-900'
-                                        : 'bg-emerald-50/40 border-emerald-200/70 text-gray-900'
-                                    }`}
+                                          ? 'bg-amber-50/70 border-amber-200 text-amber-900'
+                                          : 'bg-emerald-50/40 border-emerald-200/70 text-gray-900'
+                                      }`}
                                   >
                                     <div>
                                       <div className="font-bold text-xs flex items-center gap-1.5">
@@ -15076,11 +14982,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                       type="button"
                                       disabled={isSavingBlockedSlots}
                                       onClick={() => toggleBlockDateSlot(selectedSlotBlockDate, slot)}
-                                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer flex-shrink-0 active:scale-95 ${
-                                        isDateBlocked
+                                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer flex-shrink-0 active:scale-95 ${isDateBlocked
                                           ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                                           : 'bg-rose-600 hover:bg-rose-700 text-white'
-                                      }`}
+                                        }`}
                                     >
                                       {isDateBlocked ? 'Unblock Slot' : 'Block Slot'}
                                     </button>
@@ -15110,13 +15015,12 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                 return (
                                   <div
                                     key={slot}
-                                    className={`p-3 rounded-xl border flex items-center justify-between gap-3 transition-all ${
-                                      isDateBlocked
+                                    className={`p-3 rounded-xl border flex items-center justify-between gap-3 transition-all ${isDateBlocked
                                         ? 'bg-rose-50/80 border-rose-200 text-rose-900'
                                         : isGloballyBlocked
-                                        ? 'bg-amber-50/70 border-amber-200 text-amber-900'
-                                        : 'bg-emerald-50/40 border-emerald-200/70 text-gray-900'
-                                    }`}
+                                          ? 'bg-amber-50/70 border-amber-200 text-amber-900'
+                                          : 'bg-emerald-50/40 border-emerald-200/70 text-gray-900'
+                                      }`}
                                   >
                                     <div>
                                       <div className="font-bold text-xs flex items-center gap-1.5">
@@ -15138,11 +15042,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                       type="button"
                                       disabled={isSavingBlockedSlots}
                                       onClick={() => toggleBlockDateSlot(selectedSlotBlockDate, slot)}
-                                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer flex-shrink-0 active:scale-95 ${
-                                        isDateBlocked
+                                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer flex-shrink-0 active:scale-95 ${isDateBlocked
                                           ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                                           : 'bg-rose-600 hover:bg-rose-700 text-white'
-                                      }`}
+                                        }`}
                                     >
                                       {isDateBlocked ? 'Unblock Slot' : 'Block Slot'}
                                     </button>
@@ -15208,11 +15111,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                 return (
                                   <div
                                     key={dateStr}
-                                    className={`p-3.5 rounded-2xl border transition-all ${
-                                      isCurrentlySelected
+                                    className={`p-3.5 rounded-2xl border transition-all ${isCurrentlySelected
                                         ? 'border-amber-400 bg-amber-50/40 shadow-xs'
                                         : 'border-gray-200 bg-white hover:border-gray-300'
-                                    }`}
+                                      }`}
                                   >
                                     <div className="flex items-center justify-between mb-2">
                                       <button
@@ -15390,13 +15292,11 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   </div>
 
                   {/* 1. Master Enable/Disable Switch Card */}
-                  <div className={`p-5 rounded-2xl border-2 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm ${
-                    editableEmailConfig.enabled ? 'bg-emerald-50/70 border-emerald-300' : 'bg-rose-50/70 border-rose-300'
-                  }`}>
+                  <div className={`p-5 rounded-2xl border-2 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm ${editableEmailConfig.enabled ? 'bg-emerald-50/70 border-emerald-300' : 'bg-rose-50/70 border-rose-300'
+                    }`}>
                     <div className="flex items-start gap-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0 ${
-                        editableEmailConfig.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
-                      }`}>
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0 ${editableEmailConfig.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                        }`}>
                         {editableEmailConfig.enabled ? '🔔' : '🔕'}
                       </div>
                       <div>
@@ -15404,9 +15304,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           <h4 className="text-sm font-bold text-gray-900">
                             Automated Enquiry Email Notifications
                           </h4>
-                          <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full uppercase ${
-                            editableEmailConfig.enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                          }`}>
+                          <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full uppercase ${editableEmailConfig.enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                            }`}>
                             {editableEmailConfig.enabled ? '● Active (Sending ON)' : '○ Disabled (Sending OFF)'}
                           </span>
                         </div>
@@ -15421,11 +15320,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <button
                       type="button"
                       onClick={() => setEditableEmailConfig(prev => ({ ...prev, enabled: !prev.enabled }))}
-                      className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer flex-shrink-0 ${
-                        editableEmailConfig.enabled
+                      className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer flex-shrink-0 ${editableEmailConfig.enabled
                           ? 'bg-rose-600 hover:bg-rose-700 text-white'
                           : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                      }`}
+                        }`}
                     >
                       <Icon name={editableEmailConfig.enabled ? 'EyeSlashIcon' : 'EyeIcon'} size={16} />
                       <span>{editableEmailConfig.enabled ? 'Turn OFF Email Dispatch' : 'Turn ON Email Dispatch'}</span>
@@ -15454,11 +15352,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       {editableEmailConfig.recipients.map((rec) => (
                         <div
                           key={rec.id}
-                          className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
-                            rec.enabled
+                          className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${rec.enabled
                               ? 'border-gray-200 bg-white shadow-2xs'
                               : 'border-gray-200 bg-gray-50/70 opacity-60'
-                          }`}
+                            }`}
                         >
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center text-xs font-bold flex-shrink-0">
@@ -15467,9 +15364,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             <div>
                               <div className="flex items-center gap-2">
                                 <span className="text-xs font-bold text-gray-900">{rec.name || 'Recipient'}</span>
-                                <span className={`text-[10px] font-semibold px-2 py-0.2 rounded-full ${
-                                  rec.enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-600'
-                                }`}>
+                                <span className={`text-[10px] font-semibold px-2 py-0.2 rounded-full ${rec.enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-600'
+                                  }`}>
                                   {rec.enabled ? 'Active' : 'Disabled'}
                                 </span>
                               </div>
@@ -15481,11 +15377,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             <button
                               type="button"
                               onClick={() => handleToggleRecipient(rec.id)}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
-                                rec.enabled
+                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${rec.enabled
                                   ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                                   : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                              }`}
+                                }`}
                               title={rec.enabled ? 'Click to disable notifications for this inbox' : 'Click to enable notifications'}
                             >
                               <Icon name={rec.enabled ? 'EyeIcon' : 'EyeSlashIcon'} size={14} />
@@ -15795,7 +15690,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <button onClick={() => setDiscountTab('history')} className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-colors ${discountTab === 'history' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>History</button>
                   </div>
                 </div>
-                
+
                 {discountTab === 'pending' ? (
                   pendingDiscounts.length === 0 ? (
                     <div className="text-center py-12 text-gray-400 text-sm">
@@ -15806,7 +15701,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <div className="space-y-4">
                       {pendingDiscounts.map(b => {
                         const totalBeforeDiscount = b.baseAmount + (b.extraCharges || []).reduce((s, c) => s + c.amount, 0);
-                        const discountReqVal = b.discountRequest?.type === 'percentage' 
+                        const discountReqVal = b.discountRequest?.type === 'percentage'
                           ? (totalBeforeDiscount * (b.discountRequest.value / 100))
                           : (b.discountRequest?.value || 0);
 
@@ -15828,7 +15723,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                   <div className="text-xs text-gray-600 mt-1 italic">"{b.discountRequest?.reason}"</div>
                                 </div>
                               </div>
-                              
+
                               <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded-lg p-3 border border-gray-100 mb-2">
                                 <div>
                                   <div className="text-xs text-gray-400 mb-0.5">Event Type</div>
@@ -15839,7 +15734,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                   <div className="text-sm font-medium text-gray-800">{b.guests}</div>
                                 </div>
                               </div>
-                              
+
                               <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-2">
                                 <div className="flex justify-between text-sm">
                                   <span className="text-gray-500 font-medium">Total (Base + Extras)</span>
@@ -15859,13 +15754,13 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                 </div>
                               </div>
                             </div>
-                            
+
                             <div className="flex flex-col items-center gap-3 w-full lg:w-48 flex-shrink-0">
                               {/* Deposit Proof */}
                               {b.paymentProofDeposit ? (
                                 <div className="w-full text-center">
                                   <div className="text-xs font-semibold text-gray-500 mb-1.5">Deposit Payment</div>
-                                  <div 
+                                  <div
                                     className="w-full h-24 rounded-lg overflow-hidden border border-gray-200 cursor-pointer shadow-sm group relative"
                                     onClick={() => {
                                       if (b.paymentProofDeposit?.startsWith('data:image')) {
@@ -15888,7 +15783,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                   <span className="text-[10px] font-medium">No Deposit Photo</span>
                                 </div>
                               )}
-                              
+
                               <div className="flex gap-2 w-full mt-auto">
                                 <button onClick={() => handleDiscountApproval(b.id, false)} className="flex-1 border border-red-200 text-red-600 hover:bg-red-50 font-semibold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-1">
                                   <Icon name="XMarkIcon" size={14} /> Reject
@@ -15913,7 +15808,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <div className="space-y-4">
                       {bookings.filter(b => b.discountRequest && b.discountRequest.status !== 'pending').map(b => {
                         const totalBeforeDiscount = b.baseAmount + (b.extraCharges || []).reduce((s, c) => s + c.amount, 0);
-                        const discountReqVal = b.discountRequest?.type === 'percentage' 
+                        const discountReqVal = b.discountRequest?.type === 'percentage'
                           ? (totalBeforeDiscount * (b.discountRequest.value / 100))
                           : (b.discountRequest?.value || 0);
 
@@ -15936,7 +15831,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                 <div className="text-xs text-gray-600 mt-1 italic">"{b.discountRequest?.reason}"</div>
                               </div>
                             </div>
-                            
+
                             <div className="flex items-center gap-6 text-sm text-gray-600 border-t border-gray-100 pt-3">
                               <div><span className="text-gray-400 mr-1">Event Type:</span> {b.eventType}</div>
                               <div><span className="text-gray-400 mr-1">Guests:</span> {b.guests}</div>
@@ -15965,7 +15860,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     Booking Timeline Tracker
                   </h3>
                   {trackingBookingId && (
-                    <button 
+                    <button
                       onClick={() => { setTrackingBookingId(''); setTrackerSearch(''); }}
                       className="text-sm font-semibold text-gray-600 hover:text-gray-900 flex items-center gap-1.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 px-3 py-1.5 rounded-lg transition-colors"
                     >
@@ -15973,12 +15868,12 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     </button>
                   )}
                 </div>
-                
+
                 {!trackingBookingId ? (
                   <div className="space-y-6 animate-in fade-in duration-300">
                     <div className="relative">
                       <Icon name="MagnifyingGlassIcon" size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input 
+                      <input
                         type="text"
                         placeholder="Search orders by name, email, phone number, or event type..."
                         className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A] transition-shadow shadow-sm"
@@ -15986,7 +15881,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         onChange={(e) => setTrackerSearch(e.target.value)}
                       />
                       {trackerSearch && (
-                        <button 
+                        <button
                           onClick={() => setTrackerSearch('')}
                           className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
                         >
@@ -15997,15 +15892,15 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
                     <div className="bg-white border border-gray-100 shadow-sm rounded-xl overflow-hidden max-h-[600px] overflow-y-auto">
                       {(() => {
-                        const filtered = bookings.filter(b => 
-                          b.name.toLowerCase().includes(trackerSearch.toLowerCase()) || 
+                        const filtered = bookings.filter(b =>
+                          b.name.toLowerCase().includes(trackerSearch.toLowerCase()) ||
                           b.email.toLowerCase().includes(trackerSearch.toLowerCase()) ||
                           b.phone.toLowerCase().includes(trackerSearch.toLowerCase()) ||
                           b.eventType.toLowerCase().includes(trackerSearch.toLowerCase())
                         );
 
                         return filtered.length > 0 ? filtered.map(b => (
-                          <div 
+                          <div
                             key={b.id}
                             onClick={() => {
                               setTrackingBookingId(b.id);
@@ -16047,9 +15942,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 ) : (() => {
                   const tb = bookings.find(x => x.id === trackingBookingId);
                   if (!tb) return <div className="text-gray-500 italic p-4 bg-gray-50 rounded-lg text-center">Booking not found.</div>;
-                  
+
                   const currentStepIdx = STATUS_FLOW.indexOf(tb.status);
-                  
+
                   return (
                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                       <div className="bg-gray-50 rounded-xl p-5 border border-gray-100 flex items-center justify-between shadow-sm">
@@ -16063,13 +15958,13 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           {STATUS_LABELS[tb.status]}
                         </span>
                       </div>
-                      
+
                       <div className="relative border-l-2 border-gray-200 ml-5 pl-8 space-y-8 mt-8 pb-4">
                         {STATUS_FLOW.map((step, idx) => {
                           const isCompleted = idx < currentStepIdx;
                           const isCurrent = idx === currentStepIdx;
                           const isPastOrCurrent = idx <= currentStepIdx;
-                          
+
                           return (
                             <div key={step} className="relative">
                               {/* Timeline dot */}
@@ -16077,22 +15972,22 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                 {isCompleted && <Icon name="CheckIcon" size={12} className="text-white" />}
                                 {isCurrent && <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />}
                               </div>
-                              
+
                               <div className={`font-bold text-sm ${isPastOrCurrent ? 'text-gray-900' : 'text-gray-400'}`}>
                                 Step {idx + 1}: {STATUS_LABELS[step]}
                               </div>
-                              
+
                               {/* Details if reached this step */}
                               {isPastOrCurrent && (
                                 <div className="mt-2.5 text-sm text-gray-600 bg-white border border-gray-100 shadow-sm rounded-xl p-4">
                                   {step === 'new_enquiry' && <div className="flex items-center gap-2"><Icon name="InboxIcon" size={16} className="text-gray-400" /> Enquiry received on <span className="font-semibold text-gray-800">{tb.enquiryDate || 'N/A'}</span>.</div>}
-                                  
+
                                   {step === 'menu_sent' && <div className="flex items-center gap-2"><Icon name="DocumentTextIcon" size={16} className="text-blue-500" /> Menu options sent to customer.</div>}
-                                  
+
                                   {step === 'menu_selected' && <div className="flex items-center gap-2"><Icon name="ListBulletIcon" size={16} className="text-amber-500" /> Selected Menu: <span className="font-semibold text-gray-800">{tb.selectedMenu || tb.package}</span></div>}
-                                  
+
                                   {step === 'deposit_pending' && <div className="flex items-center gap-2"><Icon name="ClockIcon" size={16} className="text-amber-600" /> Deposit requested: <span className="font-semibold text-gray-800">£{tb.deposit.toLocaleString()}</span></div>}
-                                  
+
                                   {step === 'deposit_confirmed' && (
                                     <div className="space-y-3">
                                       <div className="flex items-center gap-2 text-emerald-600 font-semibold"><Icon name="CheckCircleIcon" size={18} /> Deposit fully received.</div>
@@ -16111,9 +16006,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                       )}
                                     </div>
                                   )}
-                                  
+
                                   {step === 'final_invoice_sent' && <div className="flex items-center gap-2"><Icon name="DocumentArrowUpIcon" size={16} className="text-blue-500" /> Final invoice sent. Balance Due: <span className="font-bold text-gray-900">£{(getTotalAmount(tb) - tb.deposit).toLocaleString()}</span></div>}
-                                  
+
                                   {step === 'final_payment_received' && (
                                     <div className="space-y-3">
                                       <div className="flex items-center gap-2 text-emerald-600 font-semibold"><Icon name="CheckCircleIcon" size={18} /> Final Payment fully received.</div>
@@ -16132,9 +16027,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                       )}
                                     </div>
                                   )}
-                                  
+
                                   {step === 'event_scheduled' && <div className="flex items-center gap-2"><Icon name="CalendarDaysIcon" size={16} className="text-indigo-500" /> Event scheduled for <span className="font-semibold text-gray-800">{tb.date} at {tb.time}</span>.</div>}
-                                  
+
                                   {step === 'event_completed' && (
                                     <div className="space-y-3">
                                       <div className="flex items-center gap-2"><Icon name="FlagIcon" size={16} className="text-amber-500" /> Event has concluded.</div>
@@ -16156,7 +16051,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                       )}
                                     </div>
                                   )}
-                                  
+
                                   {step === 'completed' && (
                                     <div className="flex items-center gap-2 text-emerald-700 font-bold bg-emerald-50 px-4 py-2.5 rounded-lg border border-emerald-100">
                                       <Icon name="CheckBadgeIcon" size={20} /> Booking Successfully Closed
@@ -16737,7 +16632,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
                           const adults = selectedBooking.adults ?? selectedBooking.guests;
                           const kids4to10 = selectedBooking.kids4to10 || 0;
-                          
+
                           const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
                           const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
 
@@ -16794,9 +16689,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             </option>
                           ))}
                         </optgroup>
-                        <optgroup label="Venue & Services">
-                          <option value="Venue Hire">Venue Hire</option>
-                          <option value="Dry Hire">Dry Hire</option>
+                        <optgroup label="Services">
                           <option value="Table Service">Table Service</option>
                           <option value="Kids Pricing">Kids Pricing</option>
                         </optgroup>
@@ -16889,7 +16782,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               const kids4to10 = selectedBooking.kids4to10 || 0;
                               const kidsUnder4 = selectedBooking.kidsUnder4 || 0;
                               const guests = adults + kids4to10 + kidsUnder4;
-                              
+
                               const pricePerPerson = getPackageRate(selectedBooking.selectedMenu || selectedBooking.package, selectedBooking.date);
 
                               const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
@@ -16900,7 +16793,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
                               setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, guests, adults, baseAmount, deposit } : b));
                               setSelectedBooking(prev => prev?.id === selectedBooking.id ? { ...prev, guests, adults, baseAmount, deposit } : prev);
-                              
+
                               const updates = { guests, adults, baseAmount, deposit };
                               await setDoc(doc(db, 'booking_requests', selectedBooking.id), updates, { merge: true });
                               await setDoc(doc(db, 'bookings', selectedBooking.id), updates, { merge: true });
@@ -16920,7 +16813,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               const adults = selectedBooking.adults ?? selectedBooking.guests;
                               const kidsUnder4 = selectedBooking.kidsUnder4 || 0;
                               const guests = adults + kids4to10 + kidsUnder4;
-                              
+
                               const pricePerPerson = getPackageRate(selectedBooking.selectedMenu || selectedBooking.package, selectedBooking.date);
 
                               const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
@@ -16931,7 +16824,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
                               setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, guests, adults, kids4to10, baseAmount, deposit } : b));
                               setSelectedBooking(prev => prev?.id === selectedBooking.id ? { ...prev, guests, adults, kids4to10, baseAmount, deposit } : prev);
-                              
+
                               const updates = { guests, adults, kids4to10, baseAmount, deposit };
                               await setDoc(doc(db, 'booking_requests', selectedBooking.id), updates, { merge: true });
                               await setDoc(doc(db, 'bookings', selectedBooking.id), updates, { merge: true });
@@ -16951,7 +16844,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               const adults = selectedBooking.adults ?? selectedBooking.guests;
                               const kids4to10 = selectedBooking.kids4to10 || 0;
                               const guests = adults + kids4to10 + kidsUnder4;
-                              
+
                               const pricePerPerson = getPackageRate(selectedBooking.selectedMenu || selectedBooking.package, selectedBooking.date);
 
                               const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
@@ -16962,7 +16855,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
                               setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, guests, adults, kidsUnder4, baseAmount, deposit } : b));
                               setSelectedBooking(prev => prev?.id === selectedBooking.id ? { ...prev, guests, adults, kidsUnder4, baseAmount, deposit } : prev);
-                              
+
                               const updates = { guests, adults, kidsUnder4, baseAmount, deposit };
                               await setDoc(doc(db, 'booking_requests', selectedBooking.id), updates, { merge: true });
                               await setDoc(doc(db, 'bookings', selectedBooking.id), updates, { merge: true });
@@ -17139,9 +17032,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         {[
                           { title: 'Full Restaurant Menu', label: 'Full Menu 📋' },
                           { title: 'Extras & Upgrades', label: 'Extras & Upgrades ✨' },
-                          { title: 'Venue Hall Charges', label: 'Hall Charges 🏢' },
                           { title: 'Kids Pricing', label: 'Kids Pricing 🧒' },
-                          { title: 'Dry Hire', label: 'Dry Hire 🍽️' },
                           ...editableMenuCategories.map(c => ({ title: c.title, label: `${c.icon || '🍽️'} ${c.title}` }))
                         ].map((m) => (
                           <div key={m.title} className="flex items-center gap-1.5 bg-white border border-purple-200/70 hover:border-purple-300 rounded-lg px-2.5 py-1 shadow-2xs">
@@ -17260,11 +17151,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                   key={opt.value}
                                   type="button"
                                   onClick={() => setDepositPaymentMethod(opt.value)}
-                                  className={`flex items-center justify-between px-3 py-2 rounded-lg border text-left text-xs font-semibold transition-all ${
-                                    isSelected
+                                  className={`flex items-center justify-between px-3 py-2 rounded-lg border text-left text-xs font-semibold transition-all ${isSelected
                                       ? 'border-amber-500 bg-amber-50 text-amber-800 shadow-sm'
                                       : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-                                  }`}
+                                    }`}
                                 >
                                   <span>{opt.label}</span>
                                   {isSelected && (
@@ -17616,11 +17506,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                   key={opt.value}
                                   type="button"
                                   onClick={() => setFinalPaymentMethod(opt.value)}
-                                  className={`flex items-center justify-between px-3 py-2 rounded-lg border text-left text-xs font-semibold transition-all ${
-                                    isSelected
+                                  className={`flex items-center justify-between px-3 py-2 rounded-lg border text-left text-xs font-semibold transition-all ${isSelected
                                       ? 'border-amber-500 bg-amber-50 text-amber-800 shadow-sm'
                                       : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-                                  }`}
+                                    }`}
                                 >
                                   <span>{opt.label}</span>
                                   {isSelected && (
@@ -17724,18 +17613,6 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     );
                   })()}
 
-                  {/* Venue Hall Charge based on date */}
-                  {(() => {
-                    const hallCharge = getVenueHallCharge(selectedBooking.date, selectedBooking.time);
-                    if (!hallCharge) return null;
-                    return (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">🏛️ {hallCharge.label}</span>
-                        <span className="font-semibold text-indigo-700">£{hallCharge.amount.toLocaleString()}</span>
-                      </div>
-                    );
-                  })()}
-
                   {selectedBooking.extraCharges && selectedBooking.extraCharges.length > 0 && (
                     <div className="space-y-1">
                       <div className="text-xs font-semibold text-gray-500 mt-2 mb-1">Extras</div>
@@ -17757,21 +17634,21 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     const grandTotal = getTotalAmount(selectedBooking);
                     const extraChargesTotal = (selectedBooking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
                     const finalPaymentPaidAmt = grandTotal - selectedBooking.deposit - extraChargesTotal;
-                    
+
                     const isDepositPaid = selectedBooking.depositPaid || !['new_enquiry', 'menu_sent', 'menu_selected', 'deposit_pending'].includes(selectedBooking.status);
                     const isFinalPaid = selectedBooking.finalPaymentPaid;
                     const isExtraPaid = selectedBooking.status === 'completed' || !!selectedBooking.paymentProofExtra || selectedBooking.finalPaymentPaid;
-                    
+
                     const totalPaid = (isDepositPaid ? selectedBooking.deposit : 0) +
-                                      (isFinalPaid ? finalPaymentPaidAmt : 0) +
-                                      (isExtraPaid ? extraChargesTotal : 0);
-                                      
+                      (isFinalPaid ? finalPaymentPaidAmt : 0) +
+                      (isExtraPaid ? extraChargesTotal : 0);
+
                     const remainingBalance = grandTotal - totalPaid;
 
                     return (
                       <div className="space-y-2 border-t border-gray-200 pt-3">
                         <div className="flex justify-between text-sm font-bold">
-                          <span className="text-gray-800">Grand Total (incl. Hall)</span>
+                          <span className="text-gray-800">Grand Total</span>
                           <span className="text-gray-900">£{grandTotal.toLocaleString()}</span>
                         </div>
 
@@ -17784,7 +17661,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
                         <div className="border-t border-dashed border-gray-200 mt-2 pt-2 space-y-1">
                           <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Payment Breakdown</div>
-                          
+
                           {/* Deposit */}
                           <div className="flex justify-between text-xs">
                             <span className="text-gray-500">Deposit</span>
@@ -17899,10 +17776,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   className={`w-full font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-all ${(!selectedBooking.paymentProofDeposit || !depositPaymentMethod) ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md'}`}
                 >
                   <Icon name={(!selectedBooking.paymentProofDeposit || !depositPaymentMethod) ? "LockClosedIcon" : "CheckCircleIcon"} size={16} />
-                  {!selectedBooking.paymentProofDeposit 
-                    ? 'Upload Screenshot to Proceed' 
-                    : !depositPaymentMethod 
-                      ? 'Select Payment Method to Proceed' 
+                  {!selectedBooking.paymentProofDeposit
+                    ? 'Upload Screenshot to Proceed'
+                    : !depositPaymentMethod
+                      ? 'Select Payment Method to Proceed'
                       : 'Confirm Deposit Received'}
                 </button>
               )}
@@ -17942,10 +17819,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   className={`w-full font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-all ${(!selectedBooking.paymentProofFinal || !finalPaymentMethod) ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md'}`}
                 >
                   <Icon name={(!selectedBooking.paymentProofFinal || !finalPaymentMethod) ? "LockClosedIcon" : "CheckCircleIcon"} size={16} />
-                  {!selectedBooking.paymentProofFinal 
-                    ? 'Upload Screenshot to Proceed' 
-                    : !finalPaymentMethod 
-                      ? 'Select Payment Method to Proceed' 
+                  {!selectedBooking.paymentProofFinal
+                    ? 'Upload Screenshot to Proceed'
+                    : !finalPaymentMethod
+                      ? 'Select Payment Method to Proceed'
                       : 'Confirm Final Payment'}
                 </button>
               )}
@@ -17990,7 +17867,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 const nonPreset = (selectedBooking.extraCharges || []).filter(c => !c.isPreset && !(editableUpgrades?.items || []).some((preset: MenuUpgradeItem) => preset.name === c.label));
                 const extraChargesTotal = nonPreset.reduce((sum, c) => sum + c.amount, 0);
                 const isExtraPaymentNeeded = extraChargesTotal > 0 && selectedBooking.finalPaymentPaid;
-                
+
                 return (
                   <div className="space-y-3">
                     {isExtraPaymentNeeded && (
@@ -18002,7 +17879,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         <p className="text-xs text-red-700 mb-3 leading-relaxed">
                           Extra charges were added to this event. You must upload the payment screenshot for the remaining balance before closing the event.
                         </p>
-                        
+
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
                           <a href={buildWhatsAppLink(selectedBooking.phone, buildExtraInvoiceWhatsAppText(selectedBooking, bankDetails))}
                             target="_blank" rel="noopener noreferrer"
@@ -18096,7 +17973,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       </div>
                     )}
 
-                    <button 
+                    <button
                       onClick={() => updateStatus(selectedBooking.id, 'completed')}
                       disabled={isExtraPaymentNeeded && !selectedBooking.paymentProofExtra}
                       title={isExtraPaymentNeeded && !selectedBooking.paymentProofExtra ? "Please upload the extra payment screenshot first" : ""}
@@ -18277,8 +18154,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   {deleteConfirmModal?.category === 'online_order'
                     ? 'Online Order'
                     : deleteConfirmModal?.category === 'enquiry'
-                    ? 'Enquiry'
-                    : 'Booking Record'}
+                      ? 'Enquiry'
+                      : 'Booking Record'}
                 </span>
                 <h3 className="text-base font-bold text-gray-900 mt-0.5">
                   {deleteConfirmModal?.title || `Delete Booking`}
@@ -18351,8 +18228,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     const label = deleteConfirmModal.category === 'online_order'
                       ? 'Online Order'
                       : deleteConfirmModal.category === 'enquiry'
-                      ? 'Enquiry'
-                      : 'Booking';
+                        ? 'Enquiry'
+                        : 'Booking';
                     await executePermanentDeletion(deleteConfirmModal.targetIds, label);
                   } else if (bookingToDelete) {
                     await executePermanentDeletion([bookingToDelete.id], 'Booking');
@@ -18523,9 +18400,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         </option>
                       ))}
                     </optgroup>
-                    <optgroup label="Venue & Services">
-                      <option value="Venue Hall Only">Venue Hall Only</option>
-                      <option value="Dry Hire">Dry Hire</option>
+                    <optgroup label="Services">
                       <option value="Table Service">Table Service</option>
                     </optgroup>
                     <optgroup label="Upgrades & Extras">
@@ -19006,20 +18881,19 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
       {confirmDialog && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-7 w-full max-w-sm border border-gray-100 flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 shadow-inner ${
-              confirmDialog.type === 'warning'
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 shadow-inner ${confirmDialog.type === 'warning'
                 ? 'bg-amber-50 text-amber-600 border border-amber-200'
                 : confirmDialog.type === 'info'
-                ? 'bg-blue-50 text-blue-600 border border-blue-200'
-                : 'bg-rose-50 text-rose-600 border border-rose-200'
-            }`}>
+                  ? 'bg-blue-50 text-blue-600 border border-blue-200'
+                  : 'bg-rose-50 text-rose-600 border border-rose-200'
+              }`}>
               <Icon
                 name={
                   confirmDialog.type === 'warning'
                     ? 'ExclamationTriangleIcon'
                     : confirmDialog.type === 'info'
-                    ? 'InformationCircleIcon'
-                    : 'TrashIcon'
+                      ? 'InformationCircleIcon'
+                      : 'TrashIcon'
                 }
                 size={26}
               />
@@ -19041,13 +18915,12 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   setConfirmDialog(null);
                   action();
                 }}
-                className={`flex-1 px-4 py-2.5 rounded-xl text-xs font-bold text-white shadow-sm transition-all active:scale-95 cursor-pointer ${
-                  confirmDialog.type === 'warning'
+                className={`flex-1 px-4 py-2.5 rounded-xl text-xs font-bold text-white shadow-sm transition-all active:scale-95 cursor-pointer ${confirmDialog.type === 'warning'
                     ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-500/20'
                     : confirmDialog.type === 'info'
-                    ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'
-                    : 'bg-rose-600 hover:bg-rose-700 shadow-rose-500/20'
-                }`}
+                      ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'
+                      : 'bg-rose-600 hover:bg-rose-700 shadow-rose-500/20'
+                  }`}
               >
                 {confirmDialog.confirmText || 'Confirm'}
               </button>

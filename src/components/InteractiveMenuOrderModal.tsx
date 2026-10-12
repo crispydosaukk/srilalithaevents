@@ -572,9 +572,9 @@ export default function InteractiveMenuOrderModal({
 
   const thaliAdditionsTotal = isThali
     ? selectedThaliAdditions.reduce((sum, name) => {
-        const found = MADRAS_THALI_OPTION_3.additions.find((a) => a.name === name);
-        return sum + (found ? found.price : 2.5);
-      }, 0)
+      const found = MADRAS_THALI_OPTION_3.additions.find((a) => a.name === name);
+      return sum + (found ? found.price : 2.5);
+    }, 0)
     : 0;
 
   // Check if selected package is a custom package
@@ -605,7 +605,7 @@ export default function InteractiveMenuOrderModal({
     if (isDosaFestival)
       return Number(
         dynamicMenus?.DOSA_FESTIVAL_OPTION_5?.pricePerPerson ??
-          DOSA_FESTIVAL_OPTION_5.pricePerPerson
+        DOSA_FESTIVAL_OPTION_5.pricePerPerson
       );
     if (isCanape)
       return (
@@ -959,18 +959,18 @@ export default function InteractiveMenuOrderModal({
         selectedUpgrades.gazebo ? { name: 'Gazebo Setup', amount: 70.0 } : null,
         selectedUpgrades.waiterCount > 0
           ? {
-              name: `${selectedUpgrades.waiterCount} Waiter(s) for Serving`,
-              amount: selectedUpgrades.waiterCount * 70.0,
-            }
+            name: `${selectedUpgrades.waiterCount} Waiter(s) for Serving`,
+            amount: selectedUpgrades.waiterCount * 70.0,
+          }
           : null,
         selectedUpgrades.crockery
           ? { name: `Crockery Service (${guests} guests)`, amount: 3.0 * guests }
           : null,
         selectedUpgrades.extraHours > 0
           ? {
-              name: `${selectedUpgrades.extraHours} Extra Hour(s) for Serving/Cooking`,
-              amount: selectedUpgrades.extraHours * 100.0,
-            }
+            name: `${selectedUpgrades.extraHours} Extra Hour(s) for Serving/Cooking`,
+            amount: selectedUpgrades.extraHours * 100.0,
+          }
           : null,
         ...selectedUpgrades.moreDishes.map((d) => ({ name: `Extra Dish: ${d}`, amount: 2.5 })),
       ].filter(Boolean) as { name: string; amount: number }[];
@@ -982,77 +982,77 @@ export default function InteractiveMenuOrderModal({
 
       const liveDosaMenuDetails = isLiveDosa
         ? {
-            starterChoice: liveDosaStarterChoice,
-            liveDosaItems: currentLiveDosaItems.map((i: any) => i.name),
-            selectedMain: isLiveDosa2 ? selectedDishes.mainsVeg : [],
-            selectedDessert: isLiveDosa2 ? selectedDishes.desserts : [],
-            durationHours: liveDosaCalc.durationHours,
-          }
+          starterChoice: liveDosaStarterChoice,
+          liveDosaItems: currentLiveDosaItems.map((i: any) => i.name),
+          selectedMain: isLiveDosa2 ? selectedDishes.mainsVeg : [],
+          selectedDessert: isLiveDosa2 ? selectedDishes.desserts : [],
+          durationHours: liveDosaCalc.durationHours,
+        }
         : null;
 
       const thaliMenuDetails = isThali
         ? {
-            coreDishes: (
-              (dynamicMenus?.MADRAS_THALI_OPTION_3?.coreDishes ||
-                MADRAS_THALI_OPTION_3.coreDishes) as any[]
-            ).map((d: any) => (typeof d === 'string' ? d : d.name)),
-            selectedVariants: selectedThaliVariants,
-            selectedAdditions: selectedThaliAdditions,
-          }
+          coreDishes: (
+            (dynamicMenus?.MADRAS_THALI_OPTION_3?.coreDishes ||
+              MADRAS_THALI_OPTION_3.coreDishes) as any[]
+          ).map((d: any) => (typeof d === 'string' ? d : d.name)),
+          selectedVariants: selectedThaliVariants,
+          selectedAdditions: selectedThaliAdditions,
+        }
         : null;
 
       const tailorMenuDetails = isTailorMenu
         ? {
-            liveStations: selectedTailorStations,
-            customDishes: tailorSelectedDishes,
-            whatWeBring: TAILOR_MENU_OPTION_4.whatWeBring,
-            whatWeNeedFromYou: TAILOR_MENU_OPTION_4.whatWeNeedFromYou,
-            depositPolicy: '50% deposit at booking, balance in cash after event',
-          }
+          liveStations: selectedTailorStations,
+          customDishes: tailorSelectedDishes,
+          whatWeBring: TAILOR_MENU_OPTION_4.whatWeBring,
+          whatWeNeedFromYou: TAILOR_MENU_OPTION_4.whatWeNeedFromYou,
+          depositPolicy: '50% deposit at booking, balance in cash after event',
+        }
         : null;
 
       const dosaFestivalDetails = isDosaFestival
         ? {
-            selectedDosas: selectedFestivalDosas,
-            inclusions: DOSA_FESTIVAL_OPTION_5.inclusions,
-          }
+          selectedDosas: selectedFestivalDosas,
+          inclusions: DOSA_FESTIVAL_OPTION_5.inclusions,
+        }
         : null;
 
       const canapeDetails = isCanape
         ? {
-            selectedCanapes,
-          }
+          selectedCanapes,
+        }
         : null;
 
       const northIndianDetails = isNorthIndian
         ? {
-            ...selectedNorthIndian,
-            inclusions: NORTH_INDIAN_OPTION_7.inclusions,
-          }
+          ...selectedNorthIndian,
+          inclusions: NORTH_INDIAN_OPTION_7.inclusions,
+        }
         : null;
 
       const gujaratiDetails = isGujarati
         ? {
-            mithai: selectedGujaratiMithai,
-            farsan: selectedGujaratiFarsan,
-            shaak: selectedGujaratiShaak,
-            dal: selectedGujaratiDal,
-            bread: selectedGujaratiBread,
-            rice: selectedGujaratiRice,
-            condiments: selectedGujaratiCondiments,
-          }
+          mithai: selectedGujaratiMithai,
+          farsan: selectedGujaratiFarsan,
+          shaak: selectedGujaratiShaak,
+          dal: selectedGujaratiDal,
+          bread: selectedGujaratiBread,
+          rice: selectedGujaratiRice,
+          condiments: selectedGujaratiCondiments,
+        }
         : null;
 
       const punjabiDetails = isPunjabi
         ? {
-            starters: selectedPunjabiStarters,
-            subjies: selectedPunjabiSubjies,
-            dal: selectedPunjabiDal,
-            bread: selectedPunjabiBread,
-            rice: selectedPunjabiRice,
-            mithai: selectedPunjabiMithai,
-            accompaniments: selectedPunjabiAccompaniments,
-          }
+          starters: selectedPunjabiStarters,
+          subjies: selectedPunjabiSubjies,
+          dal: selectedPunjabiDal,
+          bread: selectedPunjabiBread,
+          rice: selectedPunjabiRice,
+          mithai: selectedPunjabiMithai,
+          accompaniments: selectedPunjabiAccompaniments,
+        }
         : null;
 
       const selectedMenuPayload = isLiveDosa
@@ -1145,15 +1145,15 @@ export default function InteractiveMenuOrderModal({
         try {
           const dishesSummary = selectedMenuPayload
             ? Object.entries(selectedMenuPayload)
-                .filter(([_, items]) => Array.isArray(items) && items.length > 0)
-                .map(([category, items]: [string, any]) => {
-                  const listStr = items
-                    .map((i: any) => (typeof i === 'string' ? i : i?.name || ''))
-                    .filter(Boolean)
-                    .join(', ');
-                  return `${category}: ${listStr}`;
-                })
-                .join(' | ')
+              .filter(([_, items]) => Array.isArray(items) && items.length > 0)
+              .map(([category, items]: [string, any]) => {
+                const listStr = items
+                  .map((i: any) => (typeof i === 'string' ? i : i?.name || ''))
+                  .filter(Boolean)
+                  .join(', ');
+                return `${category}: ${listStr}`;
+              })
+              .join(' | ')
             : '';
 
           await fetch('/api/send-enquiry-email', {
@@ -1300,16 +1300,14 @@ export default function InteractiveMenuOrderModal({
               setErrorMessage(null);
               setStep(1);
             }}
-            className={`py-3 px-4 flex items-center justify-center gap-2 transition-all border-b-2 cursor-pointer ${
-              step === 1
+            className={`py-3 px-4 flex items-center justify-center gap-2 transition-all border-b-2 cursor-pointer ${step === 1
                 ? 'border-[#C8860A] text-[#C8860A] bg-white'
                 : 'border-transparent text-gray-500 hover:text-gray-800'
-            }`}
+              }`}
           >
             <span
-              className={`w-5 h-5 rounded-full text-[10px] flex items-center justify-center font-bold ${
-                step === 1 ? 'bg-[#C8860A] text-white' : 'bg-gray-200 text-gray-600'
-              }`}
+              className={`w-5 h-5 rounded-full text-[10px] flex items-center justify-center font-bold ${step === 1 ? 'bg-[#C8860A] text-white' : 'bg-gray-200 text-gray-600'
+                }`}
             >
               1
             </span>
@@ -1326,16 +1324,14 @@ export default function InteractiveMenuOrderModal({
                 setStep(2);
               }
             }}
-            className={`py-3 px-4 flex items-center justify-center gap-2 transition-all border-b-2 cursor-pointer ${
-              step === 2
+            className={`py-3 px-4 flex items-center justify-center gap-2 transition-all border-b-2 cursor-pointer ${step === 2
                 ? 'border-[#C8860A] text-[#C8860A] bg-white'
                 : 'border-transparent text-gray-500 hover:text-gray-800'
-            }`}
+              }`}
           >
             <span
-              className={`w-5 h-5 rounded-full text-[10px] flex items-center justify-center font-bold ${
-                step === 2 ? 'bg-[#C8860A] text-white' : 'bg-gray-200 text-gray-600'
-              }`}
+              className={`w-5 h-5 rounded-full text-[10px] flex items-center justify-center font-bold ${step === 2 ? 'bg-[#C8860A] text-white' : 'bg-gray-200 text-gray-600'
+                }`}
             >
               2
             </span>
@@ -1352,16 +1348,14 @@ export default function InteractiveMenuOrderModal({
                 setStep(3);
               }
             }}
-            className={`py-3 px-4 flex items-center justify-center gap-2 transition-all border-b-2 cursor-pointer ${
-              step === 3
+            className={`py-3 px-4 flex items-center justify-center gap-2 transition-all border-b-2 cursor-pointer ${step === 3
                 ? 'border-[#C8860A] text-[#C8860A] bg-white'
                 : 'border-transparent text-gray-500 hover:text-gray-800'
-            }`}
+              }`}
           >
             <span
-              className={`w-5 h-5 rounded-full text-[10px] flex items-center justify-center font-bold ${
-                step === 3 ? 'bg-[#C8860A] text-white' : 'bg-gray-200 text-gray-600'
-              }`}
+              className={`w-5 h-5 rounded-full text-[10px] flex items-center justify-center font-bold ${step === 3 ? 'bg-[#C8860A] text-white' : 'bg-gray-200 text-gray-600'
+                }`}
             >
               3
             </span>
@@ -1404,11 +1398,10 @@ export default function InteractiveMenuOrderModal({
                   {/* Live Dosa Option 1 Card */}
                   <div
                     onClick={() => setSelectedPackageId('live-dosa-1')}
-                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative overflow-hidden ${
-                      isLiveDosa1
+                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative overflow-hidden ${isLiveDosa1
                         ? 'border-[#C8860A] bg-amber-50/60 shadow-md ring-2 ring-[#C8860A]/20'
                         : 'border-gray-200 hover:border-amber-300 bg-white'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-1.5">
@@ -1440,11 +1433,10 @@ export default function InteractiveMenuOrderModal({
                   {/* Live Dosa Option 2 Card */}
                   <div
                     onClick={() => setSelectedPackageId('live-dosa-2')}
-                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative overflow-hidden ${
-                      isLiveDosa2
+                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative overflow-hidden ${isLiveDosa2
                         ? 'border-[#C8860A] bg-amber-50/60 shadow-md ring-2 ring-[#C8860A]/20'
                         : 'border-gray-200 hover:border-amber-300 bg-white'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-1.5">
@@ -1476,11 +1468,10 @@ export default function InteractiveMenuOrderModal({
                   {/* Option 3: Madras Thali Card */}
                   <div
                     onClick={() => setSelectedPackageId('madras-thali-3')}
-                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative overflow-hidden ${
-                      isThali
+                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative overflow-hidden ${isThali
                         ? 'border-[#C8860A] bg-amber-50/60 shadow-md ring-2 ring-[#C8860A]/20'
                         : 'border-gray-200 hover:border-amber-300 bg-white'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-1.5">
@@ -1505,11 +1496,10 @@ export default function InteractiveMenuOrderModal({
                   {/* Option 4: Tailor Your Own Menu Card */}
                   <div
                     onClick={() => setSelectedPackageId('tailor-menu-4')}
-                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative overflow-hidden ${
-                      isTailorMenu
+                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative overflow-hidden ${isTailorMenu
                         ? 'border-[#B45309] bg-amber-50/60 shadow-md ring-2 ring-[#B45309]/20'
                         : 'border-gray-200 hover:border-amber-300 bg-white'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-1.5">
@@ -1536,11 +1526,10 @@ export default function InteractiveMenuOrderModal({
                   {/* Option 5: Dosa Festival At Your Home Card */}
                   <div
                     onClick={() => setSelectedPackageId('dosa-festival-5')}
-                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative overflow-hidden ${
-                      isDosaFestival
+                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative overflow-hidden ${isDosaFestival
                         ? 'border-[#EA580C] bg-orange-50/60 shadow-md ring-2 ring-[#EA580C]/20'
                         : 'border-gray-200 hover:border-orange-300 bg-white'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-1.5">
@@ -1567,11 +1556,10 @@ export default function InteractiveMenuOrderModal({
                   {/* Option 6: Canapé Service Card */}
                   <div
                     onClick={() => setSelectedPackageId('canape-6')}
-                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative overflow-hidden ${
-                      isCanape
+                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative overflow-hidden ${isCanape
                         ? 'border-[#E11D48] bg-rose-50/60 shadow-md ring-2 ring-[#E11D48]/20'
                         : 'border-gray-200 hover:border-rose-300 bg-white'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-1.5">
@@ -1598,11 +1586,10 @@ export default function InteractiveMenuOrderModal({
                   {/* Option 7: North Indian Standard Menu Card */}
                   <div
                     onClick={() => setSelectedPackageId('north-indian-7')}
-                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative overflow-hidden ${
-                      isNorthIndian
+                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative overflow-hidden ${isNorthIndian
                         ? 'border-[#4F46E5] bg-indigo-50/60 shadow-md ring-2 ring-[#4F46E5]/20'
                         : 'border-gray-200 hover:border-indigo-300 bg-white'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-1.5">
@@ -1629,11 +1616,10 @@ export default function InteractiveMenuOrderModal({
                   {/* Option 8: Gujarati Menu Card */}
                   <div
                     onClick={() => setSelectedPackageId('gujarati-8')}
-                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative overflow-hidden ${
-                      isGujarati
+                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative overflow-hidden ${isGujarati
                         ? 'border-[#0D9488] bg-teal-50/60 shadow-md ring-2 ring-[#0D9488]/20'
                         : 'border-gray-200 hover:border-teal-300 bg-white'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-1.5">
@@ -1660,11 +1646,10 @@ export default function InteractiveMenuOrderModal({
                   {/* Option 9: Punjabi Menu Card */}
                   <div
                     onClick={() => setSelectedPackageId('punjabi-9')}
-                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative overflow-hidden ${
-                      isPunjabi
+                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative overflow-hidden ${isPunjabi
                         ? 'border-[#D97706] bg-amber-50/60 shadow-md ring-2 ring-[#D97706]/20'
                         : 'border-gray-200 hover:border-amber-300 bg-white'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-1.5">
@@ -1831,11 +1816,10 @@ export default function InteractiveMenuOrderModal({
                       }
                       setErrorMessage(null);
                     }}
-                    className={`w-full border rounded-xl px-3.5 py-2.5 text-xs font-medium focus:outline-none focus:ring-2 bg-white ${
-                      eventDate && blockedDates.includes(eventDate)
+                    className={`w-full border rounded-xl px-3.5 py-2.5 text-xs font-medium focus:outline-none focus:ring-2 bg-white ${eventDate && blockedDates.includes(eventDate)
                         ? 'border-red-500 ring-2 ring-red-100 bg-red-50/10 text-red-900'
                         : 'border-gray-300 text-gray-900 focus:ring-[#C8860A]'
-                    }`}
+                      }`}
                   />
                   {eventDate &&
                     (blockedDates.includes(eventDate) ? (
@@ -1874,11 +1858,10 @@ export default function InteractiveMenuOrderModal({
                           if (openLunch) setEventTime(openLunch);
                           setErrorMessage(null);
                         }}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                          timeCategory === 'lunch'
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${timeCategory === 'lunch'
                             ? 'bg-[#C8860A] text-white shadow-xs'
                             : 'text-gray-600 hover:text-gray-900'
-                        }`}
+                          }`}
                       >
                         ☀️ Lunch Slots
                       </button>
@@ -1890,11 +1873,10 @@ export default function InteractiveMenuOrderModal({
                           if (openDinner) setEventTime(openDinner);
                           setErrorMessage(null);
                         }}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                          timeCategory === 'dinner'
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${timeCategory === 'dinner'
                             ? 'bg-[#C8860A] text-white shadow-xs'
                             : 'text-gray-600 hover:text-gray-900'
-                        }`}
+                          }`}
                       >
                         🌙 Dinner Slots
                       </button>
@@ -1906,11 +1888,10 @@ export default function InteractiveMenuOrderModal({
                             setEventTime(`${customStartTime} to ${customEndTime}`);
                             setErrorMessage(null);
                           }}
-                          className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                            timeCategory === 'custom'
+                          className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${timeCategory === 'custom'
                               ? 'bg-[#C8860A] text-white shadow-xs'
                               : 'text-gray-600 hover:text-gray-900'
-                          }`}
+                            }`}
                         >
                           ⏱️ Customised Time
                         </button>
@@ -1938,13 +1919,12 @@ export default function InteractiveMenuOrderModal({
                                 setEventTime(slot);
                                 setErrorMessage(null);
                               }}
-                              className={`py-2.5 px-2 rounded-xl border text-xs font-bold transition-all text-center flex flex-col items-center justify-center gap-0.5 ${
-                                isBlocked
+                              className={`py-2.5 px-2 rounded-xl border text-xs font-bold transition-all text-center flex flex-col items-center justify-center gap-0.5 ${isBlocked
                                   ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60'
                                   : isSelected
                                     ? 'border-[#C8860A] bg-amber-50 text-[#C8860A] ring-2 ring-[#C8860A]/20 shadow-xs cursor-pointer'
                                     : 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-white hover:border-amber-200 cursor-pointer'
-                              }`}
+                                }`}
                             >
                               <span className={isBlocked ? 'line-through' : ''}>{slot}</span>
                               {isBlocked && (
@@ -1979,13 +1959,12 @@ export default function InteractiveMenuOrderModal({
                                 setEventTime(slot);
                                 setErrorMessage(null);
                               }}
-                              className={`py-2.5 px-2 rounded-xl border text-xs font-bold transition-all text-center flex flex-col items-center justify-center gap-0.5 ${
-                                isBlocked
+                              className={`py-2.5 px-2 rounded-xl border text-xs font-bold transition-all text-center flex flex-col items-center justify-center gap-0.5 ${isBlocked
                                   ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60'
                                   : isSelected
                                     ? 'border-[#C8860A] bg-amber-50 text-[#C8860A] ring-2 ring-[#C8860A]/20 shadow-xs cursor-pointer'
                                     : 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-white hover:border-amber-200 cursor-pointer'
-                              }`}
+                                }`}
                             >
                               <span className={isBlocked ? 'line-through' : ''}>{slot}</span>
                               {isBlocked && (
@@ -2285,22 +2264,20 @@ export default function InteractiveMenuOrderModal({
                           <button
                             type="button"
                             onClick={() => setLiveDosaStarterChoice('Idly')}
-                            className={`flex-1 py-1 px-2 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                              liveDosaStarterChoice === 'Idly'
+                            className={`flex-1 py-1 px-2 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${liveDosaStarterChoice === 'Idly'
                                 ? 'bg-[#C8860A] text-white shadow-2xs'
                                 : 'bg-white border border-gray-200 text-gray-700'
-                            }`}
+                              }`}
                           >
                             ✓ Idly
                           </button>
                           <button
                             type="button"
                             onClick={() => setLiveDosaStarterChoice('Veg Biryani')}
-                            className={`flex-1 py-1 px-2 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                              liveDosaStarterChoice === 'Veg Biryani'
+                            className={`flex-1 py-1 px-2 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${liveDosaStarterChoice === 'Veg Biryani'
                                 ? 'bg-[#C8860A] text-white shadow-2xs'
                                 : 'bg-white border border-gray-200 text-gray-700'
-                            }`}
+                              }`}
                           >
                             ✓ Veg Biryani
                           </button>
@@ -2342,11 +2319,10 @@ export default function InteractiveMenuOrderModal({
                             <span>Select 1 Main Course Dish (Included in Option 2)</span>
                           </span>
                           <span
-                            className={`text-xs font-bold px-2 py-0.5 rounded-md ${
-                              selectedDishes.mainsVeg.length === 1
+                            className={`text-xs font-bold px-2 py-0.5 rounded-md ${selectedDishes.mainsVeg.length === 1
                                 ? 'bg-emerald-100 text-emerald-800'
                                 : 'bg-purple-100 text-purple-900'
-                            }`}
+                              }`}
                           >
                             {selectedDishes.mainsVeg.length} of 1 Selected
                           </span>
@@ -2358,11 +2334,10 @@ export default function InteractiveMenuOrderModal({
                             return (
                               <label
                                 key={dish}
-                                className={`flex items-center gap-2 p-2.5 rounded-xl border transition-all cursor-pointer ${
-                                  isChecked
+                                className={`flex items-center gap-2 p-2.5 rounded-xl border transition-all cursor-pointer ${isChecked
                                     ? 'bg-purple-50 border-purple-400 font-semibold text-purple-950 shadow-2xs'
                                     : 'bg-white border-gray-200 hover:border-purple-300'
-                                }`}
+                                  }`}
                               >
                                 <input
                                   type="radio"
@@ -2388,11 +2363,10 @@ export default function InteractiveMenuOrderModal({
                             <span>Select 1 Dessert (Included in Option 2)</span>
                           </span>
                           <span
-                            className={`text-xs font-bold px-2 py-0.5 rounded-md ${
-                              selectedDishes.desserts.length === 1
+                            className={`text-xs font-bold px-2 py-0.5 rounded-md ${selectedDishes.desserts.length === 1
                                 ? 'bg-emerald-100 text-emerald-800'
                                 : 'bg-purple-100 text-purple-900'
-                            }`}
+                              }`}
                           >
                             {selectedDishes.desserts.length} of 1 Selected
                           </span>
@@ -2404,11 +2378,10 @@ export default function InteractiveMenuOrderModal({
                             return (
                               <label
                                 key={dish}
-                                className={`flex items-center gap-2 p-2.5 rounded-xl border transition-all cursor-pointer ${
-                                  isChecked
+                                className={`flex items-center gap-2 p-2.5 rounded-xl border transition-all cursor-pointer ${isChecked
                                     ? 'bg-purple-50 border-purple-400 font-semibold text-purple-950 shadow-2xs'
                                     : 'bg-white border-gray-200 hover:border-purple-300'
-                                }`}
+                                  }`}
                               >
                                 <input
                                   type="radio"
@@ -2709,11 +2682,10 @@ export default function InteractiveMenuOrderModal({
                         return (
                           <label
                             key={addition.name}
-                            className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
-                              isSelected
+                            className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${isSelected
                                 ? 'bg-amber-50 border-[#C8860A] font-semibold text-gray-900 shadow-2xs'
                                 : 'bg-white border-gray-200 hover:border-amber-300'
-                            }`}
+                              }`}
                           >
                             <div className="flex items-center gap-2 truncate pr-2">
                               <input
@@ -2791,11 +2763,10 @@ export default function InteractiveMenuOrderModal({
                         return (
                           <label
                             key={stn.name}
-                            className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-start gap-3 ${
-                              isSelected
+                            className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-start gap-3 ${isSelected
                                 ? 'bg-amber-50/70 border-[#C8860A] shadow-2xs'
                                 : 'bg-gray-50/50 border-gray-200 opacity-60'
-                            }`}
+                              }`}
                           >
                             <input
                               type="checkbox"
@@ -2888,11 +2859,10 @@ export default function InteractiveMenuOrderModal({
                           return (
                             <label
                               key={dish}
-                              className={`flex items-center gap-2 p-2.5 rounded-xl border transition-all cursor-pointer ${
-                                isChecked
+                              className={`flex items-center gap-2 p-2.5 rounded-xl border transition-all cursor-pointer ${isChecked
                                   ? 'bg-amber-50 border-[#C8860A] font-semibold text-gray-900 shadow-2xs'
                                   : 'bg-white border-gray-200 hover:border-amber-300'
-                              }`}
+                                }`}
                             >
                               <input
                                 type="checkbox"
@@ -2979,11 +2949,10 @@ export default function InteractiveMenuOrderModal({
                         return (
                           <label
                             key={dosa}
-                            className={`flex items-center gap-2 p-2.5 rounded-xl border transition-all cursor-pointer ${
-                              isChecked
+                            className={`flex items-center gap-2 p-2.5 rounded-xl border transition-all cursor-pointer ${isChecked
                                 ? 'bg-orange-50 border-orange-400 font-semibold text-orange-950 shadow-2xs'
                                 : 'bg-white border-gray-200 hover:border-orange-300'
-                            }`}
+                              }`}
                           >
                             <input
                               type="checkbox"
@@ -3051,11 +3020,10 @@ export default function InteractiveMenuOrderModal({
                         return (
                           <label
                             key={item}
-                            className={`flex items-center gap-2 p-2.5 rounded-xl border transition-all cursor-pointer ${
-                              isChecked
+                            className={`flex items-center gap-2 p-2.5 rounded-xl border transition-all cursor-pointer ${isChecked
                                 ? 'bg-rose-50 border-rose-300 font-semibold text-rose-950 shadow-2xs'
                                 : 'bg-white border-gray-200 hover:border-rose-300'
-                            }`}
+                              }`}
                           >
                             <input
                               type="checkbox"
@@ -3581,11 +3549,10 @@ export default function InteractiveMenuOrderModal({
                             Vegetarian Starters
                           </span>
                           <span
-                            className={`text-xs font-bold px-2 py-0.5 rounded-md ${
-                              selectedDishes.startersVeg.length === quotas.startersVeg
+                            className={`text-xs font-bold px-2 py-0.5 rounded-md ${selectedDishes.startersVeg.length === quotas.startersVeg
                                 ? 'bg-emerald-100 text-emerald-800'
                                 : 'bg-amber-100 text-amber-900'
-                            }`}
+                              }`}
                           >
                             {selectedDishes.startersVeg.length} of {quotas.startersVeg} Selected
                           </span>
@@ -3599,13 +3566,12 @@ export default function InteractiveMenuOrderModal({
                             return (
                               <label
                                 key={dish}
-                                className={`flex items-center gap-2 p-2.5 rounded-xl border transition-all cursor-pointer ${
-                                  isChecked
+                                className={`flex items-center gap-2 p-2.5 rounded-xl border transition-all cursor-pointer ${isChecked
                                     ? 'bg-emerald-50/80 border-emerald-300 font-semibold text-emerald-950'
                                     : isMaxReached
                                       ? 'opacity-40 border-gray-200 bg-gray-50 cursor-not-allowed'
                                       : 'bg-white border-gray-200 hover:border-amber-300'
-                                }`}
+                                  }`}
                               >
                                 <input
                                   type="checkbox"
@@ -3633,11 +3599,10 @@ export default function InteractiveMenuOrderModal({
                             Vegetarian Mains
                           </span>
                           <span
-                            className={`text-xs font-bold px-2 py-0.5 rounded-md ${
-                              selectedDishes.mainsVeg.length === quotas.mainsVeg
+                            className={`text-xs font-bold px-2 py-0.5 rounded-md ${selectedDishes.mainsVeg.length === quotas.mainsVeg
                                 ? 'bg-emerald-100 text-emerald-800'
                                 : 'bg-amber-100 text-amber-900'
-                            }`}
+                              }`}
                           >
                             {selectedDishes.mainsVeg.length} of {quotas.mainsVeg} Selected
                           </span>
@@ -3651,13 +3616,12 @@ export default function InteractiveMenuOrderModal({
                             return (
                               <label
                                 key={dish}
-                                className={`flex items-center gap-2 p-2.5 rounded-xl border transition-all cursor-pointer ${
-                                  isChecked
+                                className={`flex items-center gap-2 p-2.5 rounded-xl border transition-all cursor-pointer ${isChecked
                                     ? 'bg-emerald-50/80 border-emerald-300 font-semibold text-emerald-950'
                                     : isMaxReached
                                       ? 'opacity-40 border-gray-200 bg-gray-50 cursor-not-allowed'
                                       : 'bg-white border-gray-200 hover:border-amber-300'
-                                }`}
+                                  }`}
                               >
                                 <input
                                   type="checkbox"
@@ -3689,11 +3653,10 @@ export default function InteractiveMenuOrderModal({
                           return (
                             <label
                               key={dish}
-                              className={`flex items-center gap-2 p-2.5 rounded-xl border transition-all cursor-pointer ${
-                                isChecked
+                              className={`flex items-center gap-2 p-2.5 rounded-xl border transition-all cursor-pointer ${isChecked
                                   ? 'bg-amber-50 border-amber-300 font-semibold text-amber-950'
                                   : 'bg-white border-gray-200 hover:border-amber-300'
-                              }`}
+                                }`}
                             >
                               <input
                                 type="checkbox"
@@ -3733,11 +3696,10 @@ export default function InteractiveMenuOrderModal({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   {/* Upgrade 1: Gazebo */}
                   <div
-                    className={`p-3.5 rounded-2xl border-2 transition-all flex items-start justify-between gap-3 ${
-                      selectedUpgrades.gazebo
+                    className={`p-3.5 rounded-2xl border-2 transition-all flex items-start justify-between gap-3 ${selectedUpgrades.gazebo
                         ? 'border-[#C8860A] bg-amber-50/50 shadow-xs'
                         : 'border-gray-200 bg-white'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-start gap-2.5">
                       <span className="text-2xl">⛺</span>
@@ -3763,11 +3725,10 @@ export default function InteractiveMenuOrderModal({
 
                   {/* Upgrade 2: Waiter for Serving */}
                   <div
-                    className={`p-3.5 rounded-2xl border-2 transition-all flex items-start justify-between gap-3 ${
-                      selectedUpgrades.waiterCount > 0
+                    className={`p-3.5 rounded-2xl border-2 transition-all flex items-start justify-between gap-3 ${selectedUpgrades.waiterCount > 0
                         ? 'border-[#C8860A] bg-amber-50/50 shadow-xs'
                         : 'border-gray-200 bg-white'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-start gap-2.5">
                       <span className="text-2xl">🤵</span>
@@ -3814,11 +3775,10 @@ export default function InteractiveMenuOrderModal({
 
                   {/* Upgrade 3: Crockery */}
                   <div
-                    className={`p-3.5 rounded-2xl border-2 transition-all flex items-start justify-between gap-3 ${
-                      selectedUpgrades.crockery
+                    className={`p-3.5 rounded-2xl border-2 transition-all flex items-start justify-between gap-3 ${selectedUpgrades.crockery
                         ? 'border-[#C8860A] bg-amber-50/50 shadow-xs'
                         : 'border-gray-200 bg-white'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-start gap-2.5">
                       <span className="text-2xl">🍽️</span>
@@ -3845,11 +3805,10 @@ export default function InteractiveMenuOrderModal({
 
                   {/* Upgrade 4: Extra Hour */}
                   <div
-                    className={`p-3.5 rounded-2xl border-2 transition-all flex items-start justify-between gap-3 ${
-                      selectedUpgrades.extraHours > 0
+                    className={`p-3.5 rounded-2xl border-2 transition-all flex items-start justify-between gap-3 ${selectedUpgrades.extraHours > 0
                         ? 'border-[#C8860A] bg-amber-50/50 shadow-xs'
                         : 'border-gray-200 bg-white'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-start gap-2.5">
                       <span className="text-2xl">⏱️</span>
@@ -3938,11 +3897,10 @@ export default function InteractiveMenuOrderModal({
                       return (
                         <label
                           key={dish}
-                          className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
-                            isChecked
+                          className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${isChecked
                               ? 'bg-amber-100/70 border-amber-400 font-bold text-amber-950'
                               : 'bg-gray-50 border-gray-200 hover:border-amber-300'
-                          }`}
+                            }`}
                         >
                           <div className="flex items-center gap-2 truncate">
                             <input
@@ -4538,11 +4496,10 @@ export default function InteractiveMenuOrderModal({
                       </label>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <label
-                          className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
-                            paymentChoice === 'deposit'
+                          className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-start gap-3 ${paymentChoice === 'deposit'
                               ? 'border-[#C8860A] bg-amber-50/50 shadow-sm'
                               : 'border-gray-200 bg-white hover:border-gray-300'
-                          }`}
+                            }`}
                         >
                           <input
                             type="radio"
@@ -4564,11 +4521,10 @@ export default function InteractiveMenuOrderModal({
                         </label>
 
                         <label
-                          className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
-                            paymentChoice === 'full'
+                          className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-start gap-3 ${paymentChoice === 'full'
                               ? 'border-[#C8860A] bg-amber-50/50 shadow-sm'
                               : 'border-gray-200 bg-white hover:border-gray-300'
-                          }`}
+                            }`}
                         >
                           <input
                             type="radio"

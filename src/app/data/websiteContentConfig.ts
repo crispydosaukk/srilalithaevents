@@ -235,24 +235,24 @@ export function sanitizeWebsiteContent(data: any): WebsiteContentConfig {
         : def.hero.backgroundImage,
       trustBadges: Array.isArray(rawHero.trustBadges) && rawHero.trustBadges.length > 0
         ? rawHero.trustBadges.map((b: any, i: number) => ({
-            id: b.id || `badge-${i}`,
-            icon: b.icon || '⭐',
-            title: b.title || '',
-            subtitle: b.subtitle || '',
-            enabled: b.enabled !== undefined ? !!b.enabled : true,
-          }))
+          id: b.id || `badge-${i}`,
+          icon: b.icon || '⭐',
+          title: b.title || '',
+          subtitle: b.subtitle || '',
+          enabled: b.enabled !== undefined ? !!b.enabled : true,
+        }))
         : def.hero.trustBadges,
     },
     statsRibbon: {
       enabled: rawStats.enabled !== undefined ? !!rawStats.enabled : def.statsRibbon.enabled,
       items: Array.isArray(rawStats.items) && rawStats.items.length > 0
         ? rawStats.items.map((s: any, i: number) => ({
-            id: s.id || `stat-${i}`,
-            icon: s.icon || '⭐',
-            value: s.value || '',
-            label: s.label || '',
-            enabled: s.enabled !== undefined ? !!s.enabled : true,
-          }))
+          id: s.id || `stat-${i}`,
+          icon: s.icon || '⭐',
+          value: s.value || '',
+          label: s.label || '',
+          enabled: s.enabled !== undefined ? !!s.enabled : true,
+        }))
         : def.statsRibbon.items,
     },
     menuHeader: {
@@ -267,11 +267,11 @@ export function sanitizeWebsiteContent(data: any): WebsiteContentConfig {
       title: typeof rawTerms.title === 'string' ? rawTerms.title : def.termsAndConditions.title,
       sections: Array.isArray(rawTerms.sections) && rawTerms.sections.length > 0
         ? rawTerms.sections.map((sec: any, i: number) => ({
-            id: sec.id || `sec-${i}`,
-            title: sec.title || '',
-            items: Array.isArray(sec.items) ? sec.items : [],
-            enabled: sec.enabled !== undefined ? !!sec.enabled : true,
-          }))
+          id: sec.id || `sec-${i}`,
+          title: sec.title || '',
+          items: Array.isArray(sec.items) ? sec.items : [],
+          enabled: sec.enabled !== undefined ? !!sec.enabled : true,
+        }))
         : def.termsAndConditions.sections,
       notesTitle: typeof rawTerms.notesTitle === 'string' ? rawTerms.notesTitle : def.termsAndConditions.notesTitle,
       notes: Array.isArray(rawTerms.notes) ? rawTerms.notes : def.termsAndConditions.notes,

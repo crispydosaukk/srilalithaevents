@@ -216,13 +216,13 @@ export default function HomePage() {
   }, []);
 
   const DEFAULT_DIETARY_LABELS = [
-    { code: 'V',  emoji: '🌿', label: 'Vegan',           color: '#10B981' },
-    { code: 'M',  emoji: '🥛', label: 'Milk / Dairy',    color: '#3B82F6' },
-    { code: 'N',  emoji: '🥜', label: 'Nuts',            color: '#F59E0B' },
+    { code: 'V', emoji: '🌿', label: 'Vegan', color: '#10B981' },
+    { code: 'M', emoji: '🥛', label: 'Milk / Dairy', color: '#3B82F6' },
+    { code: 'N', emoji: '🥜', label: 'Nuts', color: '#F59E0B' },
     { code: 'OJ', emoji: '🪷', label: 'Jain / No Onion', color: '#8B5CF6' },
-    { code: 'J',  emoji: '💜', label: 'Jain',            color: '#6366F1' },
-    { code: 'O',  emoji: '🧅', label: 'Onion-Free',      color: '#A855F7' },
-    { code: 'S',  emoji: '⭐', label: 'Signature',       color: '#F43F5E' },
+    { code: 'J', emoji: '💜', label: 'Jain', color: '#6366F1' },
+    { code: 'O', emoji: '🧅', label: 'Onion-Free', color: '#A855F7' },
+    { code: 'S', emoji: '⭐', label: 'Signature', color: '#F43F5E' },
   ];
   const [dietaryLabels, setDietaryLabels] = React.useState(DEFAULT_DIETARY_LABELS);
 
@@ -347,17 +347,17 @@ export default function HomePage() {
 
   const isOutdoorActive = isOutdoorCateringSelected(bookingForm);
   const activeSlotConfig: SlotCapacityConfig = formConfig.slotCapacity || DEFAULT_SLOT_CAPACITY;
-  const maxSlotCapacity = isOutdoorActive 
-    ? (activeSlotConfig.maxOutdoorCateringPerSlot || 4) 
+  const maxSlotCapacity = isOutdoorActive
+    ? (activeSlotConfig.maxOutdoorCateringPerSlot || 4)
     : (activeSlotConfig.maxHallBookingsPerSlot || 1);
 
   const dynamicTimeSlots = isOutdoorActive
-    ? (activeSlotConfig.outdoorCateringTimeSlots && activeSlotConfig.outdoorCateringTimeSlots.length > 0 
-        ? activeSlotConfig.outdoorCateringTimeSlots 
-        : DEFAULT_OUTDOOR_TIME_SLOTS)
+    ? (activeSlotConfig.outdoorCateringTimeSlots && activeSlotConfig.outdoorCateringTimeSlots.length > 0
+      ? activeSlotConfig.outdoorCateringTimeSlots
+      : DEFAULT_OUTDOOR_TIME_SLOTS)
     : (formConfig.fields.find(f => f.id === 'timeOfDay')?.options && (formConfig.fields.find(f => f.id === 'timeOfDay')?.options?.length || 0) > 0
-        ? formConfig.fields.find(f => f.id === 'timeOfDay')!.options!
-        : (activeSlotConfig.standardTimeSlots || DEFAULT_TIME_SLOTS));
+      ? formConfig.fields.find(f => f.id === 'timeOfDay')!.options!
+      : (activeSlotConfig.standardTimeSlots || DEFAULT_TIME_SLOTS));
 
   const getSlotOccupancy = (slotName: string) => {
     if (!bookingForm.date) return { count: 0, full: false, remaining: maxSlotCapacity };
@@ -685,7 +685,7 @@ export default function HomePage() {
       const guestCount = Number(bookingForm.guests) || 0;
       const selectedPkg = BANQUET_PACKAGES.find(p => p.name === bookingForm.selectedPackage);
       const selectedExtra = LIVE_COUNTER_PACKAGE?.extras?.find(e => e.name === bookingForm.selectedPackage);
-      
+
       let baseAmount = 0;
       const pkgLower = (bookingForm.selectedPackage || '').toLowerCase();
 
@@ -739,10 +739,6 @@ export default function HomePage() {
         baseAmount = 300.00;
       } else if (pkgLower.includes('candy floss')) {
         baseAmount = 100.00;
-      } else if (pkgLower.includes('venue hall')) {
-        if (pkgLower.includes('monday to thursday')) baseAmount = 100.00;
-        else if (pkgLower.includes('saturday dinner')) baseAmount = 500.00;
-        else baseAmount = 250.00;
       } else if (selectedExtra) {
         baseAmount = selectedExtra.price;
       } else {
@@ -874,9 +870,8 @@ export default function HomePage() {
       colSpanClass = 'col-span-12 sm:col-span-4';
     }
 
-    const inputBaseClass = `w-full border border-gray-300 rounded-xl ${
-      isCompact ? 'px-3 py-2.5 text-sm' : 'px-4 py-3 text-sm'
-    } focus:outline-none focus:ring-2 focus:border-yellow-500 bg-white transition-all`;
+    const inputBaseClass = `w-full border border-gray-300 rounded-xl ${isCompact ? 'px-3 py-2.5 text-sm' : 'px-4 py-3 text-sm'
+      } focus:outline-none focus:ring-2 focus:border-yellow-500 bg-white transition-all`;
 
     // Content for the field itself
     const fieldContent = (
@@ -884,7 +879,7 @@ export default function HomePage() {
         <label className={`block ${isCompact ? 'text-xs' : 'text-sm'} font-medium text-gray-700 mb-1 flex items-center gap-1.5`}>
           {field.id === 'phone' && (
             <svg viewBox="0 0 24 24" fill="#25D366" className="w-3.5 h-3.5 flex-shrink-0">
-              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.126 1.533 5.859L.057 23.428a.75.75 0 0 0 .921.921l5.684-1.47A11.943 11.943 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.75a9.694 9.694 0 0 1-4.946-1.356l-.355-.211-3.676.95.974-3.578-.231-.368A9.693 9.693 0 0 1 2.25 12C2.25 6.615 6.615 2.25 12 2.25S21.75 6.615 21.75 12 17.385 21.75 12 21.75z"/>
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" /><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.126 1.533 5.859L.057 23.428a.75.75 0 0 0 .921.921l5.684-1.47A11.943 11.943 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.75a9.694 9.694 0 0 1-4.946-1.356l-.355-.211-3.676.95.974-3.578-.231-.368A9.693 9.693 0 0 1 2.25 12C2.25 6.615 6.615 2.25 12 2.25S21.75 6.615 21.75 12 17.385 21.75 12 21.75z" />
             </svg>
           )}
           {field.label} {field.required && <span className="text-red-500">*</span>}
@@ -995,11 +990,10 @@ export default function HomePage() {
               min={new Date().toISOString().split('T')[0]}
               value={bookingForm[field.id] || ''}
               onChange={(e) => setBookingForm({ ...bookingForm, [field.id]: e.target.value })}
-              className={`${inputBaseClass} ${
-                bookingForm[field.id] && blockedDates.includes(bookingForm[field.id])
+              className={`${inputBaseClass} ${bookingForm[field.id] && blockedDates.includes(bookingForm[field.id])
                   ? 'border-red-500 ring-2 ring-red-100 bg-red-50/10'
                   : ''
-              }`}
+                }`}
             />
             {bookingForm[field.id] && (
               blockedDates.includes(bookingForm[field.id]) ? (
@@ -1133,7 +1127,7 @@ export default function HomePage() {
             }
           >
             <option value="">{field.placeholder || 'No specific package – help me choose'}</option>
-            
+
             {((activeLiveDosa1.isActive !== false && !activeLiveDosa1.isDeleted) || (activeLiveDosa2.isActive !== false && !activeLiveDosa2.isDeleted)) && (
               <optgroup label="── 🎪 Live Dosa Stations ──">
                 {activeLiveDosa1.isActive !== false && !activeLiveDosa1.isDeleted && (
@@ -1231,12 +1225,12 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-white overflow-x-hidden">
-      <Header onOpenModal={() => {}} />
+      <Header onOpenModal={() => { }} />
 
       {/* Hero — Modern Luxury Live Catering Showcase with Image Background */}
       <section className="pt-16 sm:pt-20 pb-6 sm:pb-8 px-4 sm:px-6 relative overflow-hidden bg-neutral-900 text-white">
         {/* Cinematic Background Image */}
-        <div 
+        <div
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"
           style={{ backgroundImage: `url('${websiteContent.hero.backgroundImage || '/assets/images/hero_live_catering_bg.jpg'}')` }}
         />
@@ -1453,11 +1447,10 @@ export default function HomePage() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveMenuTab(tab.id)}
-                  className={`px-3 sm:px-3.5 py-2 rounded-2xl text-xs sm:text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                    isActive
+                  className={`px-3 sm:px-3.5 py-2 rounded-2xl text-xs sm:text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${isActive
                       ? 'text-white shadow-md scale-[1.02]'
                       : 'bg-white border border-gray-200 text-gray-700 hover:border-amber-400 hover:bg-amber-50/40 shadow-xs'
-                  }`}
+                    }`}
                   style={isActive ? { background: 'linear-gradient(135deg, #C8860A, #F0A830)' } : {}}
                 >
                   <span>{tab.label}</span>
@@ -1507,11 +1500,10 @@ export default function HomePage() {
                     <button
                       key={f.id}
                       onClick={() => setDietaryFilter(f.id as any)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                        dietaryFilter === f.id
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${dietaryFilter === f.id
                           ? 'bg-gray-900 text-white shadow-xs'
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
+                        }`}
                     >
                       {f.id === 'all' ? f.label : `${f.emoji} ${f.label}`}
                     </button>
@@ -1521,7 +1513,7 @@ export default function HomePage() {
 
               {/* Main Menu Grid: Left Category Sidebar + Right Dish List */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                
+
                 {/* ── Left Category Buttons Column (Matching User Screenshot Layout & Colors) ── */}
                 <div className="lg:col-span-4 xl:col-span-3 space-y-2.5 bg-white p-3.5 sm:p-4 rounded-3xl border border-gray-200 shadow-sm sticky top-20 z-10">
                   <div className="text-xs font-bold text-gray-400 uppercase tracking-widest px-2 pb-1 border-b border-gray-100 flex items-center justify-between">
@@ -1532,18 +1524,18 @@ export default function HomePage() {
                   <div className="flex lg:flex-col gap-2 overflow-x-auto lg:overflow-x-visible pb-2 lg:pb-0 scrollbar-none">
                     {activeMenuCategories.map((cat, idx) => {
                       const isSelected = selectedCategoryIndex === idx && !menuSearchQuery;
-                      
+
                       // Count matching items for active dietary filter
                       const catMatchingCount = dietaryFilter === 'all'
                         ? (cat.items || []).length
                         : (cat.items || []).filter(item => {
-                            if (!item.tags || item.tags.length === 0) return false;
-                            if (dietaryFilter === 'V') return item.tags.includes('V');
-                            if (dietaryFilter === 'M') return item.tags.includes('M');
-                            if (dietaryFilter === 'N') return item.tags.includes('N');
-                            if (dietaryFilter === 'OJ') return item.tags.some(t => ['OJ', 'O', 'J'].includes(t));
-                            return true;
-                          }).length;
+                          if (!item.tags || item.tags.length === 0) return false;
+                          if (dietaryFilter === 'V') return item.tags.includes('V');
+                          if (dietaryFilter === 'M') return item.tags.includes('M');
+                          if (dietaryFilter === 'N') return item.tags.includes('N');
+                          if (dietaryFilter === 'OJ') return item.tags.some(t => ['OJ', 'O', 'J'].includes(t));
+                          return true;
+                        }).length;
 
                       // Exact button background colors matching the user screenshot
                       let buttonBg = '#C8860A'; // Default warm caramel / terracotta
@@ -1557,11 +1549,10 @@ export default function HomePage() {
                             setSelectedCategoryIndex(idx);
                             setMenuSearchQuery('');
                           }}
-                          className={`w-full text-center px-4 py-3.5 rounded-xl font-bold text-white text-xs sm:text-sm tracking-wide transition-all shadow-sm hover:shadow-md cursor-pointer flex items-center justify-between group flex-shrink-0 lg:flex-shrink ${
-                            isSelected
+                          className={`w-full text-center px-4 py-3.5 rounded-xl font-bold text-white text-xs sm:text-sm tracking-wide transition-all shadow-sm hover:shadow-md cursor-pointer flex items-center justify-between group flex-shrink-0 lg:flex-shrink ${isSelected
                               ? 'ring-3 ring-amber-400 ring-offset-2 scale-[1.02] shadow-md font-extrabold'
                               : 'opacity-95 hover:opacity-100 hover:scale-[1.01]'
-                          }`}
+                            }`}
                           style={{
                             background: buttonBg,
                           }}
@@ -1569,11 +1560,10 @@ export default function HomePage() {
                           <span className="truncate flex-1 text-center font-bold text-sm">
                             {cat.title}
                           </span>
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full ml-2 font-mono flex-shrink-0 ${
-                            catMatchingCount === 0 && dietaryFilter !== 'all'
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full ml-2 font-mono flex-shrink-0 ${catMatchingCount === 0 && dietaryFilter !== 'all'
                               ? 'bg-black/40 text-white/50'
                               : 'bg-black/20 text-white/90 font-bold'
-                          }`}>
+                            }`}>
                             {catMatchingCount}
                           </span>
                         </button>
@@ -1671,12 +1661,12 @@ export default function HomePage() {
                             background: menuSearchQuery
                               ? 'linear-gradient(135deg, #1F2937, #374151)'
                               : isGlobalFilterFallback
-                              ? 'linear-gradient(135deg, #4A1D24, #9B1B30)'
-                              : selectedCategoryIndex === 0
-                              ? 'linear-gradient(135deg, #3D2614, #5C381E)'
-                              : selectedCategoryIndex === 1
-                              ? 'linear-gradient(135deg, #2E7D32, #4CAF50)'
-                              : 'linear-gradient(135deg, #A06A05, #C8860A)',
+                                ? 'linear-gradient(135deg, #4A1D24, #9B1B30)'
+                                : selectedCategoryIndex === 0
+                                  ? 'linear-gradient(135deg, #3D2614, #5C381E)'
+                                  : selectedCategoryIndex === 1
+                                    ? 'linear-gradient(135deg, #2E7D32, #4CAF50)'
+                                    : 'linear-gradient(135deg, #A06A05, #C8860A)',
                           }}
                         >
                           <div>
@@ -1688,16 +1678,16 @@ export default function HomePage() {
                                 {menuSearchQuery
                                   ? `Search Results for "${menuSearchQuery}"`
                                   : isGlobalFilterFallback
-                                  ? `All Jain / No Onion Dishes (${itemsToDisplay.length} Total)`
-                                  : currentCategory.title}
+                                    ? `All Jain / No Onion Dishes (${itemsToDisplay.length} Total)`
+                                    : currentCategory.title}
                               </h3>
                             </div>
                             <p className="text-xs sm:text-sm text-white/80 max-w-xl">
                               {menuSearchQuery
                                 ? `Found ${itemsToDisplay.length} matching dishes across our entire menu.`
                                 : isGlobalFilterFallback
-                                ? `Showing all ${itemsToDisplay.length} Jain-friendly / No-Onion dishes across our complete menu selection.`
-                                : currentCategory.description}
+                                  ? `Showing all ${itemsToDisplay.length} Jain-friendly / No-Onion dishes across our complete menu selection.`
+                                  : currentCategory.description}
                             </p>
                           </div>
 
@@ -1747,7 +1737,7 @@ export default function HomePage() {
                                     <h4 className="font-bold text-gray-900 text-sm leading-snug group-hover:text-[#9B1B30] transition-colors">
                                       {item.name}
                                     </h4>
-                                    
+
                                     {/* Dietary Badges */}
                                     {item.tags && item.tags.length > 0 && (
                                       <div className="flex items-center gap-1 flex-shrink-0">
@@ -3638,7 +3628,7 @@ export default function HomePage() {
                     <span className="text-sm font-mono font-bold text-gray-800 break-all">{submittedBookingId}</span>
                   </div>
                 )}
-                
+
                 {/* Instant Communication Actions */}
                 <div className="flex flex-wrap items-center justify-center gap-2.5 mb-4">
                   <a

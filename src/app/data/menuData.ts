@@ -257,7 +257,7 @@ export function calculateLiveDosaPrice(
 ): LiveDosaPricingBreakdown {
   const isWeekend = dateOrType === 'weekend' || isWeekendOrBankHoliday(dateOrType);
   const isOption2 = optionChoice === 'option-2' || optionChoice === 'live-dosa-2' || (typeof optionChoice === 'string' && optionChoice.toLowerCase().includes('option 2'));
-  
+
   const baseOption = isOption2 ? LIVE_DOSA_OPTION_2 : LIVE_DOSA_OPTION_1;
   const pricing = customPricing || baseOption.pricing;
   const tier: 'weekday' | 'weekend' = isWeekend ? 'weekend' : 'weekday';
@@ -1283,12 +1283,7 @@ export const BANQUET_PACKAGES = [
   },
 ];
 
-export const VENUE_HALL_CHARGES = [
-  { day: 'Monday to Thursday', charge: '£100 + Food Packages', note: '' },
-  { day: 'Friday & Sunday Hall Hire', charge: '£250 + Food Packages', note: 'Lunch + Dinner' },
-  { day: 'Saturday Hall Hire', charge: '£250 + Food Packages', note: 'Lunch' },
-  { day: 'Saturday Hall Hire', charge: '£500 + Food Packages', note: 'Dinner' },
-];
+export const VENUE_HALL_CHARGES: { day: string; charge: string; note: string }[] = [];
 
 export const TABLE_SERVICE = [
   { service: 'Canapés Service', price: '£3 per person' },
@@ -1358,11 +1353,4 @@ export const TERMS_AND_CONDITIONS = {
   alcohol: 'Corkage fee - Charges for outside Alcohol in Venue which will be discussed as per guests.',
 };
 
-export const DRY_HIRE_PRICES = [
-  { day: 'Saturday',            session: 'Dinner', price: 3000 },
-  { day: 'Saturday',            session: 'Lunch',  price: 2000 },
-  { day: 'Friday & Sunday',     session: 'Dinner', price: 2000 },
-  { day: 'Friday & Sunday',     session: 'Lunch',  price: 1500 },
-  { day: 'Monday to Thursday',  session: 'Dinner', price: 1500 },
-  { day: 'Monday to Thursday',  session: 'Lunch',  price: 1000 },
-];
+export const DRY_HIRE_PRICES: { day: string; session: string; price: number }[] = [];

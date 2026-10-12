@@ -237,11 +237,10 @@ export default function WebsiteContentEditor({
       <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-3">
         <button
           onClick={() => setActiveTab('hero')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-            activeTab === 'hero'
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'hero'
               ? 'bg-[#C8860A] text-white shadow-sm'
               : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-          }`}
+            }`}
         >
           <span>🖼️</span>
           <span>Hero Showcase &amp; Badges (Image 1)</span>
@@ -252,11 +251,10 @@ export default function WebsiteContentEditor({
 
         <button
           onClick={() => setActiveTab('stats_menu')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-            activeTab === 'stats_menu'
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'stats_menu'
               ? 'bg-[#C8860A] text-white shadow-sm'
               : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-          }`}
+            }`}
         >
           <span>📊</span>
           <span>Quick Stats &amp; Menu Header (Image 2)</span>
@@ -267,11 +265,10 @@ export default function WebsiteContentEditor({
 
         <button
           onClick={() => setActiveTab('terms')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-            activeTab === 'terms'
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'terms'
               ? 'bg-[#C8860A] text-white shadow-sm'
               : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-          }`}
+            }`}
         >
           <span>📜</span>
           <span>Terms &amp; Conditions / Legal (Image 3)</span>
@@ -288,7 +285,7 @@ export default function WebsiteContentEditor({
         <div className="space-y-6">
           {/* Live Mini Preview Card */}
           <div className="bg-neutral-900 text-white rounded-2xl p-5 border border-neutral-700 relative overflow-hidden shadow-lg">
-            <div 
+            <div
               className="absolute inset-0 bg-cover bg-center opacity-40"
               style={{ backgroundImage: `url('${content.hero.backgroundImage}')` }}
             />
@@ -393,11 +390,10 @@ export default function WebsiteContentEditor({
                       key={p.value}
                       type="button"
                       onClick={() => updateHero({ headlinePart2Color: p.value })}
-                      className={`text-xs px-2.5 py-1 rounded-lg font-medium border transition-all flex items-center gap-1 cursor-pointer ${
-                        content.hero.headlinePart2Color.toLowerCase() === p.value.toLowerCase()
+                      className={`text-xs px-2.5 py-1 rounded-lg font-medium border transition-all flex items-center gap-1 cursor-pointer ${content.hero.headlinePart2Color.toLowerCase() === p.value.toLowerCase()
                           ? 'border-gray-900 ring-2 ring-amber-400 font-bold'
                           : 'border-gray-200 hover:border-gray-400'
-                      }`}
+                        }`}
                     >
                       <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: p.value }} />
                       <span>{p.label}</span>
@@ -588,11 +584,10 @@ export default function WebsiteContentEditor({
               {content.hero.trustBadges.map((badge, idx) => (
                 <div
                   key={badge.id}
-                  className={`p-4 rounded-xl border transition-all ${
-                    badge.enabled
+                  className={`p-4 rounded-xl border transition-all ${badge.enabled
                       ? 'border-gray-200 bg-white shadow-2xs'
                       : 'border-gray-200 bg-gray-50 opacity-60'
-                  }`}
+                    }`}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                     <div className="flex items-center gap-2">
@@ -704,11 +699,10 @@ export default function WebsiteContentEditor({
               {content.statsRibbon.items.map((stat, idx) => (
                 <div
                   key={stat.id}
-                  className={`p-4 rounded-xl border transition-all ${
-                    stat.enabled
+                  className={`p-4 rounded-xl border transition-all ${stat.enabled
                       ? 'border-gray-200 bg-white shadow-2xs'
                       : 'border-gray-200 bg-gray-50 opacity-60'
-                  }`}
+                    }`}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                     <div className="flex items-center gap-2">
@@ -832,15 +826,13 @@ export default function WebsiteContentEditor({
       {activeTab === 'terms' && (
         <div className="space-y-6">
           {/* Master Enable/Disable Switch Card */}
-          <div className={`p-5 rounded-2xl border-2 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm ${
-            content.termsAndConditions.enabled 
-              ? 'bg-emerald-50/70 border-emerald-300' 
+          <div className={`p-5 rounded-2xl border-2 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm ${content.termsAndConditions.enabled
+              ? 'bg-emerald-50/70 border-emerald-300'
               : 'bg-rose-50/70 border-rose-300'
-          }`}>
+            }`}>
             <div className="flex items-start gap-3">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0 ${
-                content.termsAndConditions.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
-              }`}>
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0 ${content.termsAndConditions.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                }`}>
                 {content.termsAndConditions.enabled ? '👁️' : '🚫'}
               </div>
               <div>
@@ -848,16 +840,15 @@ export default function WebsiteContentEditor({
                   <h3 className="text-sm font-bold text-gray-900">
                     Terms &amp; Conditions Section on Website
                   </h3>
-                  <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full uppercase ${
-                    content.termsAndConditions.enabled 
-                      ? 'bg-emerald-100 text-emerald-800' 
+                  <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full uppercase ${content.termsAndConditions.enabled
+                      ? 'bg-emerald-100 text-emerald-800'
                       : 'bg-rose-100 text-rose-800'
-                  }`}>
+                    }`}>
                     {content.termsAndConditions.enabled ? '● Currently Visible (ON)' : '○ Currently Hidden / Off (OFF)'}
                   </span>
                 </div>
                 <p className="text-xs text-gray-600 mt-1">
-                  {content.termsAndConditions.enabled 
+                  {content.termsAndConditions.enabled
                     ? 'The Terms & Conditions accordion is currently enabled and displayed above the booking section on the homepage.'
                     : 'The Terms & Conditions section is currently turned OFF and hidden from the homepage completely.'}
                 </p>
@@ -867,11 +858,10 @@ export default function WebsiteContentEditor({
             <button
               type="button"
               onClick={() => updateTerms({ enabled: !content.termsAndConditions.enabled })}
-              className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer flex-shrink-0 ${
-                content.termsAndConditions.enabled
+              className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer flex-shrink-0 ${content.termsAndConditions.enabled
                   ? 'bg-rose-600 hover:bg-rose-700 text-white'
                   : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-              }`}
+                }`}
             >
               <Icon name={content.termsAndConditions.enabled ? 'EyeSlashIcon' : 'EyeIcon'} size={16} />
               <span>{content.termsAndConditions.enabled ? 'Turn OFF / Hide from Website' : 'Turn ON / Show on Website'}</span>
