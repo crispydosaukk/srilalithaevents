@@ -1351,7 +1351,8 @@ export default function HomePage() {
                 )
               ) : (
                 <div>
-                  {/* Option to Customize Menu & Pay Online */}
+                  {/* Option to Customize Menu & Pay Online (Temporarily commented out) */}
+                  {/*
                   <div className="mb-4 p-3 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-400/20 to-amber-500/10 border border-amber-300 flex items-center justify-between gap-3 shadow-2xs">
                     <div className="flex items-center gap-2">
                       <span className="text-base flex-shrink-0">🍽️</span>
@@ -1370,6 +1371,7 @@ export default function HomePage() {
                       <span>→</span>
                     </button>
                   </div>
+                  */}
 
                   <form onSubmit={handleSubmit} className="space-y-3">
                     {customHomeAlert && (
@@ -1866,8 +1868,10 @@ export default function HomePage() {
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={() => {
-                        setSelectedPackageForModal(activeLiveDosa1.title || 'Live Dosa Option 1');
-                        setIsMenuOrderModalOpen(true);
+                        // Online order modal temporarily hidden
+                        // setSelectedPackageForModal(activeLiveDosa1.title || 'Live Dosa Option 1');
+                        // setIsMenuOrderModalOpen(true);
+                        handleEnquireNow(activeLiveDosa1.title || 'Live Dosa Option 1');
                       }}
                       className="px-6 py-3 rounded-xl font-bold text-gray-900 bg-amber-400 hover:bg-amber-300 transition-all text-xs sm:text-sm shadow-md cursor-pointer flex items-center gap-2"
                     >
@@ -2012,8 +2016,10 @@ export default function HomePage() {
 
                       <button
                         onClick={() => {
-                          setSelectedPackageForModal('Live Dosa Option 1');
-                          setIsMenuOrderModalOpen(true);
+                          // Online order modal temporarily hidden
+                          // setSelectedPackageForModal('Live Dosa Option 1');
+                          // setIsMenuOrderModalOpen(true);
+                          handleEnquireNow(`Live Dosa Option 1 (+ ${upgrade.name})`);
                         }}
                         className="w-full py-2.5 rounded-xl font-bold text-xs bg-amber-50 group-hover:bg-[#C8860A] text-[#C8860A] group-hover:text-white border border-amber-200 group-hover:border-[#C8860A] transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
                       >
@@ -2094,8 +2100,10 @@ export default function HomePage() {
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={() => {
-                        setSelectedPackageForModal(activeLiveDosa2.title || 'Live Dosa Option 2');
-                        setIsMenuOrderModalOpen(true);
+                        // Online order modal temporarily hidden
+                        // setSelectedPackageForModal(activeLiveDosa2.title || 'Live Dosa Option 2');
+                        // setIsMenuOrderModalOpen(true);
+                        handleEnquireNow(activeLiveDosa2.title || 'Live Dosa Option 2');
                       }}
                       className="px-6 py-3.5 rounded-xl font-bold text-gray-900 bg-amber-400 hover:bg-amber-300 transition-all text-sm shadow-md cursor-pointer flex items-center gap-2"
                     >
@@ -2273,8 +2281,10 @@ export default function HomePage() {
 
                       <button
                         onClick={() => {
-                          setSelectedPackageForModal('Live Dosa Option 2');
-                          setIsMenuOrderModalOpen(true);
+                          // Online order modal temporarily hidden
+                          // setSelectedPackageForModal('Live Dosa Option 2');
+                          // setIsMenuOrderModalOpen(true);
+                          handleEnquireNow(`Live Dosa Option 2 (+ ${upgrade.name})`);
                         }}
                         className="w-full py-2.5 rounded-xl font-bold text-xs bg-purple-50 group-hover:bg-[#C8860A] text-purple-900 group-hover:text-white border border-purple-200 group-hover:border-[#C8860A] transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
                       >
@@ -2341,8 +2351,10 @@ export default function HomePage() {
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={() => {
-                        setSelectedPackageForModal(activeMadrasThali.title || 'Madras Thali (Option 3)');
-                        setIsMenuOrderModalOpen(true);
+                        // Online order modal temporarily hidden
+                        // setSelectedPackageForModal(activeMadrasThali.title || 'Madras Thali (Option 3)');
+                        // setIsMenuOrderModalOpen(true);
+                        handleEnquireNow(activeMadrasThali.title || 'Madras Thali (Option 3)');
                       }}
                       className="px-6 py-3 rounded-xl font-bold text-gray-900 bg-amber-400 hover:bg-amber-300 transition-all text-xs sm:text-sm shadow-md cursor-pointer flex items-center gap-2"
                     >
@@ -2351,8 +2363,10 @@ export default function HomePage() {
                     </button>
                     <button
                       onClick={() => {
-                        setSelectedPackageForModal(activeMadrasThali.title || 'Madras Thali (Option 3)');
-                        setIsMenuOrderModalOpen(true);
+                        // Online order modal temporarily hidden
+                        // setSelectedPackageForModal(activeMadrasThali.title || 'Madras Thali (Option 3)');
+                        // setIsMenuOrderModalOpen(true);
+                        handleEnquireNow(activeMadrasThali.title || 'Madras Thali (Option 3)');
                       }}
                       className="px-5 py-3 rounded-xl font-bold text-white bg-white/10 hover:bg-white/20 border border-white/20 transition-all text-xs sm:text-sm cursor-pointer flex items-center gap-1.5"
                     >
@@ -2568,8 +2582,10 @@ export default function HomePage() {
 
                       <button
                         onClick={() => {
-                          setSelectedPackageForModal('Madras Thali (Option 3)');
-                          setIsMenuOrderModalOpen(true);
+                          // Online order modal temporarily hidden
+                          // setSelectedPackageForModal('Madras Thali (Option 3)');
+                          // setIsMenuOrderModalOpen(true);
+                          handleEnquireNow(`Madras Thali (+ ${upgrade.name})`);
                         }}
                         className="w-full py-2.5 rounded-xl font-bold text-xs bg-amber-50 group-hover:bg-[#C8860A] text-[#C8860A] group-hover:text-white border border-amber-200 group-hover:border-[#C8860A] transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
                       >
@@ -2626,25 +2642,29 @@ export default function HomePage() {
                       </div>
                     </div>
                     <div className="bg-amber-400/20 border border-amber-300/40 px-3.5 py-2 rounded-xl text-xs text-amber-100 max-w-xs leading-snug">
-                      {activeTailorMenu.depositNote || '50% Deposit: Paid online at booking. Balance paid by cash after event completion.'}
+                      {activeTailorMenu.depositNote || '50% Deposit required at booking. Balance paid after event completion.'}
                     </div>
                   </div>
 
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={() => {
-                        setSelectedPackageForModal(activeTailorMenu.title || 'Tailor Your Own Menu (Option 4)');
-                        setIsMenuOrderModalOpen(true);
+                        // Online order modal temporarily hidden
+                        // setSelectedPackageForModal(activeTailorMenu.title || 'Tailor Your Own Menu (Option 4)');
+                        // setIsMenuOrderModalOpen(true);
+                        handleEnquireNow(activeTailorMenu.title || 'Tailor Your Own Menu (Option 4)');
                       }}
                       className="px-6 py-3 rounded-xl font-bold text-gray-900 bg-amber-400 hover:bg-amber-300 transition-all text-xs sm:text-sm shadow-md cursor-pointer flex items-center gap-2"
                     >
-                      <span>{activeTailorMenu.bookBtnText || 'Tailor Your Menu Online'}</span>
+                      <span>{activeTailorMenu.bookBtnText || 'Tailor Your Menu'}</span>
                       <span>→</span>
                     </button>
                     <button
                       onClick={() => {
-                        setSelectedPackageForModal(activeTailorMenu.title || 'Tailor Your Own Menu (Option 4)');
-                        setIsMenuOrderModalOpen(true);
+                        // Online order modal temporarily hidden
+                        // setSelectedPackageForModal(activeTailorMenu.title || 'Tailor Your Own Menu (Option 4)');
+                        // setIsMenuOrderModalOpen(true);
+                        handleEnquireNow(activeTailorMenu.title || 'Tailor Your Own Menu (Option 4)');
                       }}
                       className="px-5 py-3 rounded-xl font-bold text-white bg-white/10 hover:bg-white/20 border border-white/20 transition-all text-xs sm:text-sm cursor-pointer flex items-center gap-1.5"
                     >
@@ -2764,8 +2784,10 @@ export default function HomePage() {
 
                       <button
                         onClick={() => {
-                          setSelectedPackageForModal('Tailor Your Own Menu (Option 4)');
-                          setIsMenuOrderModalOpen(true);
+                          // Online order modal temporarily hidden
+                          // setSelectedPackageForModal('Tailor Your Own Menu (Option 4)');
+                          // setIsMenuOrderModalOpen(true);
+                          handleEnquireNow(`Tailor Your Own Menu (+ ${upgrade.name})`);
                         }}
                         className="w-full py-2.5 rounded-xl font-bold text-xs bg-amber-50 group-hover:bg-[#C8860A] text-[#C8860A] group-hover:text-white border border-amber-200 group-hover:border-[#C8860A] transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
                       >
@@ -2832,8 +2854,10 @@ export default function HomePage() {
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={() => {
-                        setSelectedPackageForModal(activeDosaFestival.title || 'Dosa Festival At Your Home (Option 5)');
-                        setIsMenuOrderModalOpen(true);
+                        // Online order modal temporarily hidden
+                        // setSelectedPackageForModal(activeDosaFestival.title || 'Dosa Festival At Your Home (Option 5)');
+                        // setIsMenuOrderModalOpen(true);
+                        handleEnquireNow(activeDosaFestival.title || 'Dosa Festival At Your Home (Option 5)');
                       }}
                       className="px-6 py-3 rounded-xl font-bold text-gray-950 bg-orange-300 hover:bg-orange-200 transition-all text-xs sm:text-sm shadow-md cursor-pointer flex items-center gap-2"
                     >
@@ -2842,8 +2866,10 @@ export default function HomePage() {
                     </button>
                     <button
                       onClick={() => {
-                        setSelectedPackageForModal(activeDosaFestival.title || 'Dosa Festival At Your Home (Option 5)');
-                        setIsMenuOrderModalOpen(true);
+                        // Online order modal temporarily hidden
+                        // setSelectedPackageForModal(activeDosaFestival.title || 'Dosa Festival At Your Home (Option 5)');
+                        // setIsMenuOrderModalOpen(true);
+                        handleEnquireNow(activeDosaFestival.title || 'Dosa Festival At Your Home (Option 5)');
                       }}
                       className="px-5 py-3 rounded-xl font-bold text-white bg-white/10 hover:bg-white/20 border border-white/20 transition-all text-xs sm:text-sm cursor-pointer flex items-center gap-1.5"
                     >
@@ -2922,8 +2948,10 @@ export default function HomePage() {
 
                       <button
                         onClick={() => {
-                          setSelectedPackageForModal('Dosa Festival At Your Home (Option 5)');
-                          setIsMenuOrderModalOpen(true);
+                          // Online order modal temporarily hidden
+                          // setSelectedPackageForModal('Dosa Festival At Your Home (Option 5)');
+                          // setIsMenuOrderModalOpen(true);
+                          handleEnquireNow(`Dosa Festival (+ ${upgrade.name})`);
                         }}
                         className="w-full py-2.5 rounded-xl font-bold text-xs bg-orange-50 group-hover:bg-[#C8860A] text-orange-900 group-hover:text-white border border-orange-200 group-hover:border-[#C8860A] transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
                       >
@@ -2985,8 +3013,10 @@ export default function HomePage() {
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={() => {
-                        setSelectedPackageForModal(activeCanape.title || 'Canapé Service (Option 6)');
-                        setIsMenuOrderModalOpen(true);
+                        // Online order modal temporarily hidden
+                        // setSelectedPackageForModal(activeCanape.title || 'Canapé Service (Option 6)');
+                        // setIsMenuOrderModalOpen(true);
+                        handleEnquireNow(activeCanape.title || 'Canapé Service (Option 6)');
                       }}
                       className="px-6 py-3 rounded-xl font-bold text-gray-950 bg-rose-200 hover:bg-rose-100 transition-all text-xs sm:text-sm shadow-md cursor-pointer flex items-center gap-2"
                     >
@@ -3071,8 +3101,10 @@ export default function HomePage() {
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={() => {
-                        setSelectedPackageForModal(activeNorthIndian.title || 'North Indian Standard Menu (Option 7)');
-                        setIsMenuOrderModalOpen(true);
+                        // Online order modal temporarily hidden
+                        // setSelectedPackageForModal(activeNorthIndian.title || 'North Indian Standard Menu (Option 7)');
+                        // setIsMenuOrderModalOpen(true);
+                        handleEnquireNow(activeNorthIndian.title || 'North Indian Standard Menu (Option 7)');
                       }}
                       className="px-6 py-3.5 rounded-xl font-bold text-gray-950 bg-indigo-200 hover:bg-indigo-100 transition-all text-sm shadow-md cursor-pointer flex items-center gap-2"
                     >
@@ -3160,8 +3192,10 @@ export default function HomePage() {
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={() => {
-                        setSelectedPackageForModal(activeGujarati.title || 'Gujarati Menu (Option 8)');
-                        setIsMenuOrderModalOpen(true);
+                        // Online order modal temporarily hidden
+                        // setSelectedPackageForModal(activeGujarati.title || 'Gujarati Menu (Option 8)');
+                        // setIsMenuOrderModalOpen(true);
+                        handleEnquireNow(activeGujarati.title || 'Gujarati Menu (Option 8)');
                       }}
                       className="px-6 py-3.5 rounded-xl font-bold text-gray-950 bg-teal-200 hover:bg-teal-100 transition-all text-sm shadow-md cursor-pointer flex items-center gap-2"
                     >
@@ -3282,8 +3316,10 @@ export default function HomePage() {
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={() => {
-                        setSelectedPackageForModal(activePunjabi.title || 'Punjabi Menu (Option 9)');
-                        setIsMenuOrderModalOpen(true);
+                        // Online order modal temporarily hidden
+                        // setSelectedPackageForModal(activePunjabi.title || 'Punjabi Menu (Option 9)');
+                        // setIsMenuOrderModalOpen(true);
+                        handleEnquireNow(activePunjabi.title || 'Punjabi Menu (Option 9)');
                       }}
                       className="px-6 py-3.5 rounded-xl font-bold text-gray-950 bg-amber-300 hover:bg-amber-200 transition-all text-sm shadow-md cursor-pointer flex items-center gap-2"
                     >
@@ -3466,8 +3502,10 @@ export default function HomePage() {
                     <div className="flex flex-wrap gap-3 mt-4">
                       <button
                         onClick={() => {
-                          setSelectedPackageForModal(pkg.title);
-                          setIsMenuOrderModalOpen(true);
+                          // Online order modal temporarily hidden
+                          // setSelectedPackageForModal(pkg.title);
+                          // setIsMenuOrderModalOpen(true);
+                          handleEnquireNow(pkg.title);
                         }}
                         className="px-6 py-3 rounded-xl font-bold text-gray-900 bg-amber-400 hover:bg-amber-300 transition-all text-xs sm:text-sm shadow-md cursor-pointer flex items-center gap-2"
                       >
@@ -3705,7 +3743,8 @@ export default function HomePage() {
             )
           ) : (
             <div>
-              {/* Option to Customize Menu & Pay Online */}
+              {/* Option to Customize Menu & Pay Online (Temporarily commented out) */}
+              {/*
               <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-400/20 to-amber-500/10 border border-amber-300 flex items-center justify-between gap-4 shadow-2xs">
                 <div className="flex items-center gap-2.5">
                   <span className="text-xl flex-shrink-0">🍽️</span>
@@ -3724,6 +3763,7 @@ export default function HomePage() {
                   <span>→</span>
                 </button>
               </div>
+              */}
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-12 gap-4">
@@ -3765,13 +3805,15 @@ export default function HomePage() {
         </Link>
       </div>
 
-      {/* Interactive Menu Customizer & Online Order Modal */}
+      {/* Interactive Menu Customizer & Online Order Modal (Temporarily commented out) */}
+      {/*
       <InteractiveMenuOrderModal
         isOpen={isMenuOrderModalOpen}
         onClose={() => setIsMenuOrderModalOpen(false)}
         initialPackage={selectedPackageForModal}
         deliveryConfig={deliveryConfig}
       />
+      */}
 
       <Footer />
       {/* ─── CUSTOM ALERT MODAL ─── */}
